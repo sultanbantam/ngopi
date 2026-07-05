@@ -1,0 +1,62 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id             String   @id @default(uuid())
+  username       String   @unique
+  password_hash  String
+  display_name   String
+  public_key     String?
+  wallet_address String?
+  is_online      Boolean  @default(false)
+  last_seen      DateTime @default(now())
+  created_at     DateTime @default(now())
+
+  messages      Message[]
+  groupsCreated Group[]   @relation("GroupCreator")
+  groupMembers  GroupMember[]
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  room_id        String // Bisa berupa kombinasi UserID (1-on-1) atau GroupID
+  sender_id      String
+  content        String? // Optional for non-text messages
+  type           String   @default("text") // "text", "image", "audio", "document"
+  attachment_url String?
+  is_delivered   Boolean  @default(false)
+  is_read        Boolean  @default(false)
+  timestamp      DateTime @default(now())
+  reactions      Json?    // Store reactions, e.g. {"sender_id": "emoji"}
+  is_edited      Boolean  @default(false)
+  is_pinned      Boolean  @default(false)
+
+  sender         User     @relation(fields: [sender_id], references: [id])
+}
+
+model Group {
+  id              String   @id @default(uuid())
+  name            String
+  min_bmc_balance Float    @default(0)
+  created_by      String
+
+  creator User @relation("GroupCreator", fields: [created_by], references: [id])
+  members GroupMember[]
+}
+
+model GroupMember {
+  id         String   @id @default(uuid())
+  group_id   String
+  user_id    String
+  joined_at  DateTime @default(now())
+
+  group      Group @relation(fields: [group_id], references: [id])
+  user       User  @relation(fields: [user_id], references: [id])
+
+  @@unique([group_id, user_id])
+}

@@ -1,0 +1,20 @@
+node_modules/
+.env
+.DS_Store
+
+# Expo
+.expo/
+dist/
+web-build/
+
+# Backend
+backend/node_modules/
+backend/dist/
+backend/.env
+
+# Frontend
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/web-build/
+frontend/.env
