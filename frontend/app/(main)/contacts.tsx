@@ -1,16 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image } from 'react-native';
 import { router } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
+import * as ImagePicker from 'expo-image-picker';
 
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://api.bamboochat.click/api';
 
 export default function ContactsScreen() {
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState('');
+  const [currentUsername, setCurrentUsername] = useState('');
+  const [currentBmcId, setCurrentBmcId] = useState('');
   const [currentUserId, setCurrentUserId] = useState('');
   const [contacts, setContacts] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
@@ -19,12 +22,22 @@ export default function ContactsScreen() {
   const [activeTab, setActiveTab] = useState<'contacts' | 'groups'>('contacts');
 
   // Modals state
+  const [dropdownVisible, setDropdownVisible] = useState(false);
   const [isWalletModalVisible, setWalletModalVisible] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   
   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupMinBmc, setGroupMinBmc] = useState('0');
+
+  // Profile Modal State
+  const [isProfileModalVisible, setProfileModalVisible] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  const [editBio, setEditBio] = useState('');
+  const [editStatus, setEditStatus] = useState('');
+  const [editAvatar, setEditAvatar] = useState('');
+  const [currentAvatarUrl, setCurrentAvatarUrl] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -58,6 +71,7 @@ export default function ContactsScreen() {
         token = (await SecureStore.getItemAsync('token')) || '';
       }
       setCurrentUser(user);
+      setCurrentUsername(user);
       setCurrentUserId(userId);
 
       // Fetch users and groups
@@ -68,8 +82,21 @@ export default function ContactsScreen() {
           axios.get(`${API_URL}/groups`, { headers })
         ]);
         
-        setContacts(usersRes.data.filter((u: any) => u.id !== userId));
+        const allUsers = usersRes.data;
+        setContacts(allUsers.filter((u: any) => u.id !== userId));
         setGroups(groupsRes.data);
+
+        const me = allUsers.find((u: any) => u.id === userId);
+        if (me) {
+          setCurrentUser(me.display_name);
+          setCurrentUsername(me.username);
+          setCurrentBmcId(me.bmc_id?.toString() || '');
+          setEditDisplayName(me.display_name);
+          setEditBio(me.bio || '');
+          setEditStatus(me.status || '');
+          setEditAvatar(me.avatar_url || '');
+          setCurrentAvatarUrl(me.avatar_url || '');
+        }
       } catch (e) {
         console.error('Failed to fetch data', e);
       }
@@ -80,6 +107,14 @@ export default function ContactsScreen() {
             ...prev,
             [data.room_id || data.sender_id]: (prev[data.room_id || data.sender_id] || 0) + 1
           }));
+
+          // Trigger Web Notification jika tab sedang disembunyikan
+          if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+             new Notification('BambooChat: Pesan Baru', {
+               body: 'Anda menerima pesan baru dari kontak Anda.',
+               icon: '/favicon.ico'
+             });
+          }
         });
       }
 
@@ -93,6 +128,12 @@ export default function ContactsScreen() {
         socketService.socket.off('receive_message');
       }
     };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'web' && 'Notification' in window) {
+      Notification.requestPermission();
+    }
   }, []);
 
   const openChat = (id: string, name: string) => {
@@ -125,6 +166,66 @@ export default function ContactsScreen() {
       console.error(e);
       if (Platform.OS === 'web') alert('Failed to save wallet address');
       else Alert.alert('Error', 'Failed to save wallet address');
+    }
+  };
+
+  const saveProfile = async () => {
+    try {
+      setIsSavingProfile(true);
+      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      
+      let finalAvatarUrl = editAvatar;
+      if (editAvatar && (editAvatar.startsWith('blob:') || editAvatar.startsWith('file:'))) {
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const res = await fetch(editAvatar);
+          const blob = await res.blob();
+          formData.append('file', blob, 'avatar.jpg');
+        } else {
+          formData.append('file', {
+            uri: editAvatar,
+            name: 'avatar.jpg',
+            type: 'image/jpeg',
+          } as any);
+        }
+        const uploadRes = await axios.post(`${API_URL}/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        finalAvatarUrl = uploadRes.data.url;
+      }
+
+      const res = await axios.post(`${API_URL}/auth/profile`, { 
+        display_name: editDisplayName, 
+        bio: editBio, 
+        status: editStatus, 
+        avatar_url: finalAvatarUrl 
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCurrentUser(res.data.user.display_name);
+      setCurrentAvatarUrl(res.data.user.avatar_url);
+      setProfileModalVisible(false);
+      if (Platform.OS === 'web') alert('Profile Saved!');
+      else Alert.alert('Success', 'Profile Saved!');
+    } catch (e) {
+      console.error(e);
+      if (Platform.OS === 'web') alert('Failed to save profile');
+      else Alert.alert('Error', 'Failed to save profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const pickImage = async () => {
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.5,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setEditAvatar(result.assets[0].uri);
     }
   };
 
@@ -168,11 +269,31 @@ export default function ContactsScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello, {currentUser}</Text>
-          <TouchableOpacity onPress={() => setWalletModalVisible(true)}>
-            <Text style={styles.walletText}>⚙️ Set Wallet Address</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 50 }}>
+          <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
+            <View style={styles.avatar}>
+              {currentAvatarUrl ? (
+                <Image source={{ uri: currentAvatarUrl }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{currentUser.charAt(0) || 'U'}</Text>
+              )}
+            </View>
           </TouchableOpacity>
+          <View>
+            <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
+              <Text style={styles.greeting}>Halo, {currentUser} ▾</Text>
+            </TouchableOpacity>
+            {dropdownVisible && (
+              <View style={styles.dropdownMenu}>
+                <TouchableOpacity style={styles.dropdownItem} onPress={() => { setDropdownVisible(false); setProfileModalVisible(true); }}>
+                  <Text style={styles.dropdownItemText}>👤 Profil Saya</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.dropdownItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
+                  <Text style={styles.dropdownItemText}>⚙️ Atur Alamat Dompet</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         </View>
         <TouchableOpacity onPress={handleLogout}>
           <Text style={styles.logoutText}>Logout</Text>
@@ -195,11 +316,16 @@ export default function ContactsScreen() {
           renderItem={({ item }) => (
             <TouchableOpacity style={styles.contactItem} onPress={() => openChat(item.id, item.display_name)}>
               <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
+                {item.avatar_url ? (
+                  <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+                ) : (
+                  <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
+                )}
               </View>
               <View style={styles.contactInfo}>
                 <Text style={styles.contactName}>{item.display_name}</Text>
-                <Text style={styles.contactUsername}>@{item.username}</Text>
+                <Text style={styles.usernameTag}>@{item.username}{item.bmc_id ? `_bmc${item.bmc_id}` : ''}</Text>
+                {item.status ? <Text style={styles.contactStatus}>{item.status}</Text> : null}
               </View>
               {unreadCounts[item.id] > 0 && (
                 <View style={styles.unreadBadge}>
@@ -234,6 +360,46 @@ export default function ContactsScreen() {
           />
         </View>
       )}
+
+      {/* Profile Modal */}
+      <Modal visible={isProfileModalVisible} transparent={true} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { padding: 32, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155' }]}>
+            <Text style={[styles.modalTitle, { fontSize: 24, textAlign: 'center', marginBottom: 24, color: '#10B981' }]}>My Profile</Text>
+            
+            <View style={{ alignItems: 'center', marginBottom: 24 }}>
+              <TouchableOpacity onPress={pickImage} style={{ alignItems: 'center' }}>
+                <View style={[styles.avatar, { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#10B981' }]}>
+                  {editAvatar ? (
+                    <Image source={{ uri: editAvatar }} style={{ width: 100, height: 100, borderRadius: 50 }} />
+                  ) : (
+                    <Text style={[styles.avatarText, { fontSize: 40 }]}>{editDisplayName.charAt(0) || 'U'}</Text>
+                  )}
+                </View>
+                <Text style={{ color: '#94A3B8', marginTop: 12, fontWeight: 'bold', fontSize: 14 }}>Tap to Change Photo</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.inputLabel}>Display Name</Text>
+            <TextInput style={styles.inputField} placeholder="Enter your display name" placeholderTextColor="#64748b" value={editDisplayName} onChangeText={setEditDisplayName} />
+            
+            <Text style={styles.inputLabel}>Bio</Text>
+            <TextInput style={styles.inputField} placeholder="A short bio about you" placeholderTextColor="#64748b" value={editBio} onChangeText={setEditBio} />
+            
+            <Text style={styles.inputLabel}>Status</Text>
+            <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor="#64748b" value={editStatus} onChangeText={setEditStatus} />
+            
+            <View style={[styles.modalActions, { marginTop: 16 }]}>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: '#334155', borderRadius: 8, paddingHorizontal: 20 }]}>
+                <Text style={[styles.cancelBtnText, { color: '#fff' }]}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={saveProfile} disabled={isSavingProfile}>
+                {isSavingProfile ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Simpan Perubahan</Text>}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Wallet Modal */}
       <Modal visible={isWalletModalVisible} transparent={true} animationType="fade">
@@ -317,9 +483,32 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155',
   },
   greeting: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
     color: '#F8FAFC',
+    fontWeight: 'bold',
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: 30,
+    left: 0,
+    backgroundColor: '#1E293B',
+    borderRadius: 8,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    minWidth: 160,
+    zIndex: 100,
+  },
+  dropdownItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  dropdownItemText: {
+    color: '#F8FAFC',
+    fontSize: 14,
   },
   walletText: {
     color: '#10B981',
@@ -367,6 +556,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
   avatarText: {
     color: '#fff',
@@ -377,14 +572,29 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contactName: {
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
     color: '#F8FAFC',
+    fontWeight: '600',
     marginBottom: 4,
+  },
+  usernameTag: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginBottom: 4,
+  },
+  contactStatus: {
+    fontSize: 12,
+    color: '#10B981',
   },
   contactUsername: {
     fontSize: 14,
     color: '#64748b',
+  },
+  contactBio: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 2,
+    fontStyle: 'italic',
   },
   unreadBadge: {
     backgroundColor: '#EF4444',
@@ -448,6 +658,24 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 14,
     marginBottom: 16,
+  },
+  inputField: {
+    backgroundColor: '#1E293B',
+    color: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    fontSize: 16,
+  },
+  inputLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 6,
+    marginLeft: 4,
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: '#0F172A',

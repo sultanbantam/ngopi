@@ -4,12 +4,13 @@ import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 
-const API_URL = 'http://localhost:3000/api';
+const API_URL = 'https://api.bamboochat.click/api';
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [publicKey, setPublicKey] = useState('TEMP_PUB_KEY'); // MVP simplification
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -76,14 +77,19 @@ export default function RegisterScreen() {
           autoCapitalize="none"
         />
         
-        <TextInput
-          style={styles.input}
-          placeholder="Password"
-          placeholderTextColor="#64748b"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
+        <View style={styles.passwordContainer}>
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Password"
+            placeholderTextColor="#64748b"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+          />
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+            <Text style={{ color: '#94A3B8' }}>{showPassword ? 'Hide' : 'Show'}</Text>
+          </TouchableOpacity>
+        </View>
 
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
@@ -141,6 +147,24 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  passwordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 16,
+  },
+  passwordInput: {
+    flex: 1,
+    color: '#F8FAFC',
+    padding: 16,
+    fontSize: 16,
+  },
+  eyeIcon: {
+    padding: 16,
   },
   button: {
     backgroundColor: '#10B981', // Emerald green

@@ -120,7 +120,7 @@ export default function ChatRoomScreen() {
 
       // Fetch history
       try {
-        const response = await axios.get(`http://localhost:3000/api/messages/${sharedKey}`, {
+        const response = await axios.get(`https://api.bamboochat.click/api/messages/${sharedKey}`, {
           headers: { Authorization: `Bearer ${await SecureStore.getItemAsync('token') || localStorage.getItem('token')}` }
         });
         const history = response.data.map((msg: any) => {
@@ -154,6 +154,9 @@ export default function ChatRoomScreen() {
 
         // Listen for incoming messages
         socketService.socket.on('receive_message', (data: any) => {
+          // Hanya proses pesan jika room_id cocok dengan chat yang sedang dibuka
+          if (data.room_id !== sharedKey) return;
+          
           // Prevent double messages if we sent it (from our own optimistic UI)
           if (data.sender_id === myId) return;
 
@@ -337,7 +340,7 @@ export default function ChatRoomScreen() {
         } as any);
       }
 
-      const response = await axios.post('http://localhost:3000/api/upload', formData, {
+      const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       return response.data.url;
@@ -345,6 +348,23 @@ export default function ChatRoomScreen() {
       console.error('Upload failed:', error);
       alert('Failed to upload file');
       return null;
+    }
+  };
+
+  const downloadAttachment = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download failed:', error);
     }
   };
 
@@ -461,7 +481,7 @@ export default function ChatRoomScreen() {
         formData.append('file', audioBlob, 'upload.webm');
         
         try {
-          const response = await axios.post('http://localhost:3000/api/upload', formData, {
+          const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
           const url = response.data.url;
@@ -566,13 +586,25 @@ export default function ChatRoomScreen() {
   };
 
   const handleCopy = () => {
-    // Basic copy to clipboard
     if (selectedMessage && selectedMessage.type === 'text') {
       if (Platform.OS === 'web') {
         navigator.clipboard.writeText(selectedMessage.content || '');
       }
     }
     setIsMenuVisible(false);
+  };
+
+  const downloadFile = (url: string, filename: string) => {
+    if (Platform.OS === 'web') {
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } else {
+      Linking.openURL(url).catch(e => console.error('Failed to open URL', e));
+    }
   };
 
   const renderReactions = (reactions?: Record<string, string>) => {
@@ -617,7 +649,6 @@ export default function ChatRoomScreen() {
         <View style={styles.headerRightIcons}>
           <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'true' } })}><Text style={styles.headerIcon}>📹</Text></TouchableOpacity>
           <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'false' } })}><Text style={styles.headerIcon}>📞</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconButton}><Text style={styles.headerIcon}>⋮</Text></TouchableOpacity>
         </View>
       </View>
 
@@ -643,13 +674,13 @@ export default function ChatRoomScreen() {
             delayLongPress={300}
           >
             {item.type === 'image' && item.attachment_url ? (
-              <TouchableOpacity onPress={() => Linking.openURL(item.attachment_url!)}>
-                <Image source={{ uri: item.attachment_url }} style={styles.attachedImage} />
+              <TouchableOpacity onPress={() => downloadFile(item.attachment_url!, item.content || 'image.jpg')}>
+                <Image source={{ uri: item.attachment_url }} style={styles.attachedImage} resizeMode="cover" />
               </TouchableOpacity>
             ) : item.type === 'audio' && item.attachment_url ? (
               <AudioMessage url={item.attachment_url} />
             ) : item.type === 'document' && item.attachment_url ? (
-              <TouchableOpacity style={styles.documentContainer} onPress={() => Linking.openURL(item.attachment_url!)}>
+              <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
                 <Text style={styles.documentIcon}>📄</Text>
                 <Text style={styles.documentName}>{item.content}</Text>
               </TouchableOpacity>

@@ -13,9 +13,13 @@ model User {
   display_name   String
   public_key     String?
   wallet_address String?
+  avatar_url     String?
+  bio            String?
+  status         String?
   is_online      Boolean  @default(false)
   last_seen      DateTime @default(now())
   created_at     DateTime @default(now())
+  bmc_id         Int      @default(autoincrement())
 
   messages      Message[]
   groupsCreated Group[]   @relation("GroupCreator")

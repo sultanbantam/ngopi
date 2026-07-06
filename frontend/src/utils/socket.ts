@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { Platform } from 'react-native';
 import * as SecureStore from './storage';
 
-const SOCKET_URL = 'http://localhost:3000';
+const SOCKET_URL = 'https://api.bamboochat.click';
 
 class SocketService {
   public socket: Socket | null = null;
@@ -21,6 +21,9 @@ class SocketService {
 
     this.socket = io(SOCKET_URL, {
       query: { token },
+      extraHeaders: {
+        'ngrok-skip-browser-warning': '69420'
+      },
       transports: ['websocket']
     });
 

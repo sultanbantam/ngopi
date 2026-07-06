@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Stack, Slot, usePathname } from 'expo-router';
-import { View, useWindowDimensions, StyleSheet, Text, TouchableOpacity, Platform } from 'react-native';
+import { View, useWindowDimensions, StyleSheet, Text, Platform } from 'react-native';
 import ContactsScreen from './contacts';
 import { socketService } from '../../src/utils/socket';
+import * as SecureStore from '../../src/utils/storage';
 
 export default function MainLayout() {
   const { width } = useWindowDimensions();
@@ -12,23 +13,92 @@ export default function MainLayout() {
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
+  // Minta izin notifikasi browser dan ambil user ID
+  useEffect(() => {
+    const init = async () => {
+      let uid = null;
+      if (Platform.OS === 'web') {
+        uid = localStorage.getItem('userId');
+        if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+          Notification.requestPermission();
+        }
+      } else {
+        uid = await SecureStore.getItemAsync('userId');
+      }
+      setCurrentUserId(uid);
+    };
+    init();
+  }, []);
+
+  const playNotificationSound = () => {
+    if (Platform.OS !== 'web') return;
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
+      oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
+
+      gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.3);
+    } catch (e) {
+      console.log('Audio error:', e);
+    }
+  };
+
+  const showNotification = (title: string, body: string) => {
+    setToastMessage(`${title}: ${body}`);
+    setTimeout(() => setToastMessage(null), 4000);
+    playNotificationSound();
+
+    if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
+      if (document.hidden) {
+        new Notification(title, { body });
+      }
+    }
+  };
+
   useEffect(() => {
     const handleReaction = (data: any) => {
-      // Just a simple toast for demo
-      setToastMessage(`Someone reacted with ${data.reactions['me'] || 'an emoji'} to your message!`);
-      setTimeout(() => setToastMessage(null), 3000);
+      showNotification('Reaction', `Someone reacted to your message!`);
+    };
+
+    const handleNewMessage = (data: any) => {
+      if (currentUserId && data.sender_id !== currentUserId) {
+        // Jangan notifikasi jika kita sedang membuka chat tersebut? 
+        // Untuk sederhananya, kita selalu notif jika document.hidden atau selalu muncul toast
+        showNotification('New Message', 'You received a new message');
+      }
+    };
+
+    const handleCallIncoming = (data: any) => {
+      showNotification('Incoming Call', `${data.name} is calling you...`);
     };
 
     if (socketService.socket) {
       socketService.socket.on('message_reacted', handleReaction);
+      socketService.socket.on('receive_message', handleNewMessage);
+      socketService.socket.on('call_incoming', handleCallIncoming);
     }
     
     return () => {
       if (socketService.socket) {
         socketService.socket.off('message_reacted', handleReaction);
+        socketService.socket.off('receive_message', handleNewMessage);
+        socketService.socket.off('call_incoming', handleCallIncoming);
       }
     };
-  }, []);
+  }, [currentUserId]);
 
   const renderToast = () => {
     if (!toastMessage) return null;
