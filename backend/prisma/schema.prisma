@@ -11,6 +11,7 @@ model User {
   username       String   @unique
   password_hash  String
   display_name   String
+  role           String   @default("user")
   public_key     String?
   wallet_address String?
   avatar_url     String?
@@ -24,30 +25,45 @@ model User {
   messages      Message[]
   groupsCreated Group[]   @relation("GroupCreator")
   groupMembers  GroupMember[]
+  settings      UserSettings?
+  airdropClaims AirdropClaim[]
+  platformAssignments Platform[] @relation("PlatformSupportAgent")
+  ticketsCreated Ticket[] @relation("TicketCreator")
+  ticketsAssigned Ticket[] @relation("TicketAgent")
+  ticketMessages TicketMessage[]
+  ticketAuditLogs TicketAuditLog[]
 }
 
 model Message {
-  id             String   @id @default(uuid())
-  room_id        String // Bisa berupa kombinasi UserID (1-on-1) atau GroupID
-  sender_id      String
-  content        String? // Optional for non-text messages
-  type           String   @default("text") // "text", "image", "audio", "document"
-  attachment_url String?
-  is_delivered   Boolean  @default(false)
-  is_read        Boolean  @default(false)
-  timestamp      DateTime @default(now())
-  reactions      Json?    // Store reactions, e.g. {"sender_id": "emoji"}
-  is_edited      Boolean  @default(false)
-  is_pinned      Boolean  @default(false)
+  id                String   @id @default(uuid())
+  room_id           String // Bisa berupa kombinasi UserID (1-on-1) atau GroupID
+  sender_id         String
+  content           String? // Optional for non-text messages
+  type              String   @default("text") // "text", "image", "audio", "document"
+  attachment_url    String?
+  is_delivered      Boolean  @default(false)
+  is_read           Boolean  @default(false)
+  timestamp         DateTime @default(now())
+  reactions         Json?    // Store reactions, e.g. {"sender_id": "emoji"}
+  is_edited         Boolean  @default(false)
+  is_pinned         Boolean  @default(false)
+  is_deleted        Boolean  @default(false)
+  deleted_for_all   Boolean  @default(false)
+  parent_message_id String?  // For reply/quote feature
+  forwarded_from_id String?  // Original message ID if forwarded
 
   sender         User     @relation(fields: [sender_id], references: [id])
+  parent         Message? @relation("MessageReplies", fields: [parent_message_id], references: [id])
+  replies        Message[] @relation("MessageReplies")
 }
 
 model Group {
   id              String   @id @default(uuid())
   name            String
+  description     String?
   min_bmc_balance Float    @default(0)
   created_by      String
+  created_at      DateTime @default(now())
 
   creator User @relation("GroupCreator", fields: [created_by], references: [id])
   members GroupMember[]
@@ -63,4 +79,122 @@ model GroupMember {
   user       User  @relation(fields: [user_id], references: [id])
 
   @@unique([group_id, user_id])
+}
+
+model UserSettings {
+  id                 String  @id @default(uuid())
+  user_id            String  @unique
+  hide_name          Boolean @default(false)
+  hide_contacts      Boolean @default(false)
+  hide_groups        Boolean @default(false)
+  preferred_language String  @default("id")
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model AirdropClaim {
+  id         String   @id @default(uuid())
+  user_id    String
+  amount     Float    @default(0.1)
+  claimed_at DateTime @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@index([user_id, claimed_at])
+}
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+model Platform {
+  id               String   @id @default(uuid())
+  name             String   @unique
+  display_name     String
+  description      String
+  website_url      String
+  icon             String?
+  support_agent_id String?
+  created_at       DateTime @default(now())
+
+  support_agent User? @relation("PlatformSupportAgent", fields: [support_agent_id], references: [id])
+  faqs          Faq[]
+  tickets       Ticket[]
+
+  @@index([support_agent_id])
+  @@map("platforms")
+}
+
+model Faq {
+  id          String   @id @default(uuid())
+  platform_id String
+  question    String
+  answer      String
+  keywords    String[] @default([])
+  created_at  DateTime @default(now())
+
+  platform Platform @relation(fields: [platform_id], references: [id], onDelete: Cascade)
+
+  @@unique([platform_id, question])
+  @@index([platform_id])
+  @@map("faqs")
+}
+
+model Ticket {
+  id                String       @id @default(uuid())
+  user_id           String
+  platform_id       String
+  title             String
+  status            TicketStatus @default(open)
+  assigned_agent_id String?
+  is_escalated      Boolean      @default(false)
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+
+  user           User            @relation("TicketCreator", fields: [user_id], references: [id])
+  platform       Platform        @relation(fields: [platform_id], references: [id])
+  assigned_agent User?           @relation("TicketAgent", fields: [assigned_agent_id], references: [id])
+  messages       TicketMessage[]
+  auditLogs      TicketAuditLog[]
+
+  @@index([user_id])
+  @@index([platform_id])
+  @@index([assigned_agent_id])
+  @@index([status])
+  @@map("tickets")
+}
+
+model TicketMessage {
+  id          String   @id @default(uuid())
+  ticket_id   String
+  sender_id   String
+  content     String
+  is_internal Boolean  @default(false)
+  created_at  DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  sender User   @relation(fields: [sender_id], references: [id])
+
+  @@index([ticket_id])
+  @@index([sender_id])
+  @@index([is_internal])
+  @@map("ticket_messages")
+}
+
+model TicketAuditLog {
+  id         String   @id @default(uuid())
+  ticket_id  String
+  actor_id   String
+  action     String
+  metadata   Json?
+  created_at DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  actor  User   @relation(fields: [actor_id], references: [id])
+
+  @@index([ticket_id])
+  @@index([actor_id])
+  @@map("ticket_audit_logs")
 }

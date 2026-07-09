@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Stack, Slot, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform } from 'react-native';
 import ContactsScreen from './contacts';
+import BambupediaRoom from './bambupedia';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
+
 
 export default function MainLayout() {
   const { width } = useWindowDimensions();
@@ -116,11 +118,8 @@ export default function MainLayout() {
           <ContactsScreen />
         </View>
         <View style={styles.main}>
-          {pathname === '/contacts' || pathname === '/' ? (
-             <View style={styles.emptyState}>
-               <Text style={styles.emptyStateText}>BambooChat Web</Text>
-               <Text style={styles.emptyStateSubtext}>Select a chat to start messaging</Text>
-             </View>
+          {pathname === '/contacts' || pathname === '/' || pathname === '/bambupedia' ? (
+             <BambupediaRoom />
           ) : (
              <Slot />
           )}
@@ -138,8 +137,10 @@ export default function MainLayout() {
         headerTitleStyle: { fontWeight: 'bold' },
         contentStyle: { backgroundColor: '#0F172A' }
       }}>
-        <Stack.Screen name="contacts" options={{ title: 'WhatsApp' }} />
+        <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="help-center" options={{ title: "Pusat Bantuan" }} />
+        <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>
       {renderToast()}
     </View>
@@ -166,6 +167,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0F172A',
+  },
+  emptyStateLogo: {
+    width: 200,
+    height: 200,
+    marginBottom: 20,
+    opacity: 0.8,
   },
   emptyStateText: {
     color: '#fff',

@@ -1,11 +1,32 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { handleChatEvents } from './chat.handler';
+import { handleBambupediaEvents, startBambupediaTips } from './bambupedia.handler';
+import { handleTicketEvents } from './ticket.handler';
 import { prisma } from '../utils/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
 
+const broadcastOnlineList = async (io: Server) => {
+  try {
+    const onlineUsers = await prisma.user.findMany({
+      where: { is_online: true },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        avatar_url: true,
+      }
+    });
+    io.emit('online_list', onlineUsers);
+  } catch (e) {
+    console.error('Error broadcasting online list:', e);
+  }
+};
+
 export const setupSocket = (io: Server) => {
+  // Start rotating feature tips for Bambupedia room
+  startBambupediaTips(io);
   // Middleware for authentication
   io.use((socket: Socket, next) => {
     const token = socket.handshake.query.token as string;
@@ -28,6 +49,18 @@ export const setupSocket = (io: Server) => {
     const user = (socket as any).user;
     console.log(`User connected: ${user.username} (${socket.id})`);
 
+    // Fetch full user profile for Bambupedia
+    let fullUser: { id: string; username: string; display_name?: string | null; avatar_url?: string | null } = user;
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { id: user.id },
+        select: { id: true, username: true, display_name: true, avatar_url: true }
+      });
+      if (dbUser) fullUser = dbUser;
+    } catch (e) {
+      console.error('Error fetching user for bambupedia:', e);
+    }
+
     // Let the user join a personal room with their own ID to receive direct messages easily
     socket.join(user.id);
 
@@ -38,12 +71,18 @@ export const setupSocket = (io: Server) => {
         data: { is_online: true },
       });
       io.emit('user_status_change', { user_id: user.id, is_online: true });
+      // Broadcast updated online list
+      await broadcastOnlineList(io);
     } catch (e) {
       console.error('Error updating online status:', e);
     }
 
     // Register chat handlers
     handleChatEvents(io, socket, user);
+    handleTicketEvents(io, socket, user);
+
+    // Register Bambupedia community lobby handler
+    handleBambupediaEvents(io, socket, fullUser);
 
     // WebRTC Signaling
     socket.on('call_user', (data) => {
@@ -69,6 +108,11 @@ export const setupSocket = (io: Server) => {
       socket.to(data.to).emit('ice_candidate', data.candidate);
     });
 
+    // Request online list on demand
+    socket.on('request_online_list', async () => {
+      await broadcastOnlineList(io);
+    });
+
     socket.on('disconnect', async () => {
       console.log(`User disconnected: ${user.username} (${socket.id})`);
       try {
@@ -78,9 +122,12 @@ export const setupSocket = (io: Server) => {
           data: { is_online: false, last_seen: lastSeen },
         });
         io.emit('user_status_change', { user_id: user.id, is_online: false, last_seen: lastSeen });
+        // Broadcast updated online list
+        await broadcastOnlineList(io);
       } catch (e) {
         console.error('Error updating offline status:', e);
       }
     });
   });
 };
+

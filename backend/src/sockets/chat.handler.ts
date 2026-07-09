@@ -19,10 +19,10 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     console.log(`User ${user.username} joined room: ${roomId}`);
   });
 
-  // Event to send a message
-  socket.on('send_message', async (data: { room_id: string; receiver_id?: string; content?: string; type?: string; attachment_url?: string }) => {
+  // Event to send a message (with optional reply support)
+  socket.on('send_message', async (data: { room_id: string; receiver_id?: string; content?: string; type?: string; attachment_url?: string; parent_message_id?: string }) => {
     try {
-      const { room_id, receiver_id, content, type = 'text', attachment_url } = data;
+      const { room_id, receiver_id, content, type = 'text', attachment_url, parent_message_id } = data;
 
       // Save to database
       const savedMessage = await prisma.message.create({
@@ -32,6 +32,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
           content: content || null, // This should be encrypted ciphertext from frontend (if text)
           type,
           attachment_url: attachment_url || null,
+          parent_message_id: parent_message_id || null,
         }
       });
 
@@ -91,7 +92,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // WhatsApp Features
+  // Reaction on message
   socket.on('react_message', async (data: { message_id: string; room_id: string; receiver_id?: string; emoji: string }) => {
     try {
       const { message_id, room_id, receiver_id, emoji } = data;
@@ -119,6 +120,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
+  // Edit message
   socket.on('edit_message', async (data: { message_id: string; room_id: string; receiver_id?: string; new_content: string }) => {
     try {
       const { message_id, room_id, receiver_id, new_content } = data;
@@ -133,6 +135,66 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
+  // Delete message
+  socket.on('delete_message', async (data: { message_id: string; room_id: string; receiver_id?: string; for_all: boolean }) => {
+    try {
+      const { message_id, room_id, receiver_id, for_all } = data;
+      
+      const message = await prisma.message.findUnique({ where: { id: message_id } });
+      if (!message) return;
+      
+      // Only the sender can delete for all
+      if (for_all && message.sender_id !== user.id) return;
+
+      await prisma.message.update({
+        where: { id: message_id },
+        data: { 
+          is_deleted: true,
+          deleted_for_all: for_all,
+          content: for_all ? null : message.content // Clear content if deleted for all
+        }
+      });
+
+      const deleteEvent = { message_id, room_id, deleted_by: user.id, for_all };
+      io.to(room_id).emit('message_deleted', deleteEvent);
+      if (receiver_id) io.to(receiver_id).emit('message_deleted', deleteEvent);
+    } catch (e) {
+      console.error('Delete message error:', e);
+    }
+  });
+
+  // Forward message to another room/user
+  socket.on('forward_message', async (data: { original_message_id: string; target_room_id: string; target_receiver_id?: string }) => {
+    try {
+      const { original_message_id, target_room_id, target_receiver_id } = data;
+      
+      const originalMsg = await prisma.message.findUnique({ where: { id: original_message_id } });
+      if (!originalMsg) return;
+
+      // Create forwarded message
+      const forwardedMsg = await prisma.message.create({
+        data: {
+          room_id: target_room_id,
+          sender_id: user.id,
+          content: originalMsg.content,
+          type: originalMsg.type,
+          attachment_url: originalMsg.attachment_url,
+          forwarded_from_id: original_message_id
+        }
+      });
+
+      if (target_receiver_id) {
+        io.to(target_receiver_id).emit('receive_message', forwardedMsg);
+        io.to(user.id).emit('receive_message', forwardedMsg);
+      } else {
+        io.to(target_room_id).emit('receive_message', forwardedMsg);
+      }
+    } catch (e) {
+      console.error('Forward message error:', e);
+    }
+  });
+
+  // Pin message
   socket.on('pin_message', async (data: { message_id: string; room_id: string; receiver_id?: string; is_pinned: boolean }) => {
     try {
       const { message_id, room_id, receiver_id, is_pinned } = data;
@@ -147,3 +209,4 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 };
+

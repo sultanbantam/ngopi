@@ -18,3 +18,7 @@ frontend/.expo/
 frontend/dist/
 frontend/web-build/
 frontend/.env
+
+# Local deploy artifacts and sensitive helper scripts
+*.tar.gz
+backend/deploy*.js

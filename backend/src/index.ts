@@ -9,6 +9,12 @@ import bmcRoutes from './routes/bmc.routes';
 import messageRoutes from './routes/message.routes';
 import groupRoutes from './routes/group.routes';
 import uploadRoutes from './routes/upload.routes';
+import settingsRoutes from './routes/settings.routes';
+import platformRoutes from './routes/platform.routes';
+import faqRoutes from './routes/faq.routes';
+import aiRoutes from './routes/ai.routes';
+import ticketRoutes from './routes/ticket.routes';
+import adminRoutes from './routes/admin.routes';
 import { verifyJWT } from './middleware/auth.middleware';
 import { setupSocket } from './sockets';
 import path from 'path';
@@ -32,6 +38,12 @@ app.use('/api/bmc', bmcRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/settings', settingsRoutes);
+app.use('/api/platforms', platformRoutes);
+app.use('/api/faqs', faqRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/tickets', ticketRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -7,8 +7,13 @@ const SOCKET_URL = 'https://api.bamboochat.click';
 class SocketService {
   public socket: Socket | null = null;
 
-  public async connect() {
-    if (this.socket?.connected) return;
+  public async connect(): Promise<Socket | null> {
+    if (this.socket) {
+      if (!this.socket.connected && this.socket.disconnected) {
+        this.socket.connect();
+      }
+      return this.socket;
+    }
 
     let token = null;
     if (Platform.OS === 'web') {
@@ -17,7 +22,7 @@ class SocketService {
       token = await SecureStore.getItemAsync('token');
     }
 
-    if (!token) return;
+    if (!token) return null;
 
     this.socket = io(SOCKET_URL, {
       query: { token },
@@ -34,6 +39,8 @@ class SocketService {
     this.socket.on('disconnect', () => {
       console.log('Disconnected from WebSocket');
     });
+
+    return this.socket;
   }
 
   public disconnect() {

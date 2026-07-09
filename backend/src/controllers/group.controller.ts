@@ -4,7 +4,7 @@ import { getBmcBalance } from '../utils/blockchain';
 
 export const createGroup = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { name, minBmcBalance } = req.body;
+    const { name, description, minBmcBalance } = req.body;
     const userId = (req as any).user?.id as string; // from auth middleware
 
     if (!name) {
@@ -15,6 +15,7 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
     const group = await prisma.group.create({
       data: {
         name,
+        description: description || null,
         min_bmc_balance: parseFloat(minBmcBalance) || 0,
         created_by: userId!,
         members: {
@@ -44,6 +45,55 @@ export const listGroups = async (req: Request, res: Response): Promise<void> => 
     res.json(groups);
   } catch (error) {
     console.error('List groups error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getGroupMembers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const groupId = req.params.id as string;
+    
+    const group = await prisma.group.findUnique({
+      where: { id: groupId },
+      include: {
+        members: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                username: true,
+                display_name: true,
+                avatar_url: true,
+                is_online: true,
+                wallet_address: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!group) {
+      res.status(404).json({ error: 'Group not found' });
+      return;
+    }
+
+    res.json({
+      group_id: group.id,
+      group_name: group.name,
+      description: group.description,
+      members: group.members.map(m => ({
+        user_id: m.user.id,
+        username: m.user.username,
+        display_name: m.user.display_name,
+        avatar_url: m.user.avatar_url,
+        is_online: m.user.is_online,
+        wallet_address: m.user.wallet_address,
+        joined_at: m.joined_at
+      }))
+    });
+  } catch (error) {
+    console.error('Get group members error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
 };
@@ -115,3 +165,4 @@ export const joinGroup = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+

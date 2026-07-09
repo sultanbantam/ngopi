@@ -85,7 +85,7 @@ export default function ChatRoomScreen() {
   // Real-time states
   const [isTyping, setIsTyping] = useState(false);
   const [partnerStatus, setPartnerStatus] = useState<string>('');
-  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Attachments
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -98,6 +98,12 @@ export default function ChatRoomScreen() {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [showEmojiPanel, setShowEmojiPanel] = useState(false);
+
+  // Online Contacts State
+  const [rawOnlineList, setRawOnlineList] = useState<any[]>([]);
+  const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [myUserId, setMyUserId] = useState<string>('');
 
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
@@ -117,11 +123,19 @@ export default function ChatRoomScreen() {
       const sharedKey = [myId, partnerId].sort().join('-');
       setSecretKey(sharedKey);
       setActualRoomId(sharedKey);
+      setMyUserId(myId);
 
       // Fetch history
       try {
+        const token = await SecureStore.getItemAsync('token') || localStorage.getItem('token');
+        
+        // Fetch all users for online list
+        axios.get(`https://api.bamboochat.click/api/auth/users`, {
+          headers: { Authorization: `Bearer ${token}` }
+        }).then(res => setAllUsers(res.data)).catch(console.error);
+
         const response = await axios.get(`https://api.bamboochat.click/api/messages/${sharedKey}`, {
-          headers: { Authorization: `Bearer ${await SecureStore.getItemAsync('token') || localStorage.getItem('token')}` }
+          headers: { Authorization: `Bearer ${token}` }
         });
         const history = response.data.map((msg: any) => {
           let decryptedText = '';
@@ -222,6 +236,15 @@ export default function ChatRoomScreen() {
         socketService.socket.on('message_pinned', (data: any) => {
           setMessages(prev => prev.map(msg => msg.id === data.id ? { ...msg, is_pinned: data.is_pinned } : msg));
         });
+        socketService.socket.on('message_deleted', (data: any) => {
+          setMessages(prev => prev.filter(msg => msg.id !== data.id));
+        });
+
+        // Online users
+        socketService.socket.on('online_list', (data: any[]) => {
+          setRawOnlineList(data);
+        });
+        socketService.socket.emit('request_online_list');
 
         // WebRTC Incoming Call
         socketService.socket.on('call_incoming', (data: any) => {
@@ -252,6 +275,7 @@ export default function ChatRoomScreen() {
         socketService.socket.off('message_reacted');
         socketService.socket.off('message_edited');
         socketService.socket.off('message_pinned');
+        socketService.socket.off('message_deleted');
         socketService.socket.off('call_incoming');
       }
     };
@@ -259,6 +283,12 @@ export default function ChatRoomScreen() {
 
   const sendMessage = () => {
     if (!inputText.trim()) return;
+
+    if (inputText.trim().toLowerCase() === '/cs') {
+      setInputText('');
+      router.push('/(main)/help-center' as any);
+      return;
+    }
 
     if (isEditing && editingMessageId) {
       if (socketService.socket) {
@@ -287,7 +317,8 @@ export default function ChatRoomScreen() {
     const messageData = {
       room_id: actualRoomId,
       receiver_id: roomId, // Pass receiver_id so backend broadcasts to them globally
-      content: ciphertext
+      content: ciphertext,
+      reply_to_id: replyingToMessageId
     };
 
     if (socketService.socket) {
@@ -304,6 +335,7 @@ export default function ChatRoomScreen() {
     }]);
 
     setInputText('');
+    setReplyingToMessageId(null);
     setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
   };
 
@@ -594,6 +626,76 @@ export default function ChatRoomScreen() {
     setIsMenuVisible(false);
   };
 
+  const [replyingToMessageId, setReplyingToMessageId] = useState<string | null>(null);
+
+  const handleReply = () => {
+    if (selectedMessage) {
+      setReplyingToMessageId(selectedMessage.id);
+    }
+    setIsMenuVisible(false);
+  };
+
+  const [isForwardModalVisible, setIsForwardModalVisible] = useState(false);
+  const [forwardContacts, setForwardContacts] = useState<any[]>([]);
+  const [forwardGroups, setForwardGroups] = useState<any[]>([]);
+
+  const handleForwardClick = async () => {
+    setIsMenuVisible(false);
+    setIsForwardModalVisible(true);
+    try {
+      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const headers = { Authorization: `Bearer ${token}` };
+      const [usersRes, groupsRes] = await Promise.all([
+        axios.get(`https://api.bamboochat.click/api/auth/users`, { headers }),
+        axios.get(`https://api.bamboochat.click/api/groups`, { headers })
+      ]);
+      let myId = Platform.OS === 'web' ? localStorage.getItem('userId') : await SecureStore.getItemAsync('userId');
+      setForwardContacts(usersRes.data.filter((u: any) => u.id !== myId));
+      setForwardGroups(groupsRes.data);
+    } catch (e) {
+      console.error('Failed to fetch for forward', e);
+    }
+  };
+
+  const confirmForward = async (targetId: string) => {
+    let myId = Platform.OS === 'web' ? localStorage.getItem('userId') : await SecureStore.getItemAsync('userId');
+    const target_room_id = [myId, targetId].sort().join('-');
+    if (selectedMessage && socketService.socket) {
+      socketService.socket.emit('forward_message', {
+        message_id: selectedMessage.id,
+        target_room_id: target_room_id
+      });
+      setIsForwardModalVisible(false);
+      if (Platform.OS === 'web') alert('Pesan diteruskan');
+    }
+  };
+
+  const handleDeleteSelf = () => {
+    if (selectedMessage && socketService.socket) {
+      socketService.socket.emit('delete_message', {
+        message_id: selectedMessage.id,
+        room_id: actualRoomId,
+        receiver_id: roomId,
+        for_everyone: false
+      });
+      setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+    }
+    setIsMenuVisible(false);
+  };
+
+  const handleDeleteEveryone = () => {
+    if (selectedMessage && socketService.socket) {
+      socketService.socket.emit('delete_message', {
+        message_id: selectedMessage.id,
+        room_id: actualRoomId,
+        receiver_id: roomId,
+        for_everyone: true
+      });
+      setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
+    }
+    setIsMenuVisible(false);
+  };
+
   const downloadFile = (url: string, filename: string) => {
     if (Platform.OS === 'web') {
       const a = document.createElement('a');
@@ -621,6 +723,13 @@ export default function ChatRoomScreen() {
   };
 
   const pinnedMessage = messages.find(m => m.is_pinned);
+
+  const onlineUsersList = React.useMemo(() => {
+    return rawOnlineList
+      .filter(u => u.is_online && u.id !== myUserId && u.id !== roomId)
+      .map(u => allUsers.find(user => user.id === u.id))
+      .filter(Boolean);
+  }, [rawOnlineList, allUsers, myUserId, roomId]);
 
   return (
     <KeyboardAvoidingView 
@@ -664,51 +773,71 @@ export default function ChatRoomScreen() {
         data={messages}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.messageList}
-        renderItem={({ item }) => (
-          <TouchableOpacity 
-            style={[styles.messageBubble, item.isMine ? styles.myMessage : styles.theirMessage]}
-            onLongPress={() => {
-              setSelectedMessage(item);
-              setIsMenuVisible(true);
-            }}
-            delayLongPress={300}
-          >
-            {item.type === 'image' && item.attachment_url ? (
-              <TouchableOpacity onPress={() => downloadFile(item.attachment_url!, item.content || 'image.jpg')}>
-                <Image source={{ uri: item.attachment_url }} style={styles.attachedImage} resizeMode="cover" />
-              </TouchableOpacity>
-            ) : item.type === 'audio' && item.attachment_url ? (
-              <AudioMessage url={item.attachment_url} />
-            ) : item.type === 'document' && item.attachment_url ? (
-              <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
-                <Text style={styles.documentIcon}>📄</Text>
-                <Text style={styles.documentName}>{item.content}</Text>
-              </TouchableOpacity>
-            ) : (
-              <View>
-                <Text style={styles.messageText}>{item.content}</Text>
-                {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
-              </View>
-            )}
-            
-            <View style={styles.messageFooter}>
-              <Text style={styles.timeText}>{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
-              {item.isMine && (
-                <Text style={styles.statusText}>
-                  {item.isRead ? '✓✓' : '✓'}
-                </Text>
+        renderItem={({ item }) => {
+          const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
+          return (
+            <TouchableOpacity 
+              style={[styles.messageBubble, item.isMine ? styles.myMessage : styles.theirMessage]}
+              onLongPress={() => {
+                setSelectedMessage(item);
+                setIsMenuVisible(true);
+              }}
+              delayLongPress={300}
+            >
+              {repliedMsg && (
+                <View style={[styles.repliedBanner, item.isMine ? styles.myRepliedBanner : styles.theirRepliedBanner]}>
+                  <Text style={styles.repliedBannerSender}>{repliedMsg.isMine ? 'You' : 'Them'}</Text>
+                  <Text style={styles.repliedBannerContent} numberOfLines={1}>{repliedMsg.content || 'Attachment'}</Text>
+                </View>
               )}
-            </View>
+              {item.type === 'image' && item.attachment_url ? (
+                <TouchableOpacity onPress={() => downloadFile(item.attachment_url!, item.content || 'image.jpg')}>
+                  <Image source={{ uri: item.attachment_url }} style={styles.attachedImage} resizeMode="cover" />
+                </TouchableOpacity>
+              ) : item.type === 'audio' && item.attachment_url ? (
+                <AudioMessage url={item.attachment_url} />
+              ) : item.type === 'document' && item.attachment_url ? (
+                <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
+                  <Text style={styles.documentIcon}>📄</Text>
+                  <Text style={styles.documentName}>{item.content}</Text>
+                </TouchableOpacity>
+              ) : (
+                <View>
+                  <Text style={styles.messageText}>{item.content}</Text>
+                  {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
+                </View>
+              )}
+              
+              <View style={styles.messageFooter}>
+                <Text style={styles.timeText}>{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                {item.isMine && (
+                  <Text style={styles.statusText}>
+                    {item.isRead ? '✓✓' : '✓'}
+                  </Text>
+                )}
+              </View>
 
-            {renderReactions(item.reactions)}
-          </TouchableOpacity>
-        )}
+              <TouchableOpacity 
+                style={styles.dropdownButton}
+                onPress={() => {
+                  setSelectedMessage(item);
+                  setIsMenuVisible(true);
+                }}
+              >
+                <Text style={styles.dropdownIcon}>⌄</Text>
+              </TouchableOpacity>
+
+              {renderReactions(item.reactions)}
+            </TouchableOpacity>
+          );
+        }}
       />
 
       {/* Context Menu Modal */}
       <Modal transparent visible={isMenuVisible} animationType="fade" onRequestClose={() => setIsMenuVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMenuVisible(false)}>
           <View style={styles.menuContainer}>
+            {/* Quick Emojis */}
             <View style={styles.emojiRow}>
               {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
                 <TouchableOpacity key={emoji} onPress={() => handleReact(emoji)}>
@@ -716,25 +845,74 @@ export default function ChatRoomScreen() {
                 </TouchableOpacity>
               ))}
             </View>
-            
+
             <View style={styles.menuActions}>
               <TouchableOpacity style={styles.menuItem} onPress={handleCopy}>
-                <Text style={styles.menuItemText}>Copy</Text>
+                <Text style={styles.menuItemText}>Salin</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={handleReply}>
+                <Text style={styles.menuItemText}>Balas</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuItem} onPress={handleForwardClick}>
+                <Text style={styles.menuItemText}>Teruskan</Text>
               </TouchableOpacity>
               {selectedMessage?.isMine && selectedMessage?.type === 'text' && (
                 <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                  <Text style={styles.menuItemText}>Edit</Text>
+                  <Text style={styles.menuItemText}>✏️ Edit</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.menuItem} onPress={handlePin}>
-                <Text style={styles.menuItemText}>{selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}</Text>
+                <Text style={styles.menuItemText}>📌 {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}</Text>
+              </TouchableOpacity>
+              {selectedMessage?.isMine && (
+                <TouchableOpacity style={styles.menuItem} onPress={handleDeleteEveryone}>
+                  <Text style={[styles.menuItemText, { color: '#EF4444' }]}>🗑 Hapus untuk Semua</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.menuItem} onPress={handleDeleteSelf}>
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>🗑 Hapus untuk Saya</Text>
               </TouchableOpacity>
             </View>
           </View>
         </TouchableOpacity>
       </Modal>
 
+      {/* Forward Modal */}
+      <Modal transparent visible={isForwardModalVisible} animationType="slide" onRequestClose={() => setIsForwardModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.menuContainer, { maxHeight: '80%', padding: 0 }]}>
+            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+              <Text style={styles.headerTitle}>Teruskan Pesan</Text>
+            </View>
+            <FlatList
+              data={[...forwardContacts, ...forwardGroups]}
+              keyExtractor={item => item.id}
+              contentContainerStyle={{ padding: 16 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.contactItem} onPress={() => confirmForward(item.id)}>
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>{(item.display_name || item.name || 'U').charAt(0)}</Text>
+                  </View>
+                  <Text style={styles.contactName}>{item.display_name || item.name}</Text>
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity onPress={() => setIsForwardModalVisible(false)} style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#334155', alignItems: 'center' }}>
+              <Text style={styles.cancelBtnText}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <View style={styles.inputContainer}>
+        {replyingToMessageId && (
+          <View style={styles.editingBanner}>
+            <Text style={styles.editingBannerText}>Replying to message...</Text>
+            <TouchableOpacity onPress={() => setReplyingToMessageId(null)}>
+              <Text style={styles.editingBannerClose}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        )}
         {isEditing && (
           <View style={styles.editingBanner}>
             <Text style={styles.editingBannerText}>Editing message...</Text>
@@ -750,7 +928,22 @@ export default function ChatRoomScreen() {
           <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
             <Text style={styles.attachButtonText}>📷</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.attachButton} onPress={() => setShowEmojiPanel(!showEmojiPanel)}>
+            <Text style={styles.attachButtonText}>😊</Text>
+          </TouchableOpacity>
         </View>
+        {showEmojiPanel && (
+          <View style={styles.emojiInputPanel}>
+            {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉', '😍', '🤔', '😅', '🥳'].map(emoji => (
+              <TouchableOpacity key={emoji} style={styles.emojiInputBtn}
+                onPress={() => {
+                  setInputText(prev => prev + emoji);
+                }}>
+                <Text style={styles.emojiInputText}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         
         <View style={styles.inputRow}>
           <TextInput
@@ -777,6 +970,33 @@ export default function ChatRoomScreen() {
           )}
         </View>
       </View>
+      {/* Online Users Horizontal Bar */}
+      {onlineUsersList.length > 0 && (
+        <View style={styles.onlineChatBar}>
+          <Text style={{ color: '#10B981', fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Contacts</Text>
+          <FlatList
+            horizontal
+            data={onlineUsersList}
+            keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.onlineUserItem} onPress={() => {
+                router.push({ pathname: '/(main)/chat/[id]', params: { id: item.id, name: item.display_name } });
+              }}>
+                <View style={[styles.onlineAvatar, { width: 36, height: 36, borderRadius: 18, marginRight: 8, borderWidth: 2, borderColor: '#10B981' }]}>
+                  {item.avatar_url ? (
+                    <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
+                  )}
+                </View>
+                <Text style={{color: '#94A3B8', fontSize: 10, textAlign: 'center', width: 44}} numberOfLines={1}>{item.display_name.split(' ')[0]}</Text>
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      )}
+
     </KeyboardAvoidingView>
   );
 }
@@ -996,6 +1216,44 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
   },
+  dropdownButton: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    padding: 4,
+  },
+  dropdownIcon: {
+    color: '#94A3B8',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  onlineChatBar: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    backgroundColor: '#1E293B',
+    borderTopWidth: 1,
+    borderTopColor: '#0F172A',
+  },
+  onlineUserItem: {
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  onlineAvatar: {
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 4,
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
   customHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1050,5 +1308,76 @@ const styles = StyleSheet.create({
   headerIcon: {
     color: '#F8FAFC',
     fontSize: 20,
+  },
+  emojiInputPanel: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+    gap: 4,
+  },
+  emojiInputBtn: {
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+    margin: 2,
+  },
+  emojiInputText: {
+    fontSize: 22,
+  },
+  repliedBanner: {
+    padding: 8,
+    borderRadius: 8,
+    marginBottom: 8,
+    borderLeftWidth: 4,
+  },
+  myRepliedBanner: {
+    backgroundColor: '#059669', // Darker emerald for my message
+    borderLeftColor: '#047857',
+  },
+  theirRepliedBanner: {
+    backgroundColor: '#334155', // Slate for their message
+    borderLeftColor: '#475569',
+  },
+  repliedBannerSender: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#10B981', // Emerald text
+    marginBottom: 2,
+  },
+  repliedBannerContent: {
+    fontSize: 14,
+    color: '#CBD5E1', // Slate-300 text
+  },
+  contactItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  contactName: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  cancelBtnText: {
+    color: '#94A3B8',
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });

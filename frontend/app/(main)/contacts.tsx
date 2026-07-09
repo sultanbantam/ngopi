@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 
 import axios from 'axios';
 
@@ -14,12 +15,13 @@ export default function ContactsScreen() {
   const [currentUser, setCurrentUser] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
   const [currentBmcId, setCurrentBmcId] = useState('');
+  const [currentRole, setCurrentRole] = useState('user');
   const [currentUserId, setCurrentUserId] = useState('');
   const [contacts, setContacts] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
   
-  const [activeTab, setActiveTab] = useState<'contacts' | 'groups'>('contacts');
+  const [activeTab, setActiveTab] = useState<'semua' | 'belum_dibaca' | 'favorit' | 'rumpun'>('semua');
 
   // Modals state
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -28,7 +30,16 @@ export default function ContactsScreen() {
   
   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [groupDescription, setGroupDescription] = useState('');
   const [groupMinBmc, setGroupMinBmc] = useState('0');
+
+  // Airdrop Modal
+  const [isAirdropModalVisible, setAirdropModalVisible] = useState(false);
+  const [airdropData, setAirdropData] = useState<any>(null);
+
+  // Settings Modal
+  const [isSettingsModalVisible, setSettingsModalVisible] = useState(false);
+  const [settings, setSettings] = useState<any>({ hide_name: false, hide_contacts: false, hide_groups: false, preferred_language: 'id' });
 
   // Profile Modal State
   const [isProfileModalVisible, setProfileModalVisible] = useState(false);
@@ -38,6 +49,9 @@ export default function ContactsScreen() {
   const [editAvatar, setEditAvatar] = useState('');
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  // Online Users State
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
 
   useEffect(() => {
     const init = async () => {
@@ -77,20 +91,23 @@ export default function ContactsScreen() {
       // Fetch users and groups
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        const [usersRes, groupsRes] = await Promise.all([
+        const [usersRes, groupsRes, settingsRes] = await Promise.all([
           axios.get(`${API_URL}/auth/users`, { headers }),
-          axios.get(`${API_URL}/groups`, { headers })
+          axios.get(`${API_URL}/groups`, { headers }),
+          axios.get(`${API_URL}/settings`, { headers }).catch(() => ({ data: {} }))
         ]);
         
         const allUsers = usersRes.data;
         setContacts(allUsers.filter((u: any) => u.id !== userId));
         setGroups(groupsRes.data);
+        if (settingsRes.data) setSettings(settingsRes.data);
 
         const me = allUsers.find((u: any) => u.id === userId);
         if (me) {
           setCurrentUser(me.display_name);
           setCurrentUsername(me.username);
           setCurrentBmcId(me.bmc_id?.toString() || '');
+          setCurrentRole(me.role || 'user');
           setEditDisplayName(me.display_name);
           setEditBio(me.bio || '');
           setEditStatus(me.status || '');
@@ -116,6 +133,12 @@ export default function ContactsScreen() {
              });
           }
         });
+
+        socketService.socket.on('online_list', (data: any[]) => {
+          setOnlineUsers(data.filter(u => u.id !== userId));
+        });
+        
+        socketService.socket.emit('request_online_list');
       }
 
       setLoading(false);
@@ -126,6 +149,7 @@ export default function ContactsScreen() {
     return () => {
       if (socketService.socket) {
         socketService.socket.off('receive_message');
+        socketService.socket.off('online_list');
       }
     };
   }, []);
@@ -139,6 +163,14 @@ export default function ContactsScreen() {
   const openChat = (id: string, name: string) => {
     setUnreadCounts(prev => ({ ...prev, [id]: 0 }));
     router.push({ pathname: '/(main)/chat/[id]', params: { id, name } });
+  };
+
+  const openHelpCenter = () => {
+    router.push('/(main)/help-center' as any);
+  };
+
+  const openAdminDashboard = () => {
+    router.push('/(main)/admin/dashboard' as any);
   };
 
   const handleLogout = async () => {
@@ -232,12 +264,13 @@ export default function ContactsScreen() {
   const createGroup = async () => {
     try {
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const res = await axios.post(`${API_URL}/groups`, { name: groupName, minBmcBalance: groupMinBmc }, {
+      const res = await axios.post(`${API_URL}/groups`, { name: groupName, description: groupDescription, minBmcBalance: groupMinBmc }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setGroups([...groups, res.data]);
       setGroupModalVisible(false);
       setGroupName('');
+      setGroupDescription('');
       setGroupMinBmc('0');
     } catch (e) {
       console.error(e);
@@ -258,6 +291,52 @@ export default function ContactsScreen() {
     }
   };
 
+  const saveSettings = async () => {
+    try {
+      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      await axios.post(`${API_URL}/settings`, settings, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSettingsModalVisible(false);
+      if (Platform.OS === 'web') alert('Settings Saved!');
+      else Alert.alert('Success', 'Settings Saved!');
+    } catch (e) {
+      console.error(e);
+      if (Platform.OS === 'web') alert('Failed to save settings');
+      else Alert.alert('Error', 'Failed to save settings');
+    }
+  };
+
+  const loadAirdropData = async () => {
+    try {
+      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const res = await axios.get(`${API_URL}/bmc/airdrop/history`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setAirdropData(res.data);
+      setAirdropModalVisible(true);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const claimAirdrop = async () => {
+    try {
+      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const res = await axios.post(`${API_URL}/bmc/airdrop/claim`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (Platform.OS === 'web') alert(res.data.message);
+      else Alert.alert('Success', res.data.message);
+      loadAirdropData(); // reload data
+    } catch (e: any) {
+      console.error(e);
+      const errorMsg = e.response?.data?.error || 'Failed to claim airdrop';
+      if (Platform.OS === 'web') alert(errorMsg);
+      else Alert.alert('Error', errorMsg);
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -265,6 +344,97 @@ export default function ContactsScreen() {
       </View>
     );
   }
+
+  const getFilteredList = () => {
+    let list: any[] = [];
+    if (activeTab === 'semua') {
+      if (!settings?.hide_contacts) list.push(...contacts.map(c => ({ ...c, _type: 'contact' })));
+      if (!settings?.hide_groups) list.push(...groups.map(g => ({ ...g, _type: 'group' })));
+    } else if (activeTab === 'belum_dibaca') {
+      if (!settings?.hide_contacts) list.push(...contacts.filter(c => unreadCounts[c.id] > 0).map(c => ({ ...c, _type: 'contact' })));
+      if (!settings?.hide_groups) list.push(...groups.filter(g => unreadCounts[g.id] > 0).map(g => ({ ...g, _type: 'group' })));
+    } else if (activeTab === 'favorit') {
+      // placeholder for favorit
+    } else if (activeTab === 'rumpun') {
+      if (!settings?.hide_groups) list.push(...groups.map(g => ({ ...g, _type: 'group' })));
+    }
+    if (activeTab === 'semua') {
+      list.unshift({
+        _type: 'cs',
+        id: 'bamboo-cs',
+        display_name: 'BambooCS',
+        username: 'support',
+        status: 'Online 24/7 untuk semua platform ekosistem',
+      });
+    }
+    return list;
+  };
+
+  const renderItem = ({ item }: { item: any }) => {
+    if (item._type === 'cs') {
+      return (
+        <TouchableOpacity style={[styles.contactItem, styles.csContactItem]} onPress={openHelpCenter}>
+          <View style={[styles.avatar, styles.csAvatar]}>
+            <Ionicons name="headset-outline" size={24} color="#FFFFFF" />
+          </View>
+          <View style={styles.contactInfo}>
+            <Text style={styles.contactName}>BambooCS</Text>
+            <Text style={styles.usernameTag}>@support_hub</Text>
+            <Text style={styles.contactStatus}>{item.status}</Text>
+          </View>
+          <View style={styles.onlineDotSmall} />
+        </TouchableOpacity>
+      );
+    }
+
+    if (item._type === 'group') {
+      return (
+        <TouchableOpacity style={styles.contactItem} onPress={() => joinGroup(item)}>
+          <View style={[styles.avatar, { backgroundColor: '#3B82F6' }]}>
+            <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+          </View>
+          <View style={styles.contactInfo}>
+            <Text style={styles.contactName}>{item.name}</Text>
+            {item.description && <Text style={styles.contactBio}>{item.description}</Text>}
+            <Text style={styles.contactUsername}>Min Balance: {item.min_bmc_balance} BMC</Text>
+          </View>
+          {unreadCounts[item.id] > 0 ? (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unreadCounts[item.id]}</Text>
+            </View>
+          ) : (
+            <View style={styles.lockBadge}>
+              <Text style={styles.lockBadgeText}>🔒</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    } else {
+      return (
+        <TouchableOpacity style={styles.contactItem} onPress={() => openChat(item.id, item.display_name)}>
+          <View style={styles.avatar}>
+            {item.avatar_url ? (
+              <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
+            )}
+          </View>
+          <View style={styles.contactInfo}>
+            <Text style={styles.contactName}>{item.display_name}</Text>
+            <Text style={styles.usernameTag}>
+              @{item.username}{item.bmc_id === 0 ? '_bmc' : item.bmc_id > 0 ? `_bmc${item.bmc_id}` : ''}
+            </Text>
+            {item.status ? <Text style={styles.contactStatus}>{item.status}</Text> : null}
+          </View>
+          {unreadCounts[item.id] > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadBadgeText}>{unreadCounts[item.id]}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -281,79 +451,81 @@ export default function ContactsScreen() {
           </TouchableOpacity>
           <View>
             <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
-              <Text style={styles.greeting}>Halo, {currentUser} ▾</Text>
+              <Text style={styles.greeting}>Halo, {settings?.hide_name ? 'Anonymous' : currentUser} ▾</Text>
+              <Text style={styles.usernameTag}>
+                @{currentUsername}{currentBmcId === '0' ? '_bmc' : currentBmcId ? `_bmc${currentBmcId}` : ''}
+              </Text>
             </TouchableOpacity>
-            {dropdownVisible && (
-              <View style={styles.dropdownMenu}>
-                <TouchableOpacity style={styles.dropdownItem} onPress={() => { setDropdownVisible(false); setProfileModalVisible(true); }}>
-                  <Text style={styles.dropdownItemText}>👤 Profil Saya</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.dropdownItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
-                  <Text style={styles.dropdownItemText}>⚙️ Atur Alamat Dompet</Text>
-                </TouchableOpacity>
-              </View>
-            )}
           </View>
         </View>
-        <TouchableOpacity onPress={handleLogout}>
-          <Text style={styles.logoutText}>Logout</Text>
+        <TouchableOpacity onPress={() => setDropdownVisible(true)}>
+          <Text style={styles.logoutText}>☰ Menu</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.tabs}>
-        <TouchableOpacity style={[styles.tab, activeTab === 'contacts' && styles.activeTab]} onPress={() => setActiveTab('contacts')}>
-          <Text style={[styles.tabText, activeTab === 'contacts' && styles.activeTabText]}>Contacts</Text>
+      <View style={styles.searchContainer}>
+        <TextInput style={styles.searchInput} placeholder="Cari atau mulai obrolan baru" placeholderTextColor="#94A3B8" />
+      </View>
+
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.helpCenterButton} onPress={openHelpCenter}>
+          <Ionicons name="help-circle-outline" size={18} color="#FFFFFF" />
+          <Text style={styles.helpCenterButtonText}>Pusat Bantuan</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.tab, activeTab === 'groups' && styles.activeTab]} onPress={() => setActiveTab('groups')}>
-          <Text style={[styles.tabText, activeTab === 'groups' && styles.activeTabText]}>Groups</Text>
-        </TouchableOpacity>
+        {(currentRole === 'admin' || currentRole === 'agent') && (
+          <TouchableOpacity style={styles.adminButton} onPress={openAdminDashboard}>
+            <Ionicons name="shield-checkmark-outline" size={18} color="#34D399" />
+            <Text style={styles.adminButtonText}>CS Dashboard</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      <View style={{ marginBottom: 16 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
+          <TouchableOpacity style={[styles.chip, activeTab === 'semua' && styles.activeChip]} onPress={() => setActiveTab('semua')}>
+            <Text style={[styles.chipText, activeTab === 'semua' && styles.activeChipText]}>Semua</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.chip, activeTab === 'belum_dibaca' && styles.activeChip]} onPress={() => setActiveTab('belum_dibaca')}>
+            <Text style={[styles.chipText, activeTab === 'belum_dibaca' && styles.activeChipText]}>Belum dibaca</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.chip, activeTab === 'favorit' && styles.activeChip]} onPress={() => setActiveTab('favorit')}>
+            <Text style={[styles.chipText, activeTab === 'favorit' && styles.activeChipText]}>Favorit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.chip, activeTab === 'rumpun' && styles.activeChip]} onPress={() => setActiveTab('rumpun')}>
+            <Text style={[styles.chipText, activeTab === 'rumpun' && styles.activeChipText]}>Rumpun {groups.length}</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
       
-      {activeTab === 'contacts' ? (
-        <FlatList
-          data={contacts}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <TouchableOpacity style={styles.contactItem} onPress={() => openChat(item.id, item.display_name)}>
-              <View style={styles.avatar}>
-                {item.avatar_url ? (
-                  <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
-                ) : (
-                  <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
-                )}
-              </View>
-              <View style={styles.contactInfo}>
-                <Text style={styles.contactName}>{item.display_name}</Text>
-                <Text style={styles.usernameTag}>@{item.username}{item.bmc_id ? `_bmc${item.bmc_id}` : ''}</Text>
-                {item.status ? <Text style={styles.contactStatus}>{item.status}</Text> : null}
-              </View>
-              {unreadCounts[item.id] > 0 && (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadBadgeText}>{unreadCounts[item.id]}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-        />
-      ) : (
-        <View style={{ flex: 1 }}>
-          <TouchableOpacity style={styles.createGroupBtn} onPress={() => setGroupModalVisible(true)}>
-            <Text style={styles.createGroupBtnText}>+ Create New Group</Text>
-          </TouchableOpacity>
+      {activeTab === 'rumpun' && (
+        <TouchableOpacity style={styles.createGroupBtn} onPress={() => setGroupModalVisible(true)}>
+          <Text style={styles.createGroupBtnText}>+ Buat Rumpun Baru</Text>
+        </TouchableOpacity>
+      )}
+
+      <FlatList
+        data={getFilteredList()}
+        keyExtractor={item => item._type + item.id}
+        renderItem={renderItem}
+      />
+
+      {/* Online Users Horizontal Bar */}
+      {onlineUsers.length > 0 && !settings?.hide_contacts && (
+        <View style={styles.onlineBar}>
+          <Text style={{ color: '#10B981', fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Now</Text>
           <FlatList
-            data={groups}
+            horizontal
+            data={onlineUsers}
             keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
-              <TouchableOpacity style={styles.contactItem} onPress={() => joinGroup(item)}>
-                <View style={[styles.avatar, { backgroundColor: '#3B82F6' }]}>
-                  <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
-                </View>
-                <View style={styles.contactInfo}>
-                  <Text style={styles.contactName}>{item.name}</Text>
-                  <Text style={styles.contactUsername}>Min Balance: {item.min_bmc_balance} BMC</Text>
-                </View>
-                <View style={styles.lockBadge}>
-                  <Text style={styles.lockBadgeText}>🔒</Text>
+              <TouchableOpacity style={styles.onlineUserItem} onPress={() => openChat(item.id, item.display_name)}>
+                <View style={[styles.avatar, { width: 40, height: 40, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: '#10B981' }]}>
+                  {item.avatar_url ? (
+                    <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
+                  )}
                 </View>
               </TouchableOpacity>
             )}
@@ -426,17 +598,101 @@ export default function ContactsScreen() {
         </View>
       </Modal>
 
+      {/* Airdrop Modal */}
+      <Modal visible={isAirdropModalVisible} transparent={true} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { alignItems: 'center' }]}>
+            <Text style={{ fontSize: 40, marginBottom: 10 }}>🎁</Text>
+            <Text style={[styles.modalTitle, { color: '#10B981' }]}>Daily BMC Airdrop</Text>
+            {airdropData && (
+              <>
+                <Text style={[styles.modalDesc, { textAlign: 'center' }]}>
+                  You have claimed a total of <Text style={{ fontWeight: 'bold', color: '#fff' }}>{airdropData.total_claimed.toFixed(2)} BMC</Text> over {airdropData.total_claims} days.
+                </Text>
+                {airdropData.can_claim_today ? (
+                  <TouchableOpacity onPress={claimAirdrop} style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16 }]}>
+                    <Text style={[styles.saveBtnText, { fontSize: 18 }]}>Claim {airdropData.daily_amount} BMC Now</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <View style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16, backgroundColor: '#334155' }]}>
+                    <Text style={[styles.saveBtnText, { fontSize: 18, color: '#94A3B8' }]}>Already Claimed Today</Text>
+                  </View>
+                )}
+              </>
+            )}
+            <TouchableOpacity onPress={() => setAirdropModalVisible(false)} style={[styles.cancelBtn, { marginTop: 16 }]}>
+              <Text style={styles.cancelBtnText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Settings Modal */}
+      <Modal visible={isSettingsModalVisible} transparent={true} animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Privacy Settings</Text>
+            
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 16 }}>
+              <Text style={{ color: '#fff', fontSize: 16 }}>Hide My Name</Text>
+              <TouchableOpacity 
+                style={[styles.toggleBtn, settings?.hide_name && styles.toggleBtnActive]} 
+                onPress={() => setSettings({ ...settings, hide_name: !settings?.hide_name })}
+              >
+                <View style={[styles.toggleKnob, settings?.hide_name && styles.toggleKnobActive]} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ color: '#fff', fontSize: 16 }}>Hide Contacts Tab</Text>
+              <TouchableOpacity 
+                style={[styles.toggleBtn, settings?.hide_contacts && styles.toggleBtnActive]} 
+                onPress={() => setSettings({ ...settings, hide_contacts: !settings?.hide_contacts })}
+              >
+                <View style={[styles.toggleKnob, settings?.hide_contacts && styles.toggleKnobActive]} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ color: '#fff', fontSize: 16 }}>Hide Rumpun Tab</Text>
+              <TouchableOpacity 
+                style={[styles.toggleBtn, settings?.hide_groups && styles.toggleBtnActive]} 
+                onPress={() => setSettings({ ...settings, hide_groups: !settings?.hide_groups })}
+              >
+                <View style={[styles.toggleKnob, settings?.hide_groups && styles.toggleKnobActive]} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity onPress={() => setSettingsModalVisible(false)} style={styles.cancelBtn}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveSettings} style={styles.saveBtn}>
+                <Text style={styles.saveBtnText}>Save Preferences</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Create Group Modal */}
       <Modal visible={isGroupModalVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Create Token-Gated Group</Text>
+            <Text style={styles.modalTitle}>Buat Rumpun Baru</Text>
             <TextInput
               style={styles.input}
-              placeholder="Group Name"
+              placeholder="Nama Rumpun"
               placeholderTextColor="#64748b"
               value={groupName}
               onChangeText={setGroupName}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Deskripsi Singkat (Opsional)"
+              placeholderTextColor="#64748b"
+              value={groupDescription}
+              onChangeText={setGroupDescription}
             />
             <TextInput
               style={styles.input}
@@ -448,14 +704,38 @@ export default function ContactsScreen() {
             />
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setGroupModalVisible(false)} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+                <Text style={styles.cancelBtnText}>Batal</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={createGroup} style={styles.saveBtn}>
-                <Text style={styles.saveBtnText}>Create</Text>
+                <Text style={styles.saveBtnText}>Buat</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal visible={dropdownVisible} transparent={true} animationType="slide" onRequestClose={() => setDropdownVisible(false)}>
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDropdownVisible(false)}>
+          <View style={styles.actionSheet}>
+            <View style={styles.actionSheetHandle} />
+            <Text style={styles.actionSheetTitle}>Pengaturan Akun</Text>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setProfileModalVisible(true); }}>
+              <Text style={styles.actionSheetText}>👤 Profil Saya</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); loadAirdropData(); }}>
+              <Text style={[styles.actionSheetText, { color: '#10B981' }]}>🎁 Klaim Airdrop BMC</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
+              <Text style={styles.actionSheetText}>⚙️ Atur Alamat Dompet</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setSettingsModalVisible(true); }}>
+              <Text style={styles.actionSheetText}>🔒 Pengaturan Privasi</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.actionSheetItem, { borderBottomWidth: 0 }]} onPress={() => { setDropdownVisible(false); handleLogout(); }}>
+              <Text style={[styles.actionSheetText, { color: '#EF4444' }]}>🚪 Keluar</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -487,28 +767,46 @@ const styles = StyleSheet.create({
     color: '#F8FAFC',
     fontWeight: 'bold',
   },
-  dropdownMenu: {
-    position: 'absolute',
-    top: 30,
-    left: 0,
+  actionSheet: {
     backgroundColor: '#1E293B',
-    borderRadius: 8,
-    paddingVertical: 4,
+    padding: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    width: '100%',
+    alignItems: 'center',
+    position: 'absolute',
+    bottom: 0,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-    minWidth: 160,
-    zIndex: 100,
+    shadowRadius: 5,
+    elevation: 10,
   },
-  dropdownItem: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+  actionSheetHandle: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#475569',
+    borderRadius: 2,
+    marginBottom: 16,
   },
-  dropdownItemText: {
-    color: '#F8FAFC',
+  actionSheetTitle: {
+    color: '#94A3B8',
     fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textTransform: 'uppercase',
+  },
+  actionSheetItem: {
+    width: '100%',
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+    alignItems: 'center',
+  },
+  actionSheetText: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '500',
   },
   walletText: {
     color: '#10B981',
@@ -519,26 +817,73 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     fontWeight: 'bold',
   },
-  tabs: {
+  searchContainer: {
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  searchInput: {
+    backgroundColor: '#1E293B',
+    color: '#fff',
+    padding: 12,
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    fontSize: 16,
+  },
+  quickActions: {
     flexDirection: 'row',
-    marginBottom: 16,
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    flexWrap: 'wrap',
   },
-  tab: {
-    flex: 1,
-    paddingVertical: 12,
+  helpCenterButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    gap: 8,
+    backgroundColor: '#10B981',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
   },
-  activeTab: {
-    borderBottomColor: '#10B981',
+  helpCenterButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
   },
-  tabText: {
+  adminButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1,
+    borderColor: '#10B981',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  adminButtonText: {
+    color: '#34D399',
+    fontWeight: '800',
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  chip: {
+    backgroundColor: '#1E293B',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  activeChip: {
+    backgroundColor: '#064E3B', // dark green
+  },
+  chipText: {
     color: '#94A3B8',
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '500',
   },
-  activeTabText: {
-    color: '#10B981',
+  activeChipText: {
+    color: '#10B981', // bright green
   },
   contactItem: {
     flexDirection: 'row',
@@ -547,6 +892,21 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,
+  },
+  csContactItem: {
+    borderWidth: 1,
+    borderColor: '#10B981',
+    backgroundColor: '#0B2A22',
+  },
+  csAvatar: {
+    backgroundColor: '#059669',
+  },
+  onlineDotSmall: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#22C55E',
+    marginLeft: 8,
   },
   avatar: {
     width: 48,
@@ -707,5 +1067,36 @@ const styles = StyleSheet.create({
   saveBtnText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  toggleBtn: {
+    width: 50,
+    height: 28,
+    backgroundColor: '#334155',
+    borderRadius: 14,
+    padding: 2,
+    justifyContent: 'center',
+  },
+  toggleBtnActive: {
+    backgroundColor: '#10B981',
+  },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    transform: [{ translateX: 0 }],
+  },
+  toggleKnobActive: {
+    transform: [{ translateX: 22 }],
+  },
+  onlineBar: {
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    marginTop: 8,
+  },
+  onlineUserItem: {
+    alignItems: 'center',
   }
 });

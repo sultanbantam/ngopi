@@ -46,7 +46,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     });
 
     // Generate JWT
-    const token = jwt.sign({ id: newUser.id, username: newUser.username }, JWT_SECRET, {
+    const token = jwt.sign({ id: newUser.id, username: newUser.username, role: newUser.role }, JWT_SECRET, {
       expiresIn: '7d',
     });
 
@@ -65,6 +65,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         username: newUser.username,
         display_name: newUser.display_name,
         bmc_id: newUser.bmc_id,
+        role: newUser.role,
       },
       token, // Also return in JSON for mobile app usage
     });
@@ -100,7 +101,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     // Generate JWT
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, {
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, {
       expiresIn: '7d',
     });
 
@@ -119,6 +120,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         username: user.username,
         display_name: user.display_name,
         bmc_id: user.bmc_id,
+        role: user.role,
       },
       token, // Also return in JSON for mobile app usage
     });
@@ -140,6 +142,7 @@ export const getUsers = async (req: Request, res: Response): Promise<void> => {
         bio: true,
         status: true,
         bmc_id: true,
+        role: true,
       }
     });
     res.status(200).json(users);
@@ -238,7 +241,7 @@ export const bamboochainCallback = async (req: Request, res: Response): Promise<
     }
 
     // Generate BambooChat JWT
-    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '7d' });
 
     // Redirect to frontend (Vercel) with token
     res.redirect(`https://www.bamboochat.click/login?sso_token=${token}&sso_username=${user.username}&sso_userid=${user.id}`);

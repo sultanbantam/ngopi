@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Image } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 
 const API_URL = 'https://api.bamboochat.click/api';
+
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const logoImage = require('../../assets/logo.png');
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -55,7 +58,9 @@ export default function RegisterScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.card}>
-        <Text style={styles.title}>Create Account</Text>
+        <View style={styles.logoContainer}>
+          <Image source={logoImage} style={styles.logo} resizeMode="contain" />
+        </View>
         <Text style={styles.subtitle}>Join Bamboochain today</Text>
         
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
@@ -112,6 +117,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#0F172A',
   },
   card: {
     width: '100%',
@@ -125,12 +131,13 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#F8FAFC',
-    textAlign: 'center',
+  logoContainer: {
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  logo: {
+    width: 140,
+    height: 140,
   },
   subtitle: {
     fontSize: 16,
