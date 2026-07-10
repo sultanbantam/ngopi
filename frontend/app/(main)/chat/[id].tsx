@@ -11,6 +11,24 @@ import axios from 'axios';
 import BambupediaRoom from '../bambupedia';
 
 const NoTranslateText = Text as any;
+const API_ORIGIN = 'https://api.bamboochat.click';
+
+const normalizeAttachmentUrl = (url?: string | null) => {
+  if (!url) return '';
+  if (url.startsWith('http://api.bamboochat.click')) return url.replace('http://', 'https://');
+  if (url.startsWith('/uploads/')) return `${API_ORIGIN}${url}`;
+  return url;
+};
+
+const looksEncrypted = (value?: string | null) => !!value && value.startsWith('U2FsdGVkX1');
+
+const decodeMessageContent = (content: unknown, type: string | undefined, secretKey: string) => {
+  if (typeof content !== 'string' || !content) return '';
+  if ((type === 'text' || type === 'document') && looksEncrypted(content)) {
+    return decryptMessage(content, secretKey);
+  }
+  return content;
+};
 
 interface Message {
   id: string;
@@ -128,6 +146,8 @@ function PrivateChatRoomScreen() {
   const router = useRouter();
 
   useEffect(() => {
+    const cleanupSocketListeners: Array<() => void> = [];
+
     const initRoom = async () => {
       // Create a shared symmetric key for E2EE based on sorted IDs
       let myId = '';
@@ -157,19 +177,16 @@ function PrivateChatRoomScreen() {
           headers: { Authorization: `Bearer ${token}` }
         });
         const history = response.data.map((msg: any) => {
-          let decryptedText = '';
-          if (msg.type === 'text' && msg.content) {
-            decryptedText = decryptMessage(msg.content, sharedKey);
-          }
+          const messageType = msg.type || 'text';
           return {
             id: msg.id,
             sender_id: msg.sender_id,
-            content: decryptedText,
+            content: decodeMessageContent(msg.content, messageType, sharedKey),
             isMine: msg.sender_id === myId,
             timestamp: msg.timestamp,
             isRead: msg.is_read,
-            type: msg.type,
-            attachment_url: msg.attachment_url,
+            type: messageType,
+            attachment_url: normalizeAttachmentUrl(msg.attachment_url),
             reactions: msg.reactions || {},
             is_edited: msg.is_edited,
             is_pinned: msg.is_pinned
@@ -182,121 +199,122 @@ function PrivateChatRoomScreen() {
       }
 
       // Join room
-      if (socketService.socket) {
-        socketService.socket.emit('join_room', sharedKey);
+      const socket = await socketService.connect();
+      if (socket) {
+        socket.emit('join_room', sharedKey);
 
-        // Listen for incoming messages
-        socketService.socket.on('receive_message', (data: any) => {
-          // Hanya proses pesan jika room_id cocok dengan chat yang sedang dibuka
+        const handleReceiveMessage = (data: any) => {
           if (data.room_id !== sharedKey) return;
-          
-          // Prevent double messages if we sent it (from our own optimistic UI)
           if (data.sender_id === myId) return;
 
-          // Decrypt the message
-          let decryptedText = '';
-          if (data.type === 'text' && data.content) {
-            decryptedText = decryptMessage(data.content, sharedKey);
-          }
-          
+          const messageType = data.type || 'text';
           setMessages(prev => [...prev, {
             id: data.id || Math.random().toString(),
             sender_id: data.sender_id,
-            content: decryptedText,
-            isMine: false, 
+            content: decodeMessageContent(data.content, messageType, sharedKey),
+            isMine: false,
             timestamp: new Date().toISOString(),
-            type: data.type || 'text',
-            attachment_url: data.attachment_url,
+            type: messageType,
+            attachment_url: normalizeAttachmentUrl(data.attachment_url),
             reactions: data.reactions || {},
             is_edited: data.is_edited,
             is_pinned: data.is_pinned
           }]);
 
-          // Emit read receipt immediately since we are in the room!
-          socketService.socket?.emit('mark_messages_read', { sender_id: data.sender_id, room_id: sharedKey });
-        });
+          socket.emit('mark_messages_read', { sender_id: data.sender_id, room_id: sharedKey });
+        };
 
-        // Listen for errors (like token gating)
-        socketService.socket.on('error', (err: any) => {
+        const handleSocketError = (err: any) => {
           alert(`Error: ${err.message}`);
-        });
+        };
 
-        // Typing events
-        socketService.socket.on('typing_start', () => setIsTyping(true));
-        socketService.socket.on('typing_stop', () => setIsTyping(false));
+        const handleTypingStart = () => setIsTyping(true);
+        const handleTypingStop = () => setIsTyping(false);
 
-        // Status events
-        socketService.socket.on('user_status_change', (data: any) => {
+        const handleUserStatusChange = (data: any) => {
           if (data.user_id === roomId) {
             setPartnerStatus(data.is_online ? 'Online' : data.last_seen ? `Last seen: ${new Date(data.last_seen).toLocaleTimeString()}` : '');
           }
-        });
+        };
 
-        // Messages read event
-        socketService.socket.on('messages_read', (data: any) => {
+        const handleMessagesRead = (data: any) => {
           if (data.room_id === sharedKey) {
             setMessages(prev => prev.map(msg => ({ ...msg, isRead: true })));
           }
-        });
+        };
 
-        // WhatsApp Features Listeners
-        socketService.socket.on('message_reacted', (data: any) => {
+        const handleMessageReacted = (data: any) => {
           setMessages(prev => prev.map(msg => msg.id === data.id ? { ...msg, reactions: data.reactions } : msg));
-        });
-        socketService.socket.on('message_edited', (data: any) => {
+        };
+
+        const handleMessageEdited = (data: any) => {
           setMessages(prev => prev.map(msg => {
             if (msg.id === data.id) {
-              const newContent = (data.type === 'text' && data.content) ? decryptMessage(data.content, sharedKey) : data.content;
-              return { ...msg, content: newContent, is_edited: true };
+              return { ...msg, content: decodeMessageContent(data.content, data.type, sharedKey), is_edited: true };
             }
             return msg;
           }));
-        });
-        socketService.socket.on('message_pinned', (data: any) => {
+        };
+
+        const handleMessagePinned = (data: any) => {
           setMessages(prev => prev.map(msg => msg.id === data.id ? { ...msg, is_pinned: data.is_pinned } : msg));
-        });
-        socketService.socket.on('message_deleted', (data: any) => {
+        };
+
+        const handleMessageDeleted = (data: any) => {
           setMessages(prev => prev.filter(msg => msg.id !== data.id));
-        });
+        };
 
-        // Online users
-        socketService.socket.on('online_list', (data: any[]) => {
+        const handleOnlineList = (data: any[]) => {
           setRawOnlineList(data);
-        });
-        socketService.socket.emit('request_online_list');
+        };
 
-        // WebRTC Incoming Call
-        socketService.socket.on('call_incoming', (data: any) => {
-          // data: { signal, from, name, room_id, isVideo }
+        const handleCallIncoming = (data: any) => {
+          if (data.from === myId) return;
           if (window.confirm(`${data.name} sedang memanggil Anda. Jawab?`)) {
             const signalStr = encodeURIComponent(JSON.stringify(data.signal));
-            router.push({ 
-              pathname: '/(main)/call/[id]', 
-              params: { id: data.from, name: data.name, isVideo: data.isVideo ? 'true' : 'false', isCaller: 'false', incomingSignal: signalStr } 
+            router.push({
+              pathname: '/(main)/call/[id]',
+              params: { id: data.from, name: data.name, isVideo: data.isVideo ? 'true' : 'false', isCaller: 'false', incomingSignal: signalStr }
             });
           }
+        };
+
+        socket.on('receive_message', handleReceiveMessage);
+        socket.on('error', handleSocketError);
+        socket.on('typing_start', handleTypingStart);
+        socket.on('typing_stop', handleTypingStop);
+        socket.on('user_status_change', handleUserStatusChange);
+        socket.on('messages_read', handleMessagesRead);
+        socket.on('message_reacted', handleMessageReacted);
+        socket.on('message_edited', handleMessageEdited);
+        socket.on('message_pinned', handleMessagePinned);
+        socket.on('message_deleted', handleMessageDeleted);
+        socket.on('online_list', handleOnlineList);
+        socket.on('call_incoming', handleCallIncoming);
+
+        cleanupSocketListeners.push(() => {
+          socket.off('receive_message', handleReceiveMessage);
+          socket.off('error', handleSocketError);
+          socket.off('typing_start', handleTypingStart);
+          socket.off('typing_stop', handleTypingStop);
+          socket.off('user_status_change', handleUserStatusChange);
+          socket.off('messages_read', handleMessagesRead);
+          socket.off('message_reacted', handleMessageReacted);
+          socket.off('message_edited', handleMessageEdited);
+          socket.off('message_pinned', handleMessagePinned);
+          socket.off('message_deleted', handleMessageDeleted);
+          socket.off('online_list', handleOnlineList);
+          socket.off('call_incoming', handleCallIncoming);
         });
 
-        // Mark messages as read since we just opened the chat
-        socketService.socket.emit('mark_messages_read', { sender_id: partnerId, room_id: sharedKey });
+        socket.emit('request_online_list');
+        socket.emit('mark_messages_read', { sender_id: partnerId, room_id: sharedKey });
       }
     };
     initRoom();
 
     return () => {
-      if (socketService.socket) {
-        socketService.socket.off('receive_message');
-        socketService.socket.off('error');
-        socketService.socket.off('typing_start');
-        socketService.socket.off('typing_stop');
-        socketService.socket.off('user_status_change');
-        socketService.socket.off('messages_read');
-        socketService.socket.off('message_reacted');
-        socketService.socket.off('message_edited');
-        socketService.socket.off('message_pinned');
-        socketService.socket.off('message_deleted');
-        socketService.socket.off('call_incoming');
-      }
+      cleanupSocketListeners.forEach((cleanup) => cleanup());
     };
   }, [roomId]);
 
@@ -394,7 +412,7 @@ function PrivateChatRoomScreen() {
       const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      return response.data.url;
+      return normalizeAttachmentUrl(response.data.url);
     } catch (error) {
       console.error('Upload failed:', error);
       alert('Failed to upload file');
@@ -535,7 +553,7 @@ function PrivateChatRoomScreen() {
           const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
-          const url = response.data.url;
+          const url = normalizeAttachmentUrl(response.data.url);
           
           if (url) {
             const messageData = { room_id: actualRoomId, receiver_id: roomId, type: 'audio', attachment_url: url };
@@ -715,16 +733,29 @@ function PrivateChatRoomScreen() {
     setIsMenuVisible(false);
   };
 
-  const downloadFile = (url: string, filename: string) => {
+  const downloadFile = async (url: string, filename: string) => {
+    const safeUrl = normalizeAttachmentUrl(url);
+    const safeFilename = filename || 'download';
+
     if (Platform.OS === 'web') {
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename || 'download';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      try {
+        const response = await fetch(safeUrl);
+        if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = safeFilename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(blobUrl);
+      } catch (error) {
+        console.error('Download failed, opening attachment instead:', error);
+        window.open(safeUrl, '_blank', 'noopener,noreferrer');
+      }
     } else {
-      Linking.openURL(url).catch(e => console.error('Failed to open URL', e));
+      Linking.openURL(safeUrl).catch(e => console.error('Failed to open URL', e));
     }
   };
 
@@ -811,10 +842,10 @@ function PrivateChatRoomScreen() {
               )}
               {item.type === 'image' && item.attachment_url ? (
                 <TouchableOpacity onPress={() => downloadFile(item.attachment_url!, item.content || 'image.jpg')}>
-                  <Image source={{ uri: item.attachment_url }} style={styles.attachedImage} resizeMode="cover" />
+                  <Image source={{ uri: normalizeAttachmentUrl(item.attachment_url) }} style={styles.attachedImage} resizeMode="cover" />
                 </TouchableOpacity>
               ) : item.type === 'audio' && item.attachment_url ? (
-                <AudioMessage url={item.attachment_url} />
+                <AudioMessage url={normalizeAttachmentUrl(item.attachment_url)} />
               ) : item.type === 'document' && item.attachment_url ? (
                 <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
                   <Text style={styles.documentIcon}>📄</Text>

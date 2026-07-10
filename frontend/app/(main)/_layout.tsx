@@ -135,7 +135,14 @@ export default function MainLayout() {
       const browserNotification = new Notification(title, { body, tag: notification.id });
       browserNotification.onclick = () => {
         window.focus();
-        setNotificationCenterVisible(true);
+        setNotifications((previous) => previous.map((item) => (
+          item.id === notification.id ? { ...item, read: true } : item
+        )));
+        if (target) {
+          router.push(target as any);
+        } else {
+          setNotificationCenterVisible(true);
+        }
       };
     }
   };
@@ -187,10 +194,18 @@ export default function MainLayout() {
     };
 
     const handleCallIncoming = (data: any) => {
+      if (currentUserId && data?.from === currentUserId) return;
       const callerName = data?.name || 'Seseorang';
-      showNotification(data?.isVideo ? 'Video Call' : 'Incoming Call', `${callerName} memanggil kamu`, {
-        pathname: '/(main)/chat/[id]',
-        params: { id: data.from, name: callerName },
+      const incomingSignal = data?.signal ? encodeURIComponent(JSON.stringify(data.signal)) : undefined;
+      showNotification(data?.isVideo ? 'Video Call' : 'Incoming Call', `${callerName} memanggil kamu. Ketuk untuk jawab.`, {
+        pathname: '/(main)/call/[id]',
+        params: {
+          id: data.from,
+          name: callerName,
+          isVideo: data?.isVideo ? 'true' : 'false',
+          isCaller: 'false',
+          ...(incomingSignal ? { incomingSignal } : {}),
+        },
       });
     };
 
@@ -311,6 +326,7 @@ export default function MainLayout() {
         <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="call/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="help-center" options={{ title: "Pusat Bantuan" }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>

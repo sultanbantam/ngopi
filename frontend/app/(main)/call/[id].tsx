@@ -38,6 +38,7 @@ export default function CallScreen() {
     }
 
     let isCallActive = true;
+    let activeSocket: any = null;
 
     const initCall = async () => {
       let myId = localStorage.getItem('userId') || '';
@@ -45,6 +46,7 @@ export default function CallScreen() {
       
       const sharedKey = [myId, partnerId].sort().join('-');
       actualRoomIdRef.current = sharedKey;
+      const socket = await socketService.connect();
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -82,8 +84,8 @@ export default function CallScreen() {
 
         // Handle ICE candidates
         peer.onicecandidate = (event: any) => {
-          if (event.candidate && socketService.socket) {
-            socketService.socket.emit('ice_candidate', {
+          if (event.candidate && socket) {
+            socket.emit('ice_candidate', {
               candidate: event.candidate,
               to: partnerId,
               room_id: sharedKey
@@ -95,8 +97,8 @@ export default function CallScreen() {
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
 
-          if (socketService.socket) {
-            socketService.socket.emit('call_user', {
+          if (socket) {
+            socket.emit('call_user', {
               userToCall: partnerId,
               signalData: offer,
               from: myId,
@@ -119,8 +121,8 @@ export default function CallScreen() {
             });
             pendingCandidates.current = [];
 
-            if (socketService.socket) {
-              socketService.socket.emit('answer_call', {
+            if (socket) {
+              socket.emit('answer_call', {
                 signal: answer,
                 to: partnerId,
                 room_id: sharedKey
@@ -133,8 +135,6 @@ export default function CallScreen() {
         setStatus('Failed to access camera/mic');
       }
     };
-
-    initCall();
 
     // Socket listeners for signaling
     const handleCallAccepted = async (signal: any) => {
@@ -161,19 +161,29 @@ export default function CallScreen() {
       endCall(false);
     };
 
-    if (socketService.socket) {
-      socketService.socket.on('call_accepted', handleCallAccepted);
-      socketService.socket.on('ice_candidate', handleIceCandidate);
-      socketService.socket.on('call_ended', handleCallEnded);
-    }
+    const attachSignalingListeners = async () => {
+      const socket = await socketService.connect();
+      activeSocket = socket;
+      if (socket) {
+        socket.on('call_accepted', handleCallAccepted);
+        socket.on('ice_candidate', handleIceCandidate);
+        socket.on('call_ended', handleCallEnded);
+      }
+    };
+
+    const start = async () => {
+      await attachSignalingListeners();
+      await initCall();
+    };
+    start();
 
     return () => {
       isCallActive = false;
       endCall(false, true); // true = isUnmounting
-      if (socketService.socket) {
-        socketService.socket.off('call_accepted', handleCallAccepted);
-        socketService.socket.off('ice_candidate', handleIceCandidate);
-        socketService.socket.off('call_ended', handleCallEnded);
+      if (activeSocket) {
+        activeSocket.off('call_accepted', handleCallAccepted);
+        activeSocket.off('ice_candidate', handleIceCandidate);
+        activeSocket.off('call_ended', handleCallEnded);
       }
     };
   }, []);
