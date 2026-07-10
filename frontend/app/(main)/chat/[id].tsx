@@ -8,6 +8,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import axios from 'axios';
+import BambupediaRoom from '../bambupedia';
 
 interface Message {
   id: string;
@@ -76,6 +77,22 @@ const AudioMessage = ({ url }: { url: string }) => {
 };
 
 export default function ChatRoomScreen() {
+  const params = useLocalSearchParams();
+  const router = useRouter();
+  const rawName = Array.isArray(params.name) ? params.name[0] : params.name;
+  const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const routeLabel = `${rawName || ''} ${rawId || ''}`;
+  const isBambupediaLink = /bamboo(cs|pedia)|rumpun/i.test(routeLabel) || rawId === 'bambupedia';
+
+  useEffect(() => {
+    if (isBambupediaLink) router.replace('/(main)/bambupedia');
+  }, [isBambupediaLink, router]);
+
+  if (isBambupediaLink) return <BambupediaRoom />;
+  return <PrivateChatRoomScreen />;
+}
+
+function PrivateChatRoomScreen() {
   const { id: roomId, name } = useLocalSearchParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
@@ -1381,3 +1398,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+

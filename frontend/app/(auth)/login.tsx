@@ -33,7 +33,7 @@ export default function LoginScreen() {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
-        router.replace('/(main)/contacts');
+        router.replace('/(main)/bambupedia');
       }
     };
     handleSSO();
@@ -63,7 +63,7 @@ export default function LoginScreen() {
         await SecureStore.setItemAsync('userId', user.id);
       }
 
-      router.replace('/(main)/contacts');
+      router.replace('/(main)/bambupedia');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
@@ -244,3 +244,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+

@@ -18,7 +18,7 @@ export default function IndexScreen() {
         }
         
         if (token) {
-          router.replace('/(main)/contacts');
+          router.replace('/(main)/bambupedia');
         } else {
           router.replace('/(auth)/login');
         }
@@ -50,3 +50,4 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   }
 });
+

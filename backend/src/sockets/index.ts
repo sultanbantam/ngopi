@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { handleChatEvents } from './chat.handler';
-import { handleBambupediaEvents, startBambupediaTips } from './bambupedia.handler';
+import { emitBambupediaMembers, handleBambupediaEvents, startBambupediaTips } from './bambupedia.handler';
 import { handleTicketEvents } from './ticket.handler';
 import { prisma } from '../utils/prisma';
 
@@ -73,6 +73,7 @@ export const setupSocket = (io: Server) => {
       io.emit('user_status_change', { user_id: user.id, is_online: true });
       // Broadcast updated online list
       await broadcastOnlineList(io);
+      await emitBambupediaMembers(io);
     } catch (e) {
       console.error('Error updating online status:', e);
     }
@@ -124,10 +125,13 @@ export const setupSocket = (io: Server) => {
         io.emit('user_status_change', { user_id: user.id, is_online: false, last_seen: lastSeen });
         // Broadcast updated online list
         await broadcastOnlineList(io);
+        await emitBambupediaMembers(io);
       } catch (e) {
         console.error('Error updating offline status:', e);
       }
     });
   });
 };
+
+
 

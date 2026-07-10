@@ -47,7 +47,7 @@ export default function RegisterScreen() {
         await SecureStore.setItemAsync('userId', user.id);
       }
 
-      router.replace('/(main)/contacts');
+      router.replace('/(main)/bambupedia');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
     } finally {
@@ -203,3 +203,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+

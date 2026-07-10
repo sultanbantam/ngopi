@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,30 +10,55 @@ import {
   KeyboardAvoidingView,
   Image,
   useWindowDimensions,
+  Modal,
+  Pressable,
+  Linking,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import { Audio } from 'expo-av';
+import axios from 'axios';
+import { useRouter } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 
+const API_URL = 'https://api.bamboochat.click/api';
+const ROOM_ID = 'bambupedia-room';
+const ROOM_NAME = 'Rumpun Bambupedia';
 const BAMBOO_ICON = '\uD83C\uDF8B';
 const TIP_ICON = '\uD83D\uDCA1';
 const SYSTEM_ICON = '\uD83E\uDD16';
-const SEND_ICON = '\u27A4';
 const WAVE_ICON = '\uD83D\uDC4B';
+const SMILE = '\uD83D\uDE0A';
+
+type MessageType = 'text' | 'audio' | 'image' | 'file' | 'document' | 'system';
 
 interface Member {
   id: string;
   username: string;
   display_name: string;
   avatar_url: string | null;
+  is_online?: boolean;
+  user_status?: 'online' | 'offline';
+  last_seen?: string | null;
 }
 
 interface ChatMessage {
   id: string;
+  message_id?: string;
+  room_id?: string;
+  room_name?: string;
   type: 'user' | 'system' | 'tip' | 'pinned';
+  message_type?: MessageType;
   content: string;
+  message_text?: string;
   sender_id: string;
   sender_name: string;
+  username?: string;
   avatar_url?: string | null;
+  attachment_url?: string | null;
+  mentioned_users?: string[];
   created_at: string;
 }
 
@@ -70,27 +95,105 @@ function formatTime(iso: string) {
   return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
 }
 
+function formatLastSeen(iso?: string | null) {
+  if (!iso) return 'Offline';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return 'Offline';
+  return `Offline - ${date.toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })} ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+}
+
+function normalizeUsername(username: string) {
+  return username.replace(/^@/, '').trim();
+}
+
+function getMentionQuery(text: string) {
+  const match = text.match(/(?:^|\s)@([A-Za-z0-9_.-]*)$/);
+  return match ? match[1].toLowerCase() : null;
+}
+
 function createLocalWelcomeMessage(member: Member): ChatMessage {
   const createdAt = new Date().toISOString();
   return {
     id: `local-welcome-${member.id}-${createdAt}`,
+    room_id: ROOM_ID,
+    room_name: ROOM_NAME,
     type: 'system',
-    content: `${BAMBOO_ICON} Selamat datang, ${member.display_name || member.username}! Senang kamu bergabung di Rumpun Bambupedia! ${WAVE_ICON}`,
+    message_type: 'system',
+    content: `${BAMBOO_ICON} Selamat datang, ${member.display_name || member.username}! Senang kamu bergabung di ${ROOM_NAME}! ${WAVE_ICON}`,
     sender_id: 'system',
     sender_name: 'SISTEM',
     created_at: createdAt,
   };
 }
 
+function AudioMessage({ url }: { url: string }) {
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    return sound ? () => { sound.unloadAsync(); } : undefined;
+  }, [sound]);
+
+  const playSound = async () => {
+    try {
+      if (sound) {
+        if (isPlaying) {
+          await sound.pauseAsync();
+          setIsPlaying(false);
+        } else {
+          await sound.playAsync();
+          setIsPlaying(true);
+        }
+        return;
+      }
+
+      const { sound: nextSound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
+      setSound(nextSound);
+      setIsPlaying(true);
+      nextSound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setIsPlaying(false);
+          nextSound.setPositionAsync(0);
+        }
+      });
+    } catch (error) {
+      console.error('Error playing audio', error);
+    }
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.audioPlayer}>
+        <audio controls src={url} style={{ height: 32, width: 230, maxWidth: '100%' }} />
+      </View>
+    );
+  }
+
+  return (
+    <TouchableOpacity style={styles.audioPlayer} onPress={playSound}>
+      <Ionicons name={isPlaying ? 'pause' : 'play'} size={18} color="#E2E8F0" />
+      <Text style={styles.audioText}>Voice message</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function BambupediaRoom() {
   const { width } = useWindowDimensions();
+  const router = useRouter();
   const isCompact = width < 720;
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pinnedMessage, setPinnedMessage] = useState<ChatMessage | null>(null);
   const [inputText, setInputText] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [socketConnected, setSocketConnected] = useState(false);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const webMediaRecorderRef = useRef<any>(null);
+  const webAudioChunksRef = useRef<Blob[]>([]);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const seenMessageIds = useRef(new Set<string>());
 
@@ -100,22 +203,18 @@ export default function BambupediaRoom() {
     setMessages((previous) => {
       if (seenMessageIds.current.has(message.id)) return previous;
       seenMessageIds.current.add(message.id);
-
       const next = [...previous, message];
-      return next.length > 200 ? next.slice(next.length - 200) : next;
+      return next.length > 240 ? next.slice(next.length - 240) : next;
     });
   }, []);
 
   useEffect(() => {
     const loadCurrentUser = async () => {
-      if (Platform.OS === 'web') {
-        setCurrentUserId(localStorage.getItem('userId'));
-        return;
-      }
-
-      setCurrentUserId(await SecureStore.getItemAsync('userId'));
+      const userId = await SecureStore.getItemAsync('userId');
+      const username = await SecureStore.getItemAsync('username');
+      setCurrentUserId(userId);
+      setCurrentUsername(username);
     };
-
     loadCurrentUser();
   }, []);
 
@@ -132,32 +231,40 @@ export default function BambupediaRoom() {
         socket.emit('request_bambupedia_members');
       };
 
-      const handleDisconnect = () => {
-        setSocketConnected(false);
-      };
+      const handleDisconnect = () => setSocketConnected(false);
 
       const handleMembers = (memberList: Member[]) => {
         if (!Array.isArray(memberList)) return;
-        setMembers(
-          [...memberList].sort((a, b) =>
-            (a.display_name || a.username).localeCompare(b.display_name || b.username)
-          )
-        );
-      };
+        const unique = new Map<string, Member>();
+        memberList.forEach((item) => {
+          if (!item?.id || !item?.username) return;
+          const hasOnlineFlag = typeof item.is_online === 'boolean';
+          const isOnline = hasOnlineFlag ? item.is_online : item.user_status ? item.user_status === 'online' : true;
+          unique.set(item.id, {
+            ...item,
+            display_name: item.display_name || item.username,
+            avatar_url: item.avatar_url || null,
+            is_online: isOnline,
+            user_status: isOnline ? 'online' : 'offline',
+          });
+        });
 
-      const handleMessage = (message: ChatMessage) => {
-        appendMessage(message);
-      };
-
-      const handlePinnedMessage = (message: ChatMessage) => {
-        setPinnedMessage(message);
+        setMembers(Array.from(unique.values()).sort((a, b) => {
+          const aOnline = a.is_online || a.user_status === 'online';
+          const bOnline = b.is_online || b.user_status === 'online';
+          if (aOnline !== bOnline) return aOnline ? -1 : 1;
+          return (a.display_name || a.username).localeCompare(b.display_name || b.username);
+        }));
       };
 
       const handleTip = (payload: ChatMessage | string) => {
         if (typeof payload === 'string') {
           appendMessage({
             id: `sys-tip-${Date.now()}`,
+            room_id: ROOM_ID,
+            room_name: ROOM_NAME,
             type: 'tip',
+            message_type: 'system',
             content: `${TIP_ICON} Tips Fitur: ${payload}`,
             sender_id: 'system',
             sender_name: 'SISTEM',
@@ -165,27 +272,20 @@ export default function BambupediaRoom() {
           });
           return;
         }
-
         appendMessage(payload);
       };
 
       const handleUserJoined = (payload: UserJoinedPayload) => {
-        if (payload?.message) {
-          appendMessage(payload.message);
-          return;
-        }
-
-        if (payload?.user) {
-          appendMessage(createLocalWelcomeMessage(payload.user));
-        }
+        if (payload?.message) appendMessage(payload.message);
+        else if (payload?.user) appendMessage(createLocalWelcomeMessage(payload.user));
       };
 
       socket.on('connect', handleConnect);
       socket.on('disconnect', handleDisconnect);
       socket.on('bambupedia_online_users', handleMembers);
       socket.on('bambupedia_members', handleMembers);
-      socket.on('bambupedia_message', handleMessage);
-      socket.on('bambupedia_pinned_message', handlePinnedMessage);
+      socket.on('bambupedia_message', appendMessage);
+      socket.on('bambupedia_pinned_message', setPinnedMessage);
       socket.on('bambupedia_system_tip', handleTip);
       socket.on('bambupedia_user_joined', handleUserJoined);
 
@@ -194,8 +294,8 @@ export default function BambupediaRoom() {
         socket.off('disconnect', handleDisconnect);
         socket.off('bambupedia_online_users', handleMembers);
         socket.off('bambupedia_members', handleMembers);
-        socket.off('bambupedia_message', handleMessage);
-        socket.off('bambupedia_pinned_message', handlePinnedMessage);
+        socket.off('bambupedia_message', appendMessage);
+        socket.off('bambupedia_pinned_message', setPinnedMessage);
         socket.off('bambupedia_system_tip', handleTip);
         socket.off('bambupedia_user_joined', handleUserJoined);
       };
@@ -205,7 +305,6 @@ export default function BambupediaRoom() {
     };
 
     setupSocket();
-
     return () => {
       active = false;
       removeSocketListeners?.();
@@ -214,32 +313,174 @@ export default function BambupediaRoom() {
 
   useEffect(() => {
     if (messages.length === 0) return;
-    const timer = setTimeout(() => {
-      flatListRef.current?.scrollToEnd({ animated: true });
-    }, 80);
-
+    const timer = setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 80);
     return () => clearTimeout(timer);
   }, [messages.length]);
 
+  const sortedMembers = members;
+  const onlineCount = sortedMembers.filter((member) => member.is_online || member.user_status === 'online').length;
+  const currentMember = sortedMembers.find((member) => member.id === currentUserId);
+  const activeUsername = currentUsername || currentMember?.username || null;
+  const mentionQuery = getMentionQuery(inputText);
+
+  const mentionCandidates = useMemo(() => {
+    if (mentionQuery === null) return [];
+    return sortedMembers.filter((member) => {
+      const displayName = member.display_name || member.username;
+      const handle = normalizeUsername(member.username).toLowerCase();
+      return handle.includes(mentionQuery) || displayName.toLowerCase().includes(mentionQuery);
+    }).slice(0, 6);
+  }, [mentionQuery, sortedMembers]);
+
+  const visibleMessages = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return messages;
+    return messages.filter((message) => `${message.content || ''} ${message.sender_name || ''}`.toLowerCase().includes(query));
+  }, [messages, searchQuery]);
+
+  const sendSocketMessage = (payload: { content?: string; message_type?: MessageType; attachment_url?: string | null }) => {
+    if (!socketService.socket) return;
+    socketService.socket.emit('bambupedia_message', payload);
+  };
+
   const sendMessage = () => {
     const content = inputText.trim();
-    if (!content || !socketService.socket) return;
-
-    socketService.socket.emit('bambupedia_message', { content });
+    if (!content) return;
+    sendSocketMessage({ content, message_type: 'text' });
     setInputText('');
   };
 
-  const renderAvatar = (name: string, avatarUrl?: string | null, size = 36) => {
-    const avatarStyle = [
-      styles.avatar,
-      {
-        width: size,
-        height: size,
-        borderRadius: size / 2,
-        backgroundColor: getAvatarColor(name),
-      },
-    ];
+  const sendQuickGreeting = () => {
+    sendSocketMessage({ content: `Halo semuanya, saya standby di ${ROOM_NAME}.`, message_type: 'text' });
+    setDrawerVisible(false);
+  };
 
+  const insertMention = (member: Member) => {
+    const username = normalizeUsername(member.username);
+    setInputText((previous) => {
+      const match = previous.match(/(?:^|\s)@([A-Za-z0-9_.-]*)$/);
+      if (!match || match.index === undefined) {
+        return `${previous}${previous.endsWith(' ') || previous.length === 0 ? '' : ' '}@${username} `;
+      }
+      const prefixEnd = match.index + (match[0].startsWith(' ') ? 1 : 0);
+      return `${previous.slice(0, prefixEnd)}@${username} `;
+    });
+  };
+
+  const uploadFile = async (uri: string, type: MessageType, originalName?: string) => {
+    try {
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'webm' : 'bin'}`;
+        formData.append('file', blob, originalName || fallbackName);
+      } else {
+        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin'}`;
+        formData.append('file', {
+          uri,
+          name: originalName || fallbackName,
+          type: type === 'image' ? 'image/jpeg' : type === 'audio' ? 'audio/m4a' : 'application/octet-stream',
+        } as any);
+      }
+      const response = await axios.post(`${API_URL}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      return response.data.url as string;
+    } catch (error) {
+      console.error('Bambupedia upload failed:', error);
+      return null;
+    }
+  };
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      const url = await uploadFile(result.assets[0].uri, 'image');
+      if (url) sendSocketMessage({ content: 'Image', message_type: 'image', attachment_url: url });
+    }
+  };
+
+  const pickDocument = async () => {
+    const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
+    if (!result.canceled && result.assets?.[0]?.uri) {
+      const doc = result.assets[0];
+      const url = await uploadFile(doc.uri, 'document', doc.name);
+      if (url) sendSocketMessage({ content: doc.name || 'Document', message_type: 'document', attachment_url: url });
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      if (Platform.OS === 'web') {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        webAudioChunksRef.current = [];
+        mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0) webAudioChunksRef.current.push(event.data);
+        };
+        mediaRecorder.start();
+        webMediaRecorderRef.current = mediaRecorder;
+        setIsRecording(true);
+        return;
+      }
+
+      await Audio.requestPermissionsAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: nextRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(nextRecording);
+      setIsRecording(true);
+    } catch (error) {
+      console.error('Failed to start Bambupedia recording:', error);
+    }
+  };
+
+  const stopRecording = async () => {
+    if (Platform.OS === 'web') {
+      if (!webMediaRecorderRef.current) return;
+      setIsRecording(false);
+      const mediaRecorder = webMediaRecorderRef.current;
+      mediaRecorder.onstop = async () => {
+        const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'bambupedia-voice.webm');
+        try {
+          const response = await axios.post(`${API_URL}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          if (response.data.url) sendSocketMessage({ content: 'Voice message', message_type: 'audio', attachment_url: response.data.url });
+        } catch (error) {
+          console.error('Bambupedia voice upload failed:', error);
+        }
+      };
+      mediaRecorder.stop();
+      mediaRecorder.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+      webMediaRecorderRef.current = null;
+      return;
+    }
+
+    if (!recording) return;
+    setIsRecording(false);
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+    if (uri) {
+      const url = await uploadFile(uri, 'audio');
+      if (url) sendSocketMessage({ content: 'Voice message', message_type: 'audio', attachment_url: url });
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) stopRecording();
+    else startRecording();
+  };
+
+  const openAttachment = async (url: string) => {
+    if (Platform.OS === 'web') {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    await Linking.openURL(url);
+  };
+
+  const renderAvatar = (name: string, avatarUrl?: string | null, size = 40) => {
+    const avatarStyle = [styles.avatar, { width: size, height: size, borderRadius: size / 2, backgroundColor: getAvatarColor(name) }];
     return (
       <View style={avatarStyle}>
         {avatarUrl ? (
@@ -251,442 +492,395 @@ export default function BambupediaRoom() {
     );
   };
 
+  const renderMentionedText = (content: string, style: any) => {
+    const parts = content.split(/(@[A-Za-z0-9_.-]+)/g);
+    return (
+      <Text style={style}>
+        {parts.map((part, index) => /^@[A-Za-z0-9_.-]+$/.test(part)
+          ? <Text key={`${part}-${index}`} style={styles.mentionText}>{part}</Text>
+          : <Text key={`${part}-${index}`}>{part}</Text>)}
+      </Text>
+    );
+  };
+
+  const renderAttachment = (message: ChatMessage) => {
+    const messageType = message.message_type || 'text';
+    if (!message.attachment_url) return null;
+
+    if (messageType === 'image') {
+      return (
+        <TouchableOpacity onPress={() => openAttachment(message.attachment_url!)}>
+          <Image source={{ uri: message.attachment_url }} style={styles.attachedImage} resizeMode="cover" />
+        </TouchableOpacity>
+      );
+    }
+
+    if (messageType === 'audio') return <AudioMessage url={message.attachment_url} />;
+
+    return (
+      <TouchableOpacity style={styles.documentAttachment} onPress={() => openAttachment(message.attachment_url!)}>
+        <Ionicons name="document-text-outline" size={20} color="#CFFAFE" />
+        <Text style={styles.documentName} numberOfLines={1}>{message.content || 'Attachment'}</Text>
+      </TouchableOpacity>
+    );
+  };
+
   const renderMember = ({ item }: { item: Member }) => {
     const displayName = item.display_name || item.username;
     const isMe = item.id === currentUserId;
+    const isOnline = item.is_online || item.user_status === 'online';
 
     return (
-      <View style={[styles.memberItem, isMe && styles.memberItemActive]}>
-        {renderAvatar(displayName, item.avatar_url, 34)}
+      <TouchableOpacity style={[styles.memberItem, isMe && styles.memberItemActive]} onPress={() => insertMention(item)}>
+        {renderAvatar(displayName, item.avatar_url, 38)}
         <View style={styles.memberInfo}>
-          <Text style={styles.memberName} numberOfLines={1}>{displayName}</Text>
-          <Text style={styles.memberHandle} numberOfLines={1}>@{item.username}{isMe ? ' (kamu)' : ''}</Text>
+          <View style={styles.memberNameRow}>
+            <Text style={styles.memberName} numberOfLines={1}>{displayName}</Text>
+            {isMe ? <Text style={styles.meBadge}>kamu</Text> : null}
+          </View>
+          <Text style={styles.memberHandle} numberOfLines={1}>@{normalizeUsername(item.username)}</Text>
+          <Text style={[styles.presenceText, isOnline ? styles.presenceTextOnline : styles.presenceTextOffline]} numberOfLines={1}>
+            {isOnline ? 'Online' : formatLastSeen(item.last_seen)}
+          </Text>
         </View>
-        <View style={styles.onlineDot} />
-      </View>
+        <View style={[styles.presenceDot, isOnline ? styles.presenceDotOnline : styles.presenceDotOffline]} />
+      </TouchableOpacity>
     );
   };
 
   const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isOwn = item.sender_id === currentUserId;
     const isSystem = item.type === 'system' || item.type === 'tip';
+    const mentionedUsers = item.mentioned_users || [];
+    const normalizedActive = activeUsername ? normalizeUsername(activeUsername).toLowerCase() : '';
+    const isMentioned = !!normalizedActive && mentionedUsers.map((username) => normalizeUsername(username).toLowerCase()).includes(normalizedActive);
 
     if (isSystem) {
       const isTip = item.type === 'tip';
       return (
-        <View style={[styles.systemMessage, isTip ? styles.tipMessage : styles.joinMessage]}>
-          <Text style={[styles.systemLabel, isTip ? styles.tipLabel : styles.joinLabel]}>
-            {isTip ? `${TIP_ICON} TIPS` : `${SYSTEM_ICON} SISTEM`}
-          </Text>
-          <Text style={styles.systemText}>{item.content}</Text>
+        <View style={[styles.systemMessage, isTip ? styles.tipMessage : styles.joinMessage, isMentioned && styles.mentionedSystemMessage]}>
+          <Text style={[styles.systemLabel, isTip ? styles.tipLabel : styles.joinLabel]}>{isTip ? `${TIP_ICON} TIPS` : `${SYSTEM_ICON} SISTEM`}</Text>
+          {renderMentionedText(item.content, styles.systemText)}
         </View>
       );
     }
 
+    const displayContent = item.message_text || item.content || '';
+    const hasMediaOnly = (item.message_type || 'text') === 'image' || (item.message_type || 'text') === 'audio';
     return (
       <View style={[styles.messageRow, isOwn && styles.messageRowOwn]}>
-        {!isOwn && renderAvatar(item.sender_name, item.avatar_url, 32)}
-        <View style={[styles.messageBubble, isOwn ? styles.ownBubble : styles.otherBubble]}>
+        {!isOwn && renderAvatar(item.sender_name, item.avatar_url, 34)}
+        <View style={[styles.messageBubble, isOwn ? styles.ownBubble : styles.otherBubble, isMentioned && styles.mentionedBubble]}>
           {!isOwn && <Text style={styles.senderName} numberOfLines={1}>{item.sender_name}</Text>}
-          <Text style={styles.messageText}>{item.content}</Text>
+          {renderAttachment(item)}
+          {displayContent && !hasMediaOnly ? renderMentionedText(displayContent, styles.messageText) : null}
           <Text style={styles.messageTime}>{formatTime(item.created_at)}</Text>
         </View>
       </View>
     );
   };
 
-  return (
-    <View style={[styles.container, isCompact && styles.containerCompact]}>
-      <View style={[styles.memberPanel, isCompact && styles.memberPanelCompact]}>
-        <View style={styles.panelHeader}>
-          <Text style={styles.panelTitle}>{BAMBOO_ICON} Rumpun Bambupedia</Text>
-          <View style={styles.statusRow}>
-            <View style={[styles.statusDot, socketConnected ? styles.statusDotLive : styles.statusDotOffline]} />
-            <Text style={styles.statusText}>{socketConnected ? 'Live' : 'Menghubungkan'}</Text>
+  const renderDrawer = () => (
+    <Modal visible={drawerVisible} transparent animationType={isCompact ? 'slide' : 'fade'} onRequestClose={() => setDrawerVisible(false)}>
+      <View style={[styles.drawerOverlay, isCompact && styles.drawerOverlayCompact]}>
+        <Pressable style={styles.drawerScrim} onPress={() => setDrawerVisible(false)} />
+        <View style={[styles.drawerPanel, isCompact && styles.drawerPanelCompact]}>
+          <View style={styles.drawerHeader}>
+            <View>
+              <Text style={styles.drawerTitle}>{ROOM_NAME}</Text>
+              <Text style={styles.drawerSubtitle}>{onlineCount} online - {sortedMembers.length} anggota</Text>
+            </View>
+            <TouchableOpacity style={styles.iconButton} onPress={() => setDrawerVisible(false)} accessibilityLabel="Tutup menu">
+              <Ionicons name="close" size={22} color="#E2E8F0" />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Sapaan</Text>
+            <TouchableOpacity style={styles.drawerAction} onPress={sendQuickGreeting}>
+              <Ionicons name="hand-left-outline" size={18} color="#34D399" />
+              <Text style={styles.drawerActionText}>Kirim sapaan</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Pencarian Pesan</Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color="#94A3B8" />
+              <TextInput style={styles.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder="Cari pesan" placeholderTextColor="#64748B" />
+            </View>
+          </View>
+
+          <View style={[styles.drawerSection, styles.membersSection]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.drawerSectionTitle}>Daftar User/Rumpun</Text>
+              <Text style={styles.memberCounter}>{sortedMembers.length}</Text>
+            </View>
+            <FlatList
+              data={sortedMembers}
+              keyExtractor={(item) => item.id}
+              renderItem={renderMember}
+              contentContainerStyle={styles.drawerMemberList}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={<Text style={styles.emptyMembers}>Menghubungkan daftar anggota...</Text>}
+            />
+          </View>
+
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Menu Tambahan</Text>
+            <View style={styles.menuGrid}>
+              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/(main)/help-center')}>
+                <Ionicons name="headset-outline" size={18} color="#CFFAFE" />
+                <Text style={styles.menuTileText}>Pusat Bantuan</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/(main)/contacts')}>
+                <Ionicons name="people-outline" size={18} color="#CFFAFE" />
+                <Text style={styles.menuTileText}>Kontak</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Pengaturan Room</Text>
+            <View style={styles.infoRow}>
+              <Ionicons name={socketConnected ? 'radio-button-on' : 'radio-button-off'} size={17} color={socketConnected ? '#22C55E' : '#F59E0B'} />
+              <Text style={styles.infoText}>{socketConnected ? 'Live' : 'Menghubungkan'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Informasi Room</Text>
+            <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem Bambu untuk sapaan, tanya jawab, dan koordinasi lintas platform.</Text>
           </View>
         </View>
+      </View>
+    </Modal>
+  );
 
-        <View style={styles.memberCountPill}>
-          <Text style={styles.memberCountText}>{members.length} anggota aktif</Text>
-        </View>
+  return (
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => (router.canGoBack() ? router.back() : setDrawerVisible(true))} accessibilityLabel="Kembali">
+          <Ionicons name="arrow-back" size={24} color="#F8FAFC" />
+        </TouchableOpacity>
 
-        <FlatList
-          data={members}
-          keyExtractor={(item) => item.id}
-          renderItem={renderMember}
-          style={styles.memberList}
-          contentContainerStyle={styles.memberListContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <Text style={styles.emptyMembers}>
-              {socketConnected ? 'Belum ada anggota online.' : 'Menghubungkan ke lobby...'}
-            </Text>
-          }
-        />
+        {renderAvatar('Bambupedia', null, 48)}
+
+        <TouchableOpacity style={styles.headerTitleArea} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
+          <View style={styles.headerTitleRow}>
+            <Text style={styles.headerTitle} numberOfLines={1}>{ROOM_NAME}</Text>
+            <Ionicons name="chevron-down" size={17} color="#94A3B8" />
+          </View>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>{onlineCount} online - {sortedMembers.length} anggota - {socketConnected ? 'Live' : 'Menghubungkan'}</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Cari pesan">
+          <Ionicons name="search" size={22} color="#E2E8F0" />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Menu room">
+          <Ionicons name="ellipsis-vertical" size={22} color="#E2E8F0" />
+        </TouchableOpacity>
       </View>
 
-      <View style={styles.chatPanel}>
-        <View style={styles.chatHeader}>
-          <Text style={styles.chatTitle}>{BAMBOO_ICON} Rumpun Bambupedia</Text>
-          <Text style={styles.chatSubtitle}>Ruang komunitas publik - sesi real-time - {members.length} aktif</Text>
-        </View>
-
-        <KeyboardAvoidingView style={styles.chatBody} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-          {pinnedMessage && (
-            <View style={styles.pinnedHubCard}>
+      <KeyboardAvoidingView style={styles.chatArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        {pinnedMessage && (
+          <View style={styles.pinnedHubCard}>
+            <View style={styles.pinnedTitleRow}>
+              <Ionicons name="information-circle" size={18} color="#34D399" />
               <Text style={styles.pinnedHubTitle}>Pusat Informasi Ekosistem</Text>
-              <Text style={styles.pinnedHubText}>{pinnedMessage.content}</Text>
+            </View>
+            <Text style={styles.pinnedHubText} numberOfLines={isCompact ? 7 : 8}>{pinnedMessage.content}</Text>
+          </View>
+        )}
+
+        <FlatList
+          ref={flatListRef}
+          data={visibleMessages}
+          keyExtractor={(item) => item.id}
+          renderItem={renderMessage}
+          style={styles.messageList}
+          contentContainerStyle={styles.messageListContent}
+          showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <View style={styles.emptyChat}>
+              <Text style={styles.emptyChatIcon}>{BAMBOO_ICON}</Text>
+              <Text style={styles.emptyChatTitle}>Belum ada percakapan di sesi ini.</Text>
+            </View>
+          }
+        />
+
+        <View style={styles.composerWrap}>
+          {mentionCandidates.length > 0 && (
+            <View style={styles.mentionBox}>
+              {mentionCandidates.map((member) => {
+                const displayName = member.display_name || member.username;
+                return (
+                  <TouchableOpacity key={member.id} style={styles.mentionItem} onPress={() => insertMention(member)}>
+                    {renderAvatar(displayName, member.avatar_url, 30)}
+                    <View style={styles.mentionInfo}>
+                      <Text style={styles.mentionName} numberOfLines={1}>{displayName}</Text>
+                      <Text style={styles.mentionHandle} numberOfLines={1}>@{normalizeUsername(member.username)}</Text>
+                    </View>
+                    <View style={[styles.presenceDotSmall, member.is_online ? styles.presenceDotOnline : styles.presenceDotOffline]} />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           )}
 
-          <FlatList
-            ref={flatListRef}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={renderMessage}
-            style={styles.messageList}
-            contentContainerStyle={styles.messageListContent}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.emptyChat}>
-                <Text style={styles.emptyChatIcon}>{BAMBOO_ICON}</Text>
-                <Text style={styles.emptyChatTitle}>Belum ada percakapan di sesi ini.</Text>
-              </View>
-            }
-          />
+          <View style={styles.quickActions}>
+            <TouchableOpacity style={styles.roundAction} onPress={pickDocument} accessibilityLabel="Attachment">
+              <Ionicons name="attach" size={24} color="#CBD5E1" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.roundAction} onPress={pickImage} accessibilityLabel="Kamera atau gambar">
+              <Ionicons name="camera" size={23} color="#CBD5E1" />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.roundAction} onPress={() => setInputText((value) => `${value}${SMILE}`)} accessibilityLabel="Emoji">
+              <Ionicons name="happy-outline" size={23} color="#CBD5E1" />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.inputBar}>
             <TextInput
               style={styles.textInput}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Tulis pesan di Rumpun Bambupedia..."
+              placeholder="Type an encrypted message..."
               placeholderTextColor="#64748B"
               multiline
               maxLength={1000}
               onSubmitEditing={Platform.OS === 'web' ? sendMessage : undefined}
               blurOnSubmit={false}
             />
-            <TouchableOpacity
-              style={[styles.sendButton, !inputText.trim() && styles.sendButtonDisabled]}
-              onPress={sendMessage}
-              disabled={!inputText.trim()}
-              accessibilityLabel="Kirim pesan"
-            >
-              <Text style={styles.sendButtonText}>{SEND_ICON}</Text>
+            <TouchableOpacity style={[styles.sendButton, isRecording && styles.recordingButton]} onPress={inputText.trim() ? sendMessage : toggleRecording} accessibilityLabel={inputText.trim() ? 'Kirim pesan' : 'Voice message'}>
+              <Ionicons name={inputText.trim() ? 'send' : isRecording ? 'stop' : 'mic'} size={22} color="#07111F" />
             </TouchableOpacity>
           </View>
-        </KeyboardAvoidingView>
-      </View>
+        </View>
+      </KeyboardAvoidingView>
+
+      {renderDrawer()}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: 'row',
-    backgroundColor: '#0A0F1A',
-  },
-  containerCompact: {
-    flexDirection: 'column',
-  },
-  memberPanel: {
-    width: 248,
-    backgroundColor: '#0D1420',
-    borderRightWidth: 1,
-    borderRightColor: '#1E2D3D',
-  },
-  memberPanelCompact: {
-    width: '100%',
-    maxHeight: 220,
-    borderRightWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E2D3D',
-  },
-  panelHeader: {
-    paddingHorizontal: 16,
-    paddingTop: 18,
-    paddingBottom: 10,
-  },
-  panelTitle: {
-    color: '#F8FAFC',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  statusRow: {
+  container: { flex: 1, width: '100%', minWidth: 0, overflow: 'hidden', backgroundColor: '#0A0F1A' },
+  header: {
+    minHeight: 84,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 6,
-  },
-  statusDotLive: {
-    backgroundColor: '#22C55E',
-  },
-  statusDotOffline: {
-    backgroundColor: '#F59E0B',
-  },
-  statusText: {
-    color: '#94A3B8',
-    fontSize: 12,
-  },
-  memberCountPill: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#063A32',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    marginHorizontal: 16,
-    marginBottom: 10,
-  },
-  memberCountText: {
-    color: '#34D399',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  memberList: {
-    flex: 1,
-  },
-  memberListContent: {
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-  },
-  memberItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    minHeight: 52,
-    paddingHorizontal: 8,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginBottom: 3,
-  },
-  memberItemActive: {
-    backgroundColor: '#102A2A',
-  },
-  avatar: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    marginRight: 10,
-    flexShrink: 0,
-  },
-  avatarImage: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-  },
-  memberInfo: {
-    flex: 1,
-    minWidth: 0,
-  },
-  memberName: {
-    color: '#E2E8F0',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  memberHandle: {
-    color: '#64748B',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22C55E',
-    marginLeft: 8,
-  },
-  emptyMembers: {
-    color: '#64748B',
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 18,
-    paddingHorizontal: 12,
-  },
-  chatPanel: {
-    flex: 1,
-    minWidth: 0,
-  },
-  chatHeader: {
-    backgroundColor: '#111827',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E2D3D',
-  },
-  chatTitle: {
-    color: '#F8FAFC',
-    fontSize: 17,
-    fontWeight: '800',
-  },
-  chatSubtitle: {
-    color: '#94A3B8',
-    fontSize: 12,
-    marginTop: 3,
-  },
-  chatBody: {
-    flex: 1,
-  },
-  messageList: {
-    flex: 1,
-    backgroundColor: '#0A0F1A',
-  },
-  pinnedHubCard: {
-    backgroundColor: '#102A20',
-    borderBottomWidth: 1,
-    borderBottomColor: '#1E3A2F',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-  },
-  pinnedHubTitle: {
-    color: '#34D399',
-    fontSize: 12,
-    fontWeight: '800',
-    marginBottom: 5,
-  },
-  pinnedHubText: {
-    color: '#D1FAE5',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  messageListContent: {
-    flexGrow: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-  },
-  messageRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 10,
-  },
-  messageRowOwn: {
-    flexDirection: 'row-reverse',
-  },
-  messageBubble: {
-    maxWidth: '76%',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-  },
-  ownBubble: {
-    backgroundColor: '#059669',
-    marginLeft: 44,
-  },
-  otherBubble: {
     backgroundColor: '#1E293B',
-  },
-  senderName: {
-    color: '#34D399',
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  messageText: {
-    color: '#F8FAFC',
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  messageTime: {
-    color: 'rgba(255,255,255,0.55)',
-    fontSize: 10,
-    marginTop: 5,
-    alignSelf: 'flex-end',
-  },
-  systemMessage: {
-    borderLeftWidth: 3,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginVertical: 6,
-    marginHorizontal: 6,
-  },
-  joinMessage: {
-    backgroundColor: '#0B2733',
-    borderLeftColor: '#0EA5E9',
-  },
-  tipMessage: {
-    backgroundColor: '#102A20',
-    borderLeftColor: '#22C55E',
-  },
-  systemLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    marginBottom: 4,
-  },
-  joinLabel: {
-    color: '#38BDF8',
-  },
-  tipLabel: {
-    color: '#34D399',
-  },
-  systemText: {
-    color: '#CBD5E1',
-    fontSize: 13,
-    lineHeight: 19,
-  },
-  emptyChat: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-  },
-  emptyChatIcon: {
-    fontSize: 46,
-    marginBottom: 12,
-  },
-  emptyChatTitle: {
-    color: '#CBD5E1',
-    fontSize: 15,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#111827',
-    borderTopWidth: 1,
-    borderTopColor: '#1E2D3D',
+    gap: 10,
+    zIndex: 5,
   },
+  headerIconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  headerTitleArea: { flex: 1, minWidth: 0 },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
+  headerTitle: { color: '#F8FAFC', fontSize: 20, fontWeight: '800', marginRight: 4, flexShrink: 1 },
+  headerSubtitle: { color: '#94A3B8', fontSize: 12, marginTop: 3 },
+  chatArea: { flex: 1, minHeight: 0 },
+  pinnedHubCard: { backgroundColor: '#103421', borderBottomWidth: 1, borderBottomColor: '#1F513A', paddingHorizontal: 20, paddingVertical: 12 },
+  pinnedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
+  pinnedHubTitle: { color: '#34D399', fontSize: 15, fontWeight: '800' },
+  pinnedHubText: { color: '#D1FAE5', fontSize: 14, lineHeight: 22 },
+  messageList: { flex: 1, minHeight: 0, backgroundColor: '#0B1220' },
+  messageListContent: { paddingHorizontal: 14, paddingVertical: 16, gap: 10 },
+  messageRow: { width: '100%', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start' },
+  messageRowOwn: { justifyContent: 'flex-end' },
+  messageBubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 13, paddingVertical: 9, minWidth: 72 },
+  ownBubble: { backgroundColor: '#15B981', borderBottomRightRadius: 6 },
+  otherBubble: { backgroundColor: '#172234', borderBottomLeftRadius: 6, marginLeft: 8, borderWidth: 1, borderColor: '#243246' },
+  mentionedBubble: { borderWidth: 1, borderColor: '#22D3EE', shadowColor: '#22D3EE', shadowOpacity: 0.22, shadowRadius: 8 },
+  senderName: { color: '#8BE8D2', fontSize: 12, fontWeight: '800', marginBottom: 3 },
+  messageText: { color: '#F8FAFC', fontSize: 15, lineHeight: 21 },
+  mentionText: { color: '#67E8F9', fontWeight: '800' },
+  messageTime: { color: 'rgba(248,250,252,0.68)', fontSize: 10, alignSelf: 'flex-end', marginTop: 5 },
+  systemMessage: { alignSelf: 'center', width: '100%', maxWidth: 760, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
+  joinMessage: { backgroundColor: '#132B3A', borderLeftWidth: 3, borderLeftColor: '#22D3EE' },
+  tipMessage: { backgroundColor: '#1F2B17', borderLeftWidth: 3, borderLeftColor: '#84CC16' },
+  mentionedSystemMessage: { borderWidth: 1, borderColor: '#22D3EE' },
+  systemLabel: { fontSize: 11, fontWeight: '900', marginBottom: 5 },
+  joinLabel: { color: '#67E8F9' },
+  tipLabel: { color: '#BEF264' },
+  systemText: { color: '#E2E8F0', fontSize: 14, lineHeight: 21 },
+  composerWrap: { backgroundColor: '#1E293B', borderTopWidth: 1, borderTopColor: '#334155', paddingHorizontal: 14, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 20 : 12 },
+  quickActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  roundAction: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#28364B', alignItems: 'center', justifyContent: 'center' },
+  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   textInput: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 120,
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    minHeight: 52,
+    maxHeight: 130,
+    borderRadius: 22,
+    backgroundColor: '#0B1220',
     color: '#F8FAFC',
-    fontSize: 14,
-    lineHeight: 20,
-    outlineStyle: 'none',
-  } as any,
-  sendButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    fontSize: 16,
+    outlineStyle: 'none' as any,
   },
-  sendButtonDisabled: {
-    backgroundColor: '#28433B',
-  },
-  sendButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '800',
-  },
+  sendButton: { width: 58, height: 52, borderRadius: 22, backgroundColor: '#18C08F', alignItems: 'center', justifyContent: 'center' },
+  recordingButton: { backgroundColor: '#F87171' },
+  mentionBox: { backgroundColor: '#101A2A', borderWidth: 1, borderColor: '#25435C', borderRadius: 8, marginBottom: 10, overflow: 'hidden' },
+  mentionItem: { minHeight: 46, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: '#1E2D3D' },
+  mentionInfo: { flex: 1, minWidth: 0, marginLeft: 8 },
+  mentionName: { color: '#E2E8F0', fontSize: 13, fontWeight: '800' },
+  mentionHandle: { color: '#67E8F9', fontSize: 12, marginTop: 2 },
+  emptyChat: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 80 },
+  emptyChatIcon: { fontSize: 42, marginBottom: 12 },
+  emptyChatTitle: { color: '#94A3B8', fontSize: 15, fontWeight: '700' },
+  avatar: { justifyContent: 'center', alignItems: 'center', overflow: 'hidden', flexShrink: 0 },
+  avatarImage: { width: '100%', height: '100%' },
+  avatarText: { color: '#FFFFFF', fontWeight: '900' },
+  drawerOverlay: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' },
+  drawerOverlayCompact: { justifyContent: 'flex-end' },
+  drawerScrim: { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0, backgroundColor: 'rgba(2, 6, 23, 0.62)' },
+  drawerPanel: { width: 380, maxWidth: '100%', height: '100%', backgroundColor: '#0D1420', borderLeftWidth: 1, borderLeftColor: '#26364C', paddingTop: 14, paddingHorizontal: 14, paddingBottom: 18 },
+  drawerPanelCompact: { width: '100%', height: '88%', alignSelf: 'flex-end', borderLeftWidth: 0, borderTopWidth: 1, borderTopColor: '#26364C', borderTopLeftRadius: 8, borderTopRightRadius: 8 },
+  drawerHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#1E2D3D' },
+  drawerTitle: { color: '#F8FAFC', fontSize: 18, fontWeight: '900' },
+  drawerSubtitle: { color: '#94A3B8', fontSize: 12, marginTop: 3 },
+  iconButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
+  drawerSection: { paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#172234' },
+  membersSection: { flex: 1, minHeight: 160 },
+  drawerSectionTitle: { color: '#8BE8D2', fontSize: 12, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 0, marginBottom: 8 },
+  drawerAction: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: 12, borderRadius: 8, backgroundColor: '#102A2A' },
+  drawerActionText: { color: '#E2E8F0', fontSize: 14, fontWeight: '800' },
+  searchBox: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#111C2E', borderRadius: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: '#233249' },
+  searchInput: { flex: 1, color: '#F8FAFC', fontSize: 14, outlineStyle: 'none' as any },
+  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  memberCounter: { color: '#34D399', fontSize: 12, fontWeight: '900' },
+  drawerMemberList: { paddingBottom: 8 },
+  memberItem: { minHeight: 62, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 8, borderRadius: 8, marginBottom: 4 },
+  memberItemActive: { backgroundColor: '#102A2A' },
+  memberInfo: { flex: 1, minWidth: 0, marginLeft: 10 },
+  memberNameRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0, gap: 6 },
+  memberName: { color: '#E2E8F0', fontSize: 14, fontWeight: '800', flexShrink: 1 },
+  meBadge: { color: '#07111F', backgroundColor: '#34D399', borderRadius: 7, overflow: 'hidden', paddingHorizontal: 6, paddingVertical: 1, fontSize: 10, fontWeight: '900' },
+  memberHandle: { color: '#64748B', fontSize: 12, marginTop: 2 },
+  presenceText: { fontSize: 11, marginTop: 3 },
+  presenceTextOnline: { color: '#34D399' },
+  presenceTextOffline: { color: '#94A3B8' },
+  presenceDot: { width: 9, height: 9, borderRadius: 5, marginLeft: 8 },
+  presenceDotSmall: { width: 8, height: 8, borderRadius: 4 },
+  presenceDotOnline: { backgroundColor: '#22C55E' },
+  presenceDotOffline: { backgroundColor: '#64748B' },
+  emptyMembers: { color: '#64748B', fontSize: 12, textAlign: 'center', marginTop: 18 },
+  menuGrid: { flexDirection: 'row', gap: 8 },
+  menuTile: { flex: 1, minHeight: 42, borderRadius: 8, backgroundColor: '#111C2E', borderWidth: 1, borderColor: '#233249', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 8 },
+  menuTileText: { color: '#E2E8F0', fontSize: 13, fontWeight: '800' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoText: { color: '#E2E8F0', fontSize: 13, fontWeight: '700' },
+  roomInfoText: { color: '#94A3B8', fontSize: 13, lineHeight: 20 },
+  attachedImage: { width: 250, maxWidth: '100%' as any, height: 180, borderRadius: 8, marginBottom: 6, backgroundColor: '#0B1220' },
+  audioPlayer: { minHeight: 38, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, marginBottom: 4 },
+  audioText: { color: '#E2E8F0', fontSize: 14, fontWeight: '700' },
+  documentAttachment: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, backgroundColor: 'rgba(15, 23, 42, 0.55)', paddingHorizontal: 10, marginBottom: 5 },
+  documentName: { color: '#E2E8F0', fontSize: 13, fontWeight: '700', flexShrink: 1 },
 });
-
 

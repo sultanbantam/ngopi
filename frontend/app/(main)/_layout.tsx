@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Stack, Slot, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform } from 'react-native';
-import ContactsScreen from './contacts';
 import BambupediaRoom from './bambupedia';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
@@ -112,18 +111,15 @@ export default function MainLayout() {
   };
 
   if (isLargeScreen) {
+    const showBambupedia =
+      pathname === '/contacts' ||
+      pathname === '/' ||
+      pathname === '/bambupedia' ||
+      pathname.startsWith('/chat');
+
     return (
-      <View style={styles.splitContainer}>
-        <View style={styles.sidebar}>
-          <ContactsScreen />
-        </View>
-        <View style={styles.main}>
-          {pathname === '/contacts' || pathname === '/' || pathname === '/bambupedia' ? (
-             <BambupediaRoom />
-          ) : (
-             <Slot />
-          )}
-        </View>
+      <View style={styles.singleContainer}>
+        {showBambupedia ? <BambupediaRoom /> : <Slot />}
         {renderToast()}
       </View>
     );
@@ -138,6 +134,7 @@ export default function MainLayout() {
         contentStyle: { backgroundColor: '#0F172A' }
       }}>
         <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
+        <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="help-center" options={{ title: "Pusat Bantuan" }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
@@ -148,6 +145,10 @@ export default function MainLayout() {
 }
 
 const styles = StyleSheet.create({
+  singleContainer: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+  },
   splitContainer: {
     flex: 1,
     flexDirection: 'row',
@@ -205,3 +206,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
