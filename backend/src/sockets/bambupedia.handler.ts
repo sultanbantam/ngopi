@@ -158,6 +158,30 @@ const extractMentionedUsers = (content: string) => {
   return Array.from(new Set(matches.map((match) => match.slice(1).toLowerCase())));
 };
 
+const notifyMentionedUsers = async (io: Server, message: BambupediaMessage, senderId: string) => {
+  if (message.mentioned_users.length === 0) return;
+
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, username: true, display_name: true },
+    });
+    const mentioned = new Set(message.mentioned_users.map((username) => username.toLowerCase()));
+
+    users
+      .filter((user) => user.id !== senderId && mentioned.has(user.username.toLowerCase()))
+      .forEach((user) => {
+        io.to(user.id).emit('bambupedia_mention', {
+          ...message,
+          mentioned_user_id: user.id,
+          mentioned_username: user.username,
+          mentioned_display_name: user.display_name,
+        });
+      });
+  } catch (error) {
+    console.error('Bambupedia mention notification error:', error);
+  }
+};
+
 const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', content: string): BambupediaMessage => {
   const id = makeId(prefix);
   return {
@@ -258,6 +282,7 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
     };
 
     io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', message);
+    void notifyMentionedUsers(io, message, member.id);
 
     if (messageType !== 'text') return;
 
@@ -298,3 +323,4 @@ export const startBambupediaTips = (io: Server) => {
     io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', tipMessage);
   }, TIP_INTERVAL_MS);
 };
+

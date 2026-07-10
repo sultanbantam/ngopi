@@ -70,34 +70,51 @@ export default function MainLayout() {
   };
 
   useEffect(() => {
-    const handleReaction = (data: any) => {
-      showNotification('Reaction', `Someone reacted to your message!`);
+    let subscribedSocket: any = null;
+
+    const describeMessage = (data: any) => {
+      if (data?.type === 'audio') return 'Voice message baru';
+      if (data?.type === 'image') return 'Gambar baru';
+      if (data?.type === 'document' || data?.type === 'file') return 'Dokumen baru';
+      return 'Private message baru';
+    };
+
+    const handleReaction = () => {
+      showNotification('Reaction', 'Someone reacted to your message!');
     };
 
     const handleNewMessage = (data: any) => {
       if (currentUserId && data.sender_id !== currentUserId) {
-        // Jangan notifikasi jika kita sedang membuka chat tersebut? 
-        // Untuk sederhananya, kita selalu notif jika document.hidden atau selalu muncul toast
-        showNotification('New Message', 'You received a new message');
+        showNotification('BambooChat', describeMessage(data));
       }
     };
 
     const handleCallIncoming = (data: any) => {
-      showNotification('Incoming Call', `${data.name} is calling you...`);
+      showNotification(data?.isVideo ? 'Video Call' : 'Incoming Call', `${data.name} is calling you...`);
     };
 
-    if (socketService.socket) {
-      socketService.socket.on('message_reacted', handleReaction);
-      socketService.socket.on('receive_message', handleNewMessage);
-      socketService.socket.on('call_incoming', handleCallIncoming);
-    }
-    
+    const handleBambupediaMention = (data: any) => {
+      if (currentUserId && data.sender_id === currentUserId) return;
+      showNotification('Mention Bambupedia', `${data.sender_name || 'Seseorang'} menandai kamu`);
+    };
+
+    const setupListeners = async () => {
+      const socket = await socketService.connect();
+      if (!socket) return;
+      subscribedSocket = socket;
+      socket.on('message_reacted', handleReaction);
+      socket.on('receive_message', handleNewMessage);
+      socket.on('call_incoming', handleCallIncoming);
+      socket.on('bambupedia_mention', handleBambupediaMention);
+    };
+
+    setupListeners();
+
     return () => {
-      if (socketService.socket) {
-        socketService.socket.off('message_reacted', handleReaction);
-        socketService.socket.off('receive_message', handleNewMessage);
-        socketService.socket.off('call_incoming', handleCallIncoming);
-      }
+      subscribedSocket?.off('message_reacted', handleReaction);
+      subscribedSocket?.off('receive_message', handleNewMessage);
+      subscribedSocket?.off('call_incoming', handleCallIncoming);
+      subscribedSocket?.off('bambupedia_mention', handleBambupediaMention);
     };
   }, [currentUserId]);
 
@@ -114,8 +131,7 @@ export default function MainLayout() {
     const showBambupedia =
       pathname === '/contacts' ||
       pathname === '/' ||
-      pathname === '/bambupedia' ||
-      pathname.startsWith('/chat');
+      pathname === '/bambupedia';
 
     return (
       <View style={styles.singleContainer}>
@@ -206,4 +222,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
+
 
