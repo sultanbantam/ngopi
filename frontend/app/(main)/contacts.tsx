@@ -486,6 +486,11 @@ export default function ContactsScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity style={styles.backToBambupediaButton} onPress={() => router.replace('/(main)/bambupedia' as any)}>
+        <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
+        <Text style={styles.backToBambupediaText}>Kembali</Text>
+      </TouchableOpacity>
+
       <View style={styles.header}>
         <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 50 }}>
           <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
@@ -800,6 +805,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0F172A',
+  },
+  backToBambupediaButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginBottom: 8,
+  },
+  backToBambupediaText: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: '700',
   },
   header: {
     flexDirection: 'row',

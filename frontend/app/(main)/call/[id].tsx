@@ -18,17 +18,37 @@ export default function CallScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  const [needsAudioTap, setNeedsAudioTap] = useState(false);
   
   // Refs for video elements (Web only)
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const userVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
+  const remoteStreamRef = useRef<MediaStream | null>(null);
   
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const actualRoomIdRef = useRef<string>('');
   const pendingCandidates = useRef<any[]>([]);
   const hasNavigatedBack = useRef(false);
+
+  const playRemoteAudio = async () => {
+    if (Platform.OS !== 'web') return;
+    const audio = remoteAudioRef.current;
+    const remoteStream = remoteStreamRef.current;
+    if (!audio || !remoteStream) return;
+
+    try {
+      audio.srcObject = remoteStream;
+      audio.muted = false;
+      audio.volume = 1;
+      await audio.play();
+      setNeedsAudioTap(false);
+    } catch (error) {
+      console.log('Remote audio needs user tap:', error);
+      setNeedsAudioTap(true);
+    }
+  };
 
   useEffect(() => {
     if (Platform.OS !== 'web') {
@@ -78,14 +98,12 @@ export default function CallScreen() {
         // Handle incoming stream
         peer.ontrack = (event: any) => {
           const remoteStream = event.streams[0];
+          remoteStreamRef.current = remoteStream;
           setStatus('Connected');
           if (isVideoCall && userVideoRef.current) {
             userVideoRef.current.srcObject = remoteStream;
           }
-          if (!isVideoCall && remoteAudioRef.current) {
-            remoteAudioRef.current.srcObject = remoteStream;
-            remoteAudioRef.current.play().catch((error) => console.log('Remote audio play blocked:', error));
-          }
+          playRemoteAudio();
         };
 
         // Handle ICE candidates
@@ -259,11 +277,17 @@ export default function CallScreen() {
           <View style={styles.largeAvatarContainer}>
             <Ionicons name="person" size={80} color="#fff" />
           </View>
+          {needsAudioTap && (
+            <TouchableOpacity style={styles.enableAudioButton} onPress={playRemoteAudio}>
+              <Ionicons name="volume-high" size={20} color="#0F172A" />
+              <Text style={styles.enableAudioText}>Nyalakan suara</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
       {Platform.OS === 'web' && !isVideoCall && (
-        <audio ref={remoteAudioRef as any} autoPlay style={{ display: 'none' }} />
+        <audio ref={remoteAudioRef as any} autoPlay playsInline style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
       )}
 
       {/* Header */}
@@ -374,6 +398,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#6b7280',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  enableAudioButton: {
+    marginTop: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#86EFAC',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  enableAudioText: {
+    color: '#0F172A',
+    fontWeight: '800',
   },
   remoteVideo: {
     width: '100%',
