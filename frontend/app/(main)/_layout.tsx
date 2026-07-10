@@ -302,7 +302,6 @@ export default function MainLayout() {
 
   if (isLargeScreen) {
     const showBambupedia =
-      pathname === '/contacts' ||
       pathname === '/' ||
       pathname === '/bambupedia';
 

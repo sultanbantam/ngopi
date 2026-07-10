@@ -9,6 +9,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import axios from 'axios';
 import BambupediaRoom from '../bambupedia';
+import { Ionicons } from '@expo/vector-icons';
 
 const NoTranslateText = Text as any;
 const API_ORIGIN = 'https://api.bamboochat.click';
@@ -101,8 +102,9 @@ export default function ChatRoomScreen() {
   const router = useRouter();
   const rawName = Array.isArray(params.name) ? params.name[0] : params.name;
   const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const rawType = Array.isArray(params.type) ? params.type[0] : params.type;
   const routeLabel = `${rawName || ''} ${rawId || ''}`;
-  const isBambupediaLink = /bamboo(cs|pedia)|rumpun/i.test(routeLabel) || rawId === 'bambupedia';
+  const isBambupediaLink = rawType !== 'group' && (/bamboo(cs|pedia)|rumpun/i.test(routeLabel) || rawId === 'bambupedia');
 
   useEffect(() => {
     if (isBambupediaLink) router.replace('/(main)/bambupedia');
@@ -113,7 +115,9 @@ export default function ChatRoomScreen() {
 }
 
 function PrivateChatRoomScreen() {
-  const { id: roomId, name } = useLocalSearchParams();
+  const { id: roomId, name, type } = useLocalSearchParams();
+  const chatType = Array.isArray(type) ? type[0] : type;
+  const isGroupChat = chatType === 'group';
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [secretKey, setSecretKey] = useState('');
@@ -158,8 +162,7 @@ function PrivateChatRoomScreen() {
       }
       
       const partnerId = roomId as string;
-      // Define a consistent room ID for 1-on-1 chats regardless of who opens it
-      const sharedKey = [myId, partnerId].sort().join('-');
+      const sharedKey = isGroupChat ? partnerId : [myId, partnerId].sort().join('-');
       setSecretKey(sharedKey);
       setActualRoomId(sharedKey);
       setMyUserId(myId);
@@ -334,7 +337,7 @@ function PrivateChatRoomScreen() {
         socketService.socket.emit('edit_message', {
           message_id: editingMessageId,
           room_id: actualRoomId,
-          receiver_id: roomId,
+          receiver_id: isGroupChat ? undefined : roomId,
           new_content: ciphertext
         });
         
@@ -353,7 +356,7 @@ function PrivateChatRoomScreen() {
 
     const messageData = {
       room_id: actualRoomId,
-      receiver_id: roomId, // Pass receiver_id so backend broadcasts to them globally
+      receiver_id: isGroupChat ? undefined : roomId, // Pass receiver_id only for private chats
       content: ciphertext,
       reply_to_id: replyingToMessageId
     };
@@ -380,12 +383,12 @@ function PrivateChatRoomScreen() {
     setInputText(text);
 
     if (socketService.socket && actualRoomId) {
-      socketService.socket.emit('typing_start', { room_id: actualRoomId, receiver_id: roomId });
+      socketService.socket.emit('typing_start', { room_id: actualRoomId, receiver_id: isGroupChat ? undefined : roomId });
 
       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
       typingTimeoutRef.current = setTimeout(() => {
-        socketService.socket?.emit('typing_stop', { room_id: actualRoomId, receiver_id: roomId });
+        socketService.socket?.emit('typing_stop', { room_id: actualRoomId, receiver_id: isGroupChat ? undefined : roomId });
       }, 1500);
     }
   };
@@ -452,7 +455,7 @@ function PrivateChatRoomScreen() {
         // Send image message
         const messageData = {
           room_id: actualRoomId,
-          receiver_id: roomId,
+          receiver_id: isGroupChat ? undefined : roomId,
           type: 'image',
           attachment_url: url
         };
@@ -486,7 +489,7 @@ function PrivateChatRoomScreen() {
         const encryptedName = encryptMessage(doc.name, secretKey);
         const messageData = {
           room_id: actualRoomId,
-          receiver_id: roomId,
+          receiver_id: isGroupChat ? undefined : roomId,
           type: 'document',
           content: encryptedName,
           attachment_url: url
@@ -556,7 +559,7 @@ function PrivateChatRoomScreen() {
           const url = normalizeAttachmentUrl(response.data.url);
           
           if (url) {
-            const messageData = { room_id: actualRoomId, receiver_id: roomId, type: 'audio', attachment_url: url };
+            const messageData = { room_id: actualRoomId, receiver_id: isGroupChat ? undefined : roomId, type: 'audio', attachment_url: url };
             if (socketService.socket) socketService.socket.emit('send_message', messageData);
             
             setMessages(prev => [...prev, {
@@ -585,7 +588,7 @@ function PrivateChatRoomScreen() {
           // Send audio message
           const messageData = {
             room_id: actualRoomId,
-            receiver_id: roomId,
+            receiver_id: isGroupChat ? undefined : roomId,
             type: 'audio',
             attachment_url: url
           };
@@ -612,7 +615,7 @@ function PrivateChatRoomScreen() {
       socketService.socket.emit('react_message', {
         message_id: selectedMessage.id,
         room_id: actualRoomId,
-        receiver_id: roomId,
+        receiver_id: isGroupChat ? undefined : roomId,
         emoji
       });
       // Optimistic update
@@ -645,7 +648,7 @@ function PrivateChatRoomScreen() {
       socketService.socket.emit('pin_message', {
         message_id: selectedMessage.id,
         room_id: actualRoomId,
-        receiver_id: roomId,
+        receiver_id: isGroupChat ? undefined : roomId,
         is_pinned: newPinStatus
       });
       // Optimistic
@@ -712,7 +715,7 @@ function PrivateChatRoomScreen() {
       socketService.socket.emit('delete_message', {
         message_id: selectedMessage.id,
         room_id: actualRoomId,
-        receiver_id: roomId,
+        receiver_id: isGroupChat ? undefined : roomId,
         for_everyone: false
       });
       setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
@@ -725,12 +728,19 @@ function PrivateChatRoomScreen() {
       socketService.socket.emit('delete_message', {
         message_id: selectedMessage.id,
         room_id: actualRoomId,
-        receiver_id: roomId,
+        receiver_id: isGroupChat ? undefined : roomId,
         for_everyone: true
       });
       setMessages(prev => prev.filter(msg => msg.id !== selectedMessage.id));
     }
     setIsMenuVisible(false);
+  };
+
+  const getAttachmentFilename = (message: Message) => {
+    if (message.content) return message.content;
+    if (message.type === 'image') return 'image.jpg';
+    if (message.type === 'audio') return 'voice-message.webm';
+    return 'document.pdf';
   };
 
   const downloadFile = async (url: string, filename: string) => {
@@ -757,6 +767,13 @@ function PrivateChatRoomScreen() {
     } else {
       Linking.openURL(safeUrl).catch(e => console.error('Failed to open URL', e));
     }
+  };
+
+  const handleDownloadSelected = () => {
+    if (selectedMessage?.attachment_url) {
+      downloadFile(selectedMessage.attachment_url, getAttachmentFilename(selectedMessage));
+    }
+    setIsMenuVisible(false);
   };
 
   const renderReactions = (reactions?: Record<string, string>) => {
@@ -805,10 +822,12 @@ function PrivateChatRoomScreen() {
             <Text style={styles.headerSubtitleOffline}>{partnerStatus}</Text>
           ) : null}
         </View>
-        <View style={styles.headerRightIcons}>
-          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'true' } })}><Text style={styles.headerIcon}>📹</Text></TouchableOpacity>
-          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'false' } })}><Text style={styles.headerIcon}>📞</Text></TouchableOpacity>
-        </View>
+        {!isGroupChat && (
+          <View style={styles.headerRightIcons}>
+            <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
+            <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {pinnedMessage && (
@@ -906,6 +925,11 @@ function PrivateChatRoomScreen() {
               <TouchableOpacity style={styles.menuItem} onPress={handleForwardClick}>
                 <Text style={styles.menuItemText}>Teruskan</Text>
               </TouchableOpacity>
+              {selectedMessage?.attachment_url && (
+                <TouchableOpacity style={styles.menuItem} onPress={handleDownloadSelected}>
+                  <Text style={styles.menuItemText}>Download</Text>
+                </TouchableOpacity>
+              )}
               {selectedMessage?.isMine && selectedMessage?.type === 'text' && (
                 <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
                   <Text style={styles.menuItemText}>✏️ Edit</Text>

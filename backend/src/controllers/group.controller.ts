@@ -2,6 +2,11 @@ import { Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { getBmcBalance } from '../utils/blockchain';
 
+const normalizeMinBmcBalance = (value: unknown) => {
+  const parsed = Number.parseFloat(String(value ?? 0));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+};
+
 export const createGroup = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, description, minBmcBalance } = req.body;
@@ -16,7 +21,7 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
       data: {
         name,
         description: description || null,
-        min_bmc_balance: parseFloat(minBmcBalance) || 0,
+        min_bmc_balance: normalizeMinBmcBalance(minBmcBalance),
         created_by: userId!,
         members: {
           create: {
@@ -36,6 +41,7 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
 export const listGroups = async (req: Request, res: Response): Promise<void> => {
   try {
     const groups = await prisma.group.findMany({
+      orderBy: { created_at: 'desc' },
       include: {
         _count: {
           select: { members: true }
@@ -128,7 +134,7 @@ export const joinGroup = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (existingMember) {
-      res.status(400).json({ error: 'Already a member of this group' });
+      res.status(200).json({ message: 'Already a member of this group', alreadyMember: true });
       return;
     }
 
@@ -165,4 +171,51 @@ export const joinGroup = async (req: Request, res: Response): Promise<void> => {
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+export const updateGroup = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const id = req.params.id as string;
+    const userId = (req as any).user?.id as string;
+    const { name, description, minBmcBalance } = req.body;
 
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const group = await prisma.group.findUnique({ where: { id } });
+    if (!group) {
+      res.status(404).json({ error: 'Group not found' });
+      return;
+    }
+
+    if (group.created_by !== userId) {
+      res.status(403).json({ error: 'Only the group creator can edit this group' });
+      return;
+    }
+
+    const trimmedName = typeof name === 'string' ? name.trim() : '';
+    if (!trimmedName) {
+      res.status(400).json({ error: 'Group name is required' });
+      return;
+    }
+
+    const updatedGroup = await prisma.group.update({
+      where: { id },
+      data: {
+        name: trimmedName,
+        description: typeof description === 'string' && description.trim() ? description.trim() : null,
+        min_bmc_balance: normalizeMinBmcBalance(minBmcBalance),
+      },
+      include: {
+        _count: {
+          select: { members: true }
+        }
+      }
+    });
+
+    res.status(200).json(updatedGroup);
+  } catch (error) {
+    console.error('Update group error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};

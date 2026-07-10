@@ -22,6 +22,7 @@ export default function CallScreen() {
   // Refs for video elements (Web only)
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const userVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteAudioRef = useRef<HTMLAudioElement>(null);
   
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
@@ -76,9 +77,14 @@ export default function CallScreen() {
 
         // Handle incoming stream
         peer.ontrack = (event: any) => {
+          const remoteStream = event.streams[0];
           setStatus('Connected');
-          if (userVideoRef.current) {
-            userVideoRef.current.srcObject = event.streams[0];
+          if (isVideoCall && userVideoRef.current) {
+            userVideoRef.current.srcObject = remoteStream;
+          }
+          if (!isVideoCall && remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remoteStream;
+            remoteAudioRef.current.play().catch((error) => console.log('Remote audio play blocked:', error));
           }
         };
 
@@ -254,6 +260,10 @@ export default function CallScreen() {
             <Ionicons name="person" size={80} color="#fff" />
           </View>
         </View>
+      )}
+
+      {Platform.OS === 'web' && !isVideoCall && (
+        <audio ref={remoteAudioRef as any} autoPlay style={{ display: 'none' }} />
       )}
 
       {/* Header */}

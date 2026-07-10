@@ -32,6 +32,8 @@ export default function ContactsScreen() {
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [groupMinBmc, setGroupMinBmc] = useState('0');
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [isSavingGroup, setIsSavingGroup] = useState(false);
 
   // Airdrop Modal
   const [isAirdropModalVisible, setAirdropModalVisible] = useState(false);
@@ -160,9 +162,25 @@ export default function ContactsScreen() {
     }
   }, []);
 
-  const openChat = (id: string, name: string) => {
+  const openChat = (id: string, name: string, type?: 'group' | 'contact') => {
     setUnreadCounts(prev => ({ ...prev, [id]: 0 }));
-    router.push({ pathname: '/(main)/chat/[id]', params: { id, name } });
+    router.push({ pathname: '/(main)/chat/[id]', params: { id, name, ...(type === 'group' ? { type: 'group' } : {}) } });
+  };
+
+  const openCreateGroupModal = () => {
+    setEditingGroupId(null);
+    setGroupName('');
+    setGroupDescription('');
+    setGroupMinBmc('0');
+    setGroupModalVisible(true);
+  };
+
+  const openEditGroupModal = (group: any) => {
+    setEditingGroupId(group.id);
+    setGroupName(group.name || '');
+    setGroupDescription(group.description || '');
+    setGroupMinBmc(String(group.min_bmc_balance ?? 0));
+    setGroupModalVisible(true);
   };
 
   const openHelpCenter = () => {
@@ -261,19 +279,42 @@ export default function ContactsScreen() {
     }
   };
 
-  const createGroup = async () => {
+  const saveGroup = async () => {
+    const trimmedName = groupName.trim();
+    if (!trimmedName) {
+      if (Platform.OS === 'web') alert('Nama rumpun wajib diisi');
+      else Alert.alert('Nama rumpun wajib diisi');
+      return;
+    }
+
     try {
+      setIsSavingGroup(true);
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const res = await axios.post(`${API_URL}/groups`, { name: groupName, description: groupDescription, minBmcBalance: groupMinBmc }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setGroups([...groups, res.data]);
+      const minBmcNumber = Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0);
+      const payload = { name: trimmedName, description: groupDescription, minBmcBalance: minBmcNumber };
+      const headers = { Authorization: `Bearer ${token}` };
+
+      if (editingGroupId) {
+        const res = await axios.put(`${API_URL}/groups/${editingGroupId}`, payload, { headers });
+        setGroups(prev => prev.map(group => group.id === editingGroupId ? { ...group, ...res.data } : group));
+      } else {
+        const res = await axios.post(`${API_URL}/groups`, payload, { headers });
+        setGroups(prev => [res.data, ...prev]);
+        setActiveTab('rumpun');
+      }
+
       setGroupModalVisible(false);
+      setEditingGroupId(null);
       setGroupName('');
       setGroupDescription('');
       setGroupMinBmc('0');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
+      const errorMsg = e.response?.data?.error || 'Gagal menyimpan rumpun';
+      if (Platform.OS === 'web') alert(errorMsg);
+      else Alert.alert('Error', errorMsg);
+    } finally {
+      setIsSavingGroup(false);
     }
   };
 
@@ -283,9 +324,13 @@ export default function ContactsScreen() {
       await axios.post(`${API_URL}/groups/${group.id}/join`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      openChat(group.id, group.name);
+      openChat(group.id, group.name, 'group');
     } catch (e: any) {
       const errorMsg = e.response?.data?.error || 'Failed to join group';
+      if (errorMsg === 'Already a member of this group') {
+        openChat(group.id, group.name, 'group');
+        return;
+      }
       if (Platform.OS === 'web') alert(errorMsg);
       else Alert.alert('Access Denied', errorMsg);
     }
@@ -396,17 +441,20 @@ export default function ContactsScreen() {
           <View style={styles.contactInfo}>
             <Text style={styles.contactName}>{item.name}</Text>
             {item.description && <Text style={styles.contactBio}>{item.description}</Text>}
-            <Text style={styles.contactUsername}>Min Balance: {item.min_bmc_balance} BMC</Text>
+            <Text style={styles.contactUsername}>{Number(item.min_bmc_balance) > 0 ? `Min ${item.min_bmc_balance} BMC` : 'Terbuka - 0 BMC'}</Text>
           </View>
-          {unreadCounts[item.id] > 0 ? (
-            <View style={styles.unreadBadge}>
-              <Text style={styles.unreadBadgeText}>{unreadCounts[item.id]}</Text>
-            </View>
-          ) : (
-            <View style={styles.lockBadge}>
-              <Text style={styles.lockBadgeText}>🔒</Text>
-            </View>
-          )}
+          <View style={styles.groupActions}>
+            {unreadCounts[item.id] > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadBadgeText}>{unreadCounts[item.id]}</Text>
+              </View>
+            )}
+            {item.created_by === currentUserId && (
+              <TouchableOpacity style={styles.groupEditButton} onPress={() => openEditGroupModal(item)}>
+                <Ionicons name="settings-outline" size={18} color="#A7F3D0" />
+              </TouchableOpacity>
+            )}
+          </View>
         </TouchableOpacity>
       );
     } else {
@@ -498,7 +546,7 @@ export default function ContactsScreen() {
       </View>
       
       {activeTab === 'rumpun' && (
-        <TouchableOpacity style={styles.createGroupBtn} onPress={() => setGroupModalVisible(true)}>
+        <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
           <Text style={styles.createGroupBtnText}>+ Buat Rumpun Baru</Text>
         </TouchableOpacity>
       )}
@@ -679,7 +727,7 @@ export default function ContactsScreen() {
       <Modal visible={isGroupModalVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Buat Rumpun Baru</Text>
+            <Text style={styles.modalTitle}>{editingGroupId ? 'Pengaturan Rumpun' : 'Buat Rumpun Baru'}</Text>
             <TextInput
               style={styles.input}
               placeholder="Nama Rumpun"
@@ -696,18 +744,18 @@ export default function ContactsScreen() {
             />
             <TextInput
               style={styles.input}
-              placeholder="Minimum BMC Balance (e.g. 100)"
+              placeholder="Minimum BMC Balance (0 untuk terbuka)"
               placeholderTextColor="#64748b"
               keyboardType="numeric"
               value={groupMinBmc}
               onChangeText={setGroupMinBmc}
             />
             <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setGroupModalVisible(false)} style={styles.cancelBtn}>
+              <TouchableOpacity onPress={() => { setGroupModalVisible(false); setEditingGroupId(null); }} style={styles.cancelBtn}>
                 <Text style={styles.cancelBtnText}>Batal</Text>
               </TouchableOpacity>
-              <TouchableOpacity onPress={createGroup} style={styles.saveBtn}>
-                <Text style={styles.saveBtnText}>Buat</Text>
+              <TouchableOpacity onPress={saveGroup} style={styles.saveBtn} disabled={isSavingGroup}>
+                {isSavingGroup ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{editingGroupId ? 'Simpan' : 'Buat'}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -955,6 +1003,21 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     marginTop: 2,
     fontStyle: 'italic',
+  },
+  groupActions: {
+    alignItems: 'center',
+    gap: 8,
+    marginLeft: 8,
+  },
+  groupEditButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0F3A2F',
+    borderWidth: 1,
+    borderColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unreadBadge: {
     backgroundColor: '#EF4444',
