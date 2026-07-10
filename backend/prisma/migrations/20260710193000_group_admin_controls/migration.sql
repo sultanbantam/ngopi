@@ -1,0 +1,11 @@
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "avatar_url" TEXT;
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "invite_code" TEXT;
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "join_policy" TEXT NOT NULL DEFAULT 'open';
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "only_admins_can_send" BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "allow_member_invites" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "call_enabled" BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE "GroupMember" ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'member';
+ALTER TABLE "GroupMember" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE "GroupMember" ADD COLUMN IF NOT EXISTS "invited_by" TEXT;
+UPDATE "GroupMember" gm SET "role" = 'admin' FROM "Group" g WHERE gm."group_id" = g."id" AND gm."user_id" = g."created_by";
+CREATE UNIQUE INDEX IF NOT EXISTS "Group_invite_code_key" ON "Group"("invite_code");

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Linking, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Linking, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { socketService } from '../../../src/utils/socket';
 import { encryptMessage, decryptMessage } from '../../../src/utils/crypto';
@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 const NoTranslateText = Text as any;
 const API_ORIGIN = 'https://api.bamboochat.click';
+const emojiOptions = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F64F}', '\u{1F525}', '\u{1F389}', '\u{1F60D}', '\u{1F914}', '\u{1F605}', '\u{1F973}'];
 
 const normalizeAttachmentUrl = (url?: string | null) => {
   if (!url) return '';
@@ -43,8 +44,14 @@ interface Message {
   reactions?: Record<string, string>;
   is_edited?: boolean;
   is_pinned?: boolean;
+  reply_to_id?: string;
+  sender?: {
+    id: string;
+    username?: string;
+    display_name?: string;
+    avatar_url?: string | null;
+  };
 }
-
 const AudioMessage = ({ url }: { url: string }) => {
   if (Platform.OS === 'web') {
     return (
@@ -92,7 +99,7 @@ const AudioMessage = ({ url }: { url: string }) => {
 
   return (
     <TouchableOpacity style={styles.audioPlayer} onPress={playSound}>
-      <Text style={styles.audioText}>{isPlaying ? '⏸' : '▶️'} Voice Note</Text>
+      <Text style={styles.audioText}>{isPlaying ? 'Pause' : 'Play'} Voice Note</Text>
     </TouchableOpacity>
   );
 };
@@ -145,9 +152,131 @@ function PrivateChatRoomScreen() {
   const [rawOnlineList, setRawOnlineList] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [myUserId, setMyUserId] = useState<string>('');
+  const [groupDetails, setGroupDetails] = useState<any>(null);
+  const [isGroupInfoVisible, setIsGroupInfoVisible] = useState(false);
+  const [isGroupDetailsLoading, setIsGroupDetailsLoading] = useState(false);
+  const [selectedMemberId, setSelectedMemberId] = useState('');
 
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
+  const currentRoomId = Array.isArray(roomId) ? roomId[0] : (roomId as string);
+  const chatTitle = Array.isArray(name) ? name[0] : (name as string) || 'Chat Room';
+  const groupMembers = groupDetails?.members || [];
+  const activeGroupMembers = groupMembers.filter((member: any) => member.status === 'active');
+  const onlineGroupMembers = activeGroupMembers.filter((member: any) => member.is_online);
+  const pendingGroupMembers = groupMembers.filter((member: any) => member.status === 'pending');
+  const groupMemberIds = new Set(groupMembers.map((member: any) => member.user_id));
+  const availableGroupUsers = allUsers.filter(user => user.id !== myUserId && !groupMemberIds.has(user.id));
+
+  const getAuthToken = async () => {
+    if (Platform.OS === 'web') return localStorage.getItem('token') || '';
+    return (await SecureStore.getItemAsync('token')) || '';
+  };
+
+  const loadGroupDetails = async () => {
+    if (!isGroupChat || !currentRoomId) return;
+    try {
+      setIsGroupDetailsLoading(true);
+      const token = await getAuthToken();
+      const res = await axios.get(`${API_ORIGIN}/api/groups/${currentRoomId}/members`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setGroupDetails(res.data);
+    } catch (error) {
+      console.error('Failed to load group details', error);
+    } finally {
+      setIsGroupDetailsLoading(false);
+    }
+  };
+
+  const copyInviteLink = async () => {
+    const link = groupDetails?.invite_url;
+    if (!link) return;
+    if (Platform.OS === 'web' && navigator?.clipboard) {
+      await navigator.clipboard.writeText(link);
+      alert('Link undangan disalin.');
+      return;
+    }
+    alert(link);
+  };
+
+  const regenerateInviteLink = async () => {
+    try {
+      const token = await getAuthToken();
+      const res = await axios.post(`${API_ORIGIN}/api/groups/${currentRoomId}/invite/regenerate`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setGroupDetails((prev: any) => ({ ...prev, invite_code: res.data.invite_code, invite_url: res.data.invite_url }));
+      alert('Link undangan baru sudah dibuat.');
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Gagal membuat ulang link undangan.');
+    }
+  };
+
+  const addSelectedGroupMember = async () => {
+    if (!selectedMemberId) {
+      alert('Pilih user yang mau ditambahkan.');
+      return;
+    }
+    try {
+      const token = await getAuthToken();
+      await axios.post(`${API_ORIGIN}/api/groups/${currentRoomId}/members`, { userId: selectedMemberId }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSelectedMemberId('');
+      await loadGroupDetails();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Gagal menambahkan user.');
+    }
+  };
+
+  const approveGroupMember = async (userId: string) => {
+    try {
+      const token = await getAuthToken();
+      await axios.post(`${API_ORIGIN}/api/groups/${currentRoomId}/members/${userId}/approve`, {}, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await loadGroupDetails();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Gagal menyetujui member.');
+    }
+  };
+
+  const updateGroupMemberRole = async (userId: string, role: 'admin' | 'member') => {
+    try {
+      const token = await getAuthToken();
+      await axios.patch(`${API_ORIGIN}/api/groups/${currentRoomId}/members/${userId}/role`, { role }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await loadGroupDetails();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Gagal mengubah role member.');
+    }
+  };
+
+  const removeGroupMember = async (userId: string) => {
+    try {
+      const token = await getAuthToken();
+      await axios.delete(`${API_ORIGIN}/api/groups/${currentRoomId}/members/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      await loadGroupDetails();
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Gagal menghapus member.');
+    }
+  };
+
+  const openGroupInfo = () => {
+    setIsGroupInfoVisible(true);
+    loadGroupDetails();
+  };
+
+  const getSenderLabel = (item: Message) => {
+    const fromPayload = item.sender?.display_name || item.sender?.username;
+    if (fromPayload) return fromPayload;
+    const fromDirectory = allUsers.find(user => user.id === item.sender_id);
+    return fromDirectory?.display_name || fromDirectory?.username || 'Anggota Rumpun';
+  };
 
   useEffect(() => {
     const cleanupSocketListeners: Array<() => void> = [];
@@ -253,7 +382,7 @@ function PrivateChatRoomScreen() {
         const handleMessageEdited = (data: any) => {
           setMessages(prev => prev.map(msg => {
             if (msg.id === data.id) {
-              return { ...msg, content: decodeMessageContent(data.content, data.type, sharedKey), is_edited: true };
+              return { ...msg, content: decodeMessageContent(data.content, data.type, sharedKey), is_edited: true, sender: data.sender || msg.sender };
             }
             return msg;
           }));
@@ -809,30 +938,43 @@ function PrivateChatRoomScreen() {
       {/* WhatsApp Custom Header */}
       <View style={styles.customHeader}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.headerIcon}>←</Text>
+          <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
         </TouchableOpacity>
         <View style={styles.headerAvatar}>
-          <Text style={styles.headerAvatarText}>{(name as string)?.charAt(0) || 'U'}</Text>
+          {isGroupChat && groupDetails?.avatar_url ? (
+            <Image source={{ uri: groupDetails.avatar_url }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.headerAvatarText}>{(groupDetails?.group_name || chatTitle)?.charAt(0) || 'U'}</Text>
+          )}
         </View>
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>{name || 'Chat Room'}</Text>
-          {isTyping ? (
+          <Text style={styles.headerTitle}>{groupDetails?.group_name || chatTitle || 'Chat Room'}</Text>
+          {isGroupChat ? (
+            <Text style={styles.headerSubtitleOffline}>
+              {isGroupDetailsLoading ? 'Memuat anggota...' : `${onlineGroupMembers.length} online - ${activeGroupMembers.length} anggota`}
+            </Text>
+          ) : isTyping ? (
             <Text style={styles.headerSubtitle}>typing...</Text>
           ) : partnerStatus ? (
             <Text style={styles.headerSubtitleOffline}>{partnerStatus}</Text>
           ) : null}
         </View>
-        {!isGroupChat && (
-          <View style={styles.headerRightIcons}>
-            <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
-            <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
-          </View>
-        )}
+        <View style={styles.headerRightIcons}>
+          {isGroupChat ? (
+            <TouchableOpacity style={styles.headerIconButton} onPress={openGroupInfo}>
+              <Ionicons name="information-circle-outline" size={24} color="#F8FAFC" />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
+              <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
+            </>
+          )}
+        </View>
       </View>
-
       {pinnedMessage && (
         <View style={styles.pinnedBanner}>
-          <Text style={styles.pinnedBannerTitle}>📌 Pinned Message</Text>
+          <Text style={styles.pinnedBannerTitle}>Pinned Message</Text>
           <Text style={styles.pinnedBannerContent} numberOfLines={1}>{pinnedMessage.content || 'Attachment'}</Text>
         </View>
       )}
@@ -853,6 +995,9 @@ function PrivateChatRoomScreen() {
               }}
               delayLongPress={300}
             >
+              {isGroupChat && !item.isMine && (
+                <Text style={styles.groupSenderName} numberOfLines={1}>{getSenderLabel(item)}</Text>
+              )}
               {repliedMsg && (
                 <View style={[styles.repliedBanner, item.isMine ? styles.myRepliedBanner : styles.theirRepliedBanner]}>
                   <Text style={styles.repliedBannerSender}>{repliedMsg.isMine ? 'You' : 'Them'}</Text>
@@ -867,7 +1012,7 @@ function PrivateChatRoomScreen() {
                 <AudioMessage url={normalizeAttachmentUrl(item.attachment_url)} />
               ) : item.type === 'document' && item.attachment_url ? (
                 <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
-                  <Text style={styles.documentIcon}>📄</Text>
+                  <Text style={styles.documentIcon}>FILE</Text>
                   <NoTranslateText style={styles.documentName} className="notranslate" translate="no">{item.content}</NoTranslateText>
                 </TouchableOpacity>
               ) : (
@@ -881,7 +1026,7 @@ function PrivateChatRoomScreen() {
                 <Text style={styles.timeText}>{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
                 {item.isMine && (
                   <Text style={styles.statusText}>
-                    {item.isRead ? '✓✓' : '✓'}
+                    {item.isRead ? 'read' : 'sent'}
                   </Text>
                 )}
               </View>
@@ -893,7 +1038,7 @@ function PrivateChatRoomScreen() {
                   setIsMenuVisible(true);
                 }}
               >
-                <Text style={styles.dropdownIcon}>⌄</Text>
+                <Text style={styles.dropdownIcon}>v</Text>
               </TouchableOpacity>
 
               {renderReactions(item.reactions)}
@@ -902,13 +1047,133 @@ function PrivateChatRoomScreen() {
         }}
       />
 
+      <Modal transparent visible={isGroupInfoVisible} animationType="slide" onRequestClose={() => setIsGroupInfoVisible(false)}>
+        <View style={styles.groupInfoOverlay}>
+          <View style={styles.groupInfoPanel}>
+            <View style={styles.groupInfoHeader}>
+              <Text style={styles.groupInfoTitle}>Info Rumpun</Text>
+              <TouchableOpacity style={styles.closeButton} onPress={() => setIsGroupInfoVisible(false)}>
+                <Ionicons name="close" size={22} color="#F8FAFC" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.groupHero}>
+                <View style={styles.groupHeroAvatar}>
+                  {groupDetails?.avatar_url ? (
+                    <Image source={{ uri: groupDetails.avatar_url }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.headerAvatarText}>{(groupDetails?.group_name || chatTitle)?.charAt(0) || 'R'}</Text>
+                  )}
+                </View>
+                <Text style={styles.groupHeroTitle}>{groupDetails?.group_name || chatTitle}</Text>
+                <Text style={styles.groupHeroMeta}>{onlineGroupMembers.length} online - {activeGroupMembers.length} anggota</Text>
+                {!!groupDetails?.description && <Text style={styles.groupDescription}>{groupDetails.description}</Text>}
+              </View>
+
+              <View style={styles.groupStatusRow}>
+                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.join_policy === 'approval' ? 'Join disetujui admin' : 'Join terbuka'}</Text></View>
+                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{Number(groupDetails?.min_bmc_balance || 0) > 0 ? `Min ${groupDetails.min_bmc_balance} BMC` : '0 BMC'}</Text></View>
+                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.only_admins_can_send ? 'Admin only' : 'Semua bisa chat'}</Text></View>
+              </View>
+
+              <Text style={styles.groupInfoSectionTitle}>Link Undangan</Text>
+              <View style={styles.groupInviteBox}>
+                <Text style={styles.groupInviteText} numberOfLines={2}>{groupDetails?.invite_url || 'Memuat link...'}</Text>
+              </View>
+              <View style={styles.groupActionRow}>
+                <TouchableOpacity style={styles.groupPrimaryButton} onPress={copyInviteLink}>
+                  <Text style={styles.groupButtonText}>Salin Link</Text>
+                </TouchableOpacity>
+                {groupDetails?.is_admin && (
+                  <TouchableOpacity style={styles.groupSecondaryButton} onPress={regenerateInviteLink}>
+                    <Text style={styles.groupSecondaryButtonText}>Buat Ulang</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {groupDetails?.is_admin && (
+                <View style={styles.groupAdminBox}>
+                  <Text style={styles.groupInfoSectionTitle}>Tambah User</Text>
+                  {availableGroupUsers.length > 0 ? (
+                    <>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.groupUserPickerRow}>
+                        {availableGroupUsers.slice(0, 24).map(user => (
+                          <TouchableOpacity key={user.id} style={[styles.groupUserChip, selectedMemberId === user.id && styles.groupUserChipActive]} onPress={() => setSelectedMemberId(user.id)}>
+                            <Text style={styles.groupUserChipText} numberOfLines={1}>{user.display_name || user.username}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                      <TouchableOpacity style={[styles.groupPrimaryButton, !selectedMemberId && styles.groupButtonDisabled]} onPress={addSelectedGroupMember} disabled={!selectedMemberId}>
+                        <Text style={styles.groupButtonText}>Tambah ke Rumpun</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <Text style={styles.groupHeroMeta}>Semua user terdaftar sudah ada di rumpun ini.</Text>
+                  )}
+                </View>
+              )}
+
+              {pendingGroupMembers.length > 0 && groupDetails?.is_admin && (
+                <View style={styles.groupAdminBox}>
+                  <Text style={styles.groupInfoSectionTitle}>Menunggu Persetujuan</Text>
+                  {pendingGroupMembers.map((member: any) => (
+                    <View key={member.user_id} style={styles.groupMemberRow}>
+                      <View style={styles.groupMemberAvatar}>
+                        {member.avatar_url ? <Image source={{ uri: member.avatar_url }} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{(member.display_name || member.username || 'U').charAt(0)}</Text>}
+                      </View>
+                      <View style={styles.groupMemberInfo}>
+                        <Text style={styles.groupMemberName}>{member.display_name || member.username}</Text>
+                        <Text style={styles.groupMemberMeta}>@{member.username} - pending</Text>
+                      </View>
+                      <TouchableOpacity style={styles.miniButton} onPress={() => approveGroupMember(member.user_id)}>
+                        <Text style={styles.miniButtonText}>Setujui</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.groupInfoSectionTitle}>Anggota</Text>
+              {groupMembers.map((member: any) => {
+                const displayName = member.display_name || member.username || 'User';
+                const roleLabel = member.role === 'admin' ? 'Admin' : 'Member';
+                const isCreator = groupDetails?.created_by === member.user_id;
+                return (
+                  <View key={member.user_id} style={styles.groupMemberRow}>
+                    <View style={styles.groupMemberAvatar}>
+                      {member.avatar_url ? <Image source={{ uri: member.avatar_url }} style={styles.avatarImage} /> : <Text style={styles.avatarText}>{displayName.charAt(0)}</Text>}
+                    </View>
+                    <View style={styles.groupMemberInfo}>
+                      <Text style={styles.groupMemberName} numberOfLines={1}>{displayName}{member.user_id === myUserId ? ' (kamu)' : ''}</Text>
+                      <Text style={styles.groupMemberMeta}>@{member.username} - {roleLabel}{isCreator ? ' - pembuat' : ''} - {member.status}</Text>
+                    </View>
+                    <View style={[styles.groupStatusDot, member.is_online ? styles.groupStatusDotOnline : styles.groupStatusDotOffline]} />
+                    {groupDetails?.is_admin && member.user_id !== myUserId && !isCreator && (
+                      <View style={styles.groupMemberActions}>
+                        {member.status === 'active' && (
+                          <TouchableOpacity style={styles.miniButton} onPress={() => updateGroupMemberRole(member.user_id, member.role === 'admin' ? 'member' : 'admin')}>
+                            <Text style={styles.miniButtonText}>{member.role === 'admin' ? 'Member' : 'Admin'}</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity style={[styles.miniButton, styles.miniButtonDanger]} onPress={() => removeGroupMember(member.user_id)}>
+                          <Text style={styles.miniButtonText}>Hapus</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
       {/* Context Menu Modal */}
       <Modal transparent visible={isMenuVisible} animationType="fade" onRequestClose={() => setIsMenuVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMenuVisible(false)}>
           <View style={styles.menuContainer}>
             {/* Quick Emojis */}
             <View style={styles.emojiRow}>
-              {['👍', '❤️', '😂', '😮', '😢', '🙏'].map(emoji => (
+              {emojiOptions.map(emoji => (
                 <TouchableOpacity key={emoji} onPress={() => handleReact(emoji)}>
                   <Text style={styles.menuEmoji}>{emoji}</Text>
                 </TouchableOpacity>
@@ -932,19 +1197,19 @@ function PrivateChatRoomScreen() {
               )}
               {selectedMessage?.isMine && selectedMessage?.type === 'text' && (
                 <TouchableOpacity style={styles.menuItem} onPress={handleEdit}>
-                  <Text style={styles.menuItemText}>✏️ Edit</Text>
+                  <Text style={styles.menuItemText}>Edit</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.menuItem} onPress={handlePin}>
-                <Text style={styles.menuItemText}>📌 {selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}</Text>
+                <Text style={styles.menuItemText}>{selectedMessage?.is_pinned ? 'Unpin' : 'Pin'}</Text>
               </TouchableOpacity>
               {selectedMessage?.isMine && (
                 <TouchableOpacity style={styles.menuItem} onPress={handleDeleteEveryone}>
-                  <Text style={[styles.menuItemText, { color: '#EF4444' }]}>🗑 Hapus untuk Semua</Text>
+                  <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Hapus untuk Semua</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.menuItem} onPress={handleDeleteSelf}>
-                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>🗑 Hapus untuk Saya</Text>
+                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Hapus untuk Saya</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -983,7 +1248,7 @@ function PrivateChatRoomScreen() {
           <View style={styles.editingBanner}>
             <Text style={styles.editingBannerText}>Replying to message...</Text>
             <TouchableOpacity onPress={() => setReplyingToMessageId(null)}>
-              <Text style={styles.editingBannerClose}>✕</Text>
+              <Text style={styles.editingBannerClose}>x</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -991,24 +1256,24 @@ function PrivateChatRoomScreen() {
           <View style={styles.editingBanner}>
             <Text style={styles.editingBannerText}>Editing message...</Text>
             <TouchableOpacity onPress={() => { setIsEditing(false); setEditingMessageId(null); setInputText(''); }}>
-              <Text style={styles.editingBannerClose}>✕</Text>
+              <Text style={styles.editingBannerClose}>x</Text>
             </TouchableOpacity>
           </View>
         )}
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.attachButton} onPress={pickDocument}>
-            <Text style={styles.attachButtonText}>📎</Text>
+            <Ionicons name="attach" size={20} color="#F8FAFC" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
-            <Text style={styles.attachButtonText}>📷</Text>
+            <Ionicons name="camera" size={20} color="#F8FAFC" />
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachButton} onPress={() => setShowEmojiPanel(!showEmojiPanel)}>
-            <Text style={styles.attachButtonText}>😊</Text>
+            <Ionicons name="happy-outline" size={20} color="#F8FAFC" />
           </TouchableOpacity>
         </View>
         {showEmojiPanel && (
           <View style={styles.emojiInputPanel}>
-            {['👍', '❤️', '😂', '😮', '😢', '🙏', '🔥', '🎉', '😍', '🤔', '😅', '🥳'].map(emoji => (
+            {emojiOptions.map(emoji => (
               <TouchableOpacity key={emoji} style={styles.emojiInputBtn}
                 onPress={() => {
                   setInputText(prev => prev + emoji);
@@ -1035,7 +1300,7 @@ function PrivateChatRoomScreen() {
               onPressIn={startRecording}
               onPressOut={stopRecording}
             >
-              <Text style={styles.sendButtonText}>{isRecording ? '⏺' : '🎤'}</Text>
+              <Text style={styles.sendButtonText}>{isRecording ? 'Stop' : 'Mic'}</Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
@@ -1426,7 +1691,254 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#CBD5E1', // Slate-300 text
   },
-  contactItem: {
+  groupSenderName: {
+    color: '#67E8F9',
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  groupInfoOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2,6,23,0.72)',
+    justifyContent: 'flex-end',
+  },
+  groupInfoPanel: {
+    backgroundColor: '#0F172A',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    maxHeight: '92%',
+    paddingHorizontal: 16,
+    paddingBottom: 18,
+  },
+  groupInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  groupInfoTitle: {
+    color: '#F8FAFC',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupHero: {
+    alignItems: 'center',
+    paddingVertical: 18,
+  },
+  groupHeroAvatar: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  groupHeroTitle: {
+    color: '#F8FAFC',
+    fontSize: 20,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  groupHeroMeta: {
+    color: '#94A3B8',
+    fontSize: 13,
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  groupDescription: {
+    color: '#CBD5E1',
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  groupStatusRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  groupStatusChip: {
+    backgroundColor: '#102A22',
+    borderWidth: 1,
+    borderColor: '#14532D',
+    borderRadius: 14,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+  },
+  groupStatusLabel: {
+    color: '#A7F3D0',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  groupInfoSectionTitle: {
+    color: '#67E8F9',
+    fontSize: 13,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    marginTop: 14,
+    marginBottom: 8,
+  },
+  groupInviteBox: {
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 12,
+    padding: 12,
+  },
+  groupInviteText: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  groupActionRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  groupPrimaryButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupSecondaryButton: {
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupButtonText: {
+    color: '#07111F',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  groupSecondaryButtonText: {
+    color: '#E2E8F0',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  groupButtonDisabled: {
+    opacity: 0.45,
+  },
+  groupAdminBox: {
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+    marginTop: 12,
+    paddingTop: 4,
+  },
+  groupUserPickerRow: {
+    gap: 8,
+    paddingBottom: 10,
+  },
+  groupUserChip: {
+    maxWidth: 140,
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  groupUserChipActive: {
+    borderColor: '#10B981',
+    backgroundColor: '#064E3B',
+  },
+  groupUserChipText: {
+    color: '#F8FAFC',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  groupMemberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#111827',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#1E293B',
+  },
+  groupMemberAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#10B981',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    marginRight: 10,
+  },
+  groupMemberInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+  groupMemberName: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  groupMemberMeta: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 2,
+  },
+  groupStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginHorizontal: 8,
+  },
+  groupStatusDotOnline: {
+    backgroundColor: '#22C55E',
+  },
+  groupStatusDotOffline: {
+    backgroundColor: '#64748B',
+  },
+  groupMemberActions: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  miniButton: {
+    backgroundColor: '#1E293B',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  miniButtonDanger: {
+    borderColor: '#7F1D1D',
+    backgroundColor: '#2A1114',
+  },
+  miniButtonText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '800',
+  },  contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0F172A',
@@ -1455,6 +1967,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
-
-
-

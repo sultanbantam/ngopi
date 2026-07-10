@@ -2,16 +2,53 @@ import { Server, Socket } from 'socket.io';
 import { prisma } from '../utils/prisma';
 import { checkTokenGate } from '../middleware/tokenGating.middleware';
 
+const getSenderSelect = () => ({
+  id: true,
+  username: true,
+  display_name: true,
+  avatar_url: true,
+});
+
+const getActiveGroupMember = async (groupId: string, userId: string) => {
+  const group = await prisma.group.findUnique({
+    where: { id: groupId },
+    include: {
+      members: {
+        where: { user_id: userId },
+        take: 1,
+      }
+    }
+  });
+
+  return { group, member: group?.members?.[0] || null };
+};
+
+const emitGroupAccessError = (socket: Socket, member: any) => {
+  if (!member) {
+    socket.emit('error', { message: 'Anda belum menjadi anggota rumpun ini. Silakan join dulu.' });
+    return true;
+  }
+  if (member.status === 'pending') {
+    socket.emit('error', { message: 'Permintaan join masih menunggu persetujuan admin.' });
+    return true;
+  }
+  if (member.status !== 'active') {
+    socket.emit('error', { message: 'Akses rumpun tidak aktif.' });
+    return true;
+  }
+  return false;
+};
+
 export const handleChatEvents = (io: Server, socket: Socket, user: { id: string; username: string }) => {
-  // Event to join a specific room (group or 1-on-1 generated room)
   socket.on('join_room', async (roomId: string) => {
-    // Check if room is a group and apply token gating
-    const group = await prisma.group.findUnique({ where: { id: roomId } });
+    const { group, member } = await getActiveGroupMember(roomId, user.id);
     if (group) {
+      if (emitGroupAccessError(socket, member)) return;
+
       const allowed = await checkTokenGate(user.id, roomId);
       if (!allowed) {
-        socket.emit('error', { message: 'Insufficient BMC balance to join this group' });
-        return; // Reject join
+        socket.emit('error', { message: 'Saldo BMC belum memenuhi syarat untuk masuk rumpun ini.' });
+        return;
       }
     }
 
@@ -19,41 +56,40 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     console.log(`User ${user.username} joined room: ${roomId}`);
   });
 
-  // Event to send a message (with optional reply support)
   socket.on('send_message', async (data: { room_id: string; receiver_id?: string; content?: string; type?: string; attachment_url?: string; parent_message_id?: string }) => {
     try {
       const { room_id, receiver_id, content, type = 'text', attachment_url, parent_message_id } = data;
+      const { group, member } = await getActiveGroupMember(room_id, user.id);
 
-      // Save to database
+      if (group) {
+        if (emitGroupAccessError(socket, member)) return;
+        const isAdmin = member?.role === 'admin' || group.created_by === user.id;
+        if (group.only_admins_can_send && !isAdmin) {
+          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di rumpun ini.' });
+          return;
+        }
+      }
+
       const savedMessage = await prisma.message.create({
         data: {
           room_id,
           sender_id: user.id,
-          content: content || null, // This should be encrypted ciphertext from frontend (if text)
+          content: content || null,
           type,
           attachment_url: attachment_url || null,
           parent_message_id: parent_message_id || null,
         },
         include: {
           sender: {
-            select: {
-              id: true,
-              username: true,
-              display_name: true,
-              avatar_url: true,
-            }
+            select: getSenderSelect()
           }
         }
       });
 
-      // Broadcast to the room if it's a group, or directly to receiver if 1-on-1
       if (receiver_id) {
-        // Direct message
         io.to(receiver_id).emit('receive_message', savedMessage);
-        // Also emit to self (in case user has multiple devices/tabs open)
         io.to(user.id).emit('receive_message', savedMessage);
       } else {
-        // Group message
         io.to(room_id).emit('receive_message', savedMessage);
       }
     } catch (error) {
@@ -62,7 +98,6 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Typing Indicators
   socket.on('typing_start', (data: { room_id: string; receiver_id?: string }) => {
     if (data.receiver_id) {
       io.to(data.receiver_id).emit('typing_start', { sender_id: user.id, room_id: data.room_id });
@@ -79,7 +114,6 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Event to mark messages as read
   socket.on('mark_messages_read', async (data: { room_id: string; sender_id: string }) => {
     try {
       const { room_id, sender_id } = data;
@@ -95,32 +129,29 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         }
       });
 
-      // Notify the sender that their messages were read
       io.to(room_id).emit('messages_read_by_partner', { room_id, read_by: user.id });
     } catch (err) {
       console.error('Mark read error:', err);
     }
   });
 
-  // Reaction on message
   socket.on('react_message', async (data: { message_id: string; room_id: string; receiver_id?: string; emoji: string }) => {
     try {
       const { message_id, room_id, receiver_id, emoji } = data;
-      
       const message = await prisma.message.findUnique({ where: { id: message_id } });
       if (!message) return;
-      
-      // Update reactions json
+
       const currentReactions = (message.reactions as Record<string, string>) || {};
       if (currentReactions[user.id] === emoji) {
-        delete currentReactions[user.id]; // toggle off
+        delete currentReactions[user.id];
       } else {
-        currentReactions[user.id] = emoji; // set
+        currentReactions[user.id] = emoji;
       }
 
       const updatedMsg = await prisma.message.update({
         where: { id: message_id },
-        data: { reactions: currentReactions }
+        data: { reactions: currentReactions },
+        include: { sender: { select: getSenderSelect() } }
       });
 
       io.to(room_id).emit('message_reacted', updatedMsg);
@@ -130,13 +161,13 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Edit message
   socket.on('edit_message', async (data: { message_id: string; room_id: string; receiver_id?: string; new_content: string }) => {
     try {
       const { message_id, room_id, receiver_id, new_content } = data;
       const updatedMsg = await prisma.message.update({
         where: { id: message_id },
-        data: { content: new_content, is_edited: true }
+        data: { content: new_content, is_edited: true },
+        include: { sender: { select: getSenderSelect() } }
       });
       io.to(room_id).emit('message_edited', updatedMsg);
       if (receiver_id) io.to(receiver_id).emit('message_edited', updatedMsg);
@@ -145,23 +176,19 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Delete message
   socket.on('delete_message', async (data: { message_id: string; room_id: string; receiver_id?: string; for_all: boolean }) => {
     try {
       const { message_id, room_id, receiver_id, for_all } = data;
-      
       const message = await prisma.message.findUnique({ where: { id: message_id } });
       if (!message) return;
-      
-      // Only the sender can delete for all
       if (for_all && message.sender_id !== user.id) return;
 
       await prisma.message.update({
         where: { id: message_id },
-        data: { 
+        data: {
           is_deleted: true,
           deleted_for_all: for_all,
-          content: for_all ? null : message.content // Clear content if deleted for all
+          content: for_all ? null : message.content
         }
       });
 
@@ -173,15 +200,22 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Forward message to another room/user
   socket.on('forward_message', async (data: { original_message_id: string; target_room_id: string; target_receiver_id?: string }) => {
     try {
       const { original_message_id, target_room_id, target_receiver_id } = data;
-      
       const originalMsg = await prisma.message.findUnique({ where: { id: original_message_id } });
       if (!originalMsg) return;
 
-      // Create forwarded message
+      const { group, member } = await getActiveGroupMember(target_room_id, user.id);
+      if (group) {
+        if (emitGroupAccessError(socket, member)) return;
+        const isAdmin = member?.role === 'admin' || group.created_by === user.id;
+        if (group.only_admins_can_send && !isAdmin) {
+          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di rumpun ini.' });
+          return;
+        }
+      }
+
       const forwardedMsg = await prisma.message.create({
         data: {
           room_id: target_room_id,
@@ -190,7 +224,8 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
           type: originalMsg.type,
           attachment_url: originalMsg.attachment_url,
           forwarded_from_id: original_message_id
-        }
+        },
+        include: { sender: { select: getSenderSelect() } }
       });
 
       if (target_receiver_id) {
@@ -204,13 +239,13 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 
-  // Pin message
   socket.on('pin_message', async (data: { message_id: string; room_id: string; receiver_id?: string; is_pinned: boolean }) => {
     try {
       const { message_id, room_id, receiver_id, is_pinned } = data;
       const updatedMsg = await prisma.message.update({
         where: { id: message_id },
-        data: { is_pinned }
+        data: { is_pinned },
+        include: { sender: { select: getSenderSelect() } }
       });
       io.to(room_id).emit('message_pinned', updatedMsg);
       if (receiver_id) io.to(receiver_id).emit('message_pinned', updatedMsg);
@@ -219,5 +254,3 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 };
-
-

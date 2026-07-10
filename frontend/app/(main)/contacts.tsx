@@ -32,6 +32,11 @@ export default function ContactsScreen() {
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [groupMinBmc, setGroupMinBmc] = useState('0');
+  const [groupAvatar, setGroupAvatar] = useState('');
+  const [groupJoinPolicy, setGroupJoinPolicy] = useState<'open' | 'approval'>('open');
+  const [groupOnlyAdminsCanSend, setGroupOnlyAdminsCanSend] = useState(false);
+  const [groupAllowMemberInvites, setGroupAllowMemberInvites] = useState(true);
+  const [groupCallEnabled, setGroupCallEnabled] = useState(true);
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
 
@@ -62,8 +67,10 @@ export default function ContactsScreen() {
       let user = '';
       let userId = '';
       let token = '';
+      let inviteCode = '';
       if (Platform.OS === 'web') {
         const urlParams = new URLSearchParams(window.location.search);
+        inviteCode = urlParams.get('join') || '';
         const ssoToken = urlParams.get('sso_token');
         const ssoUsername = urlParams.get('sso_username');
         const ssoUserId = urlParams.get('sso_userid');
@@ -103,6 +110,21 @@ export default function ContactsScreen() {
         setContacts(allUsers.filter((u: any) => u.id !== userId));
         setGroups(groupsRes.data);
         if (settingsRes.data) setSettings(settingsRes.data);
+
+        if (inviteCode && token) {
+          const joinRes = await axios.post(`${API_URL}/groups/invite/${inviteCode}/join`, {}, { headers });
+          if (joinRes.status === 202 || joinRes.data?.pendingApproval) {
+            if (Platform.OS === 'web') alert('Permintaan join rumpun sudah dikirim dan menunggu persetujuan admin.');
+            else Alert.alert('Menunggu Admin', 'Permintaan join rumpun sudah dikirim dan menunggu persetujuan admin.');
+          } else if (Platform.OS === 'web') {
+            alert('Berhasil join rumpun dari link undangan.');
+          } else {
+            Alert.alert('Berhasil', 'Berhasil join rumpun dari link undangan.');
+          }
+          const refreshedGroups = await axios.get(`${API_URL}/groups`, { headers });
+          setGroups(refreshedGroups.data);
+          if (Platform.OS === 'web') window.history.replaceState({}, document.title, window.location.pathname);
+        }
 
         const me = allUsers.find((u: any) => u.id === userId);
         if (me) {
@@ -172,6 +194,11 @@ export default function ContactsScreen() {
     setGroupName('');
     setGroupDescription('');
     setGroupMinBmc('0');
+    setGroupAvatar('');
+    setGroupJoinPolicy('open');
+    setGroupOnlyAdminsCanSend(false);
+    setGroupAllowMemberInvites(true);
+    setGroupCallEnabled(true);
     setGroupModalVisible(true);
   };
 
@@ -180,9 +207,13 @@ export default function ContactsScreen() {
     setGroupName(group.name || '');
     setGroupDescription(group.description || '');
     setGroupMinBmc(String(group.min_bmc_balance ?? 0));
+    setGroupAvatar(group.avatar_url || '');
+    setGroupJoinPolicy(group.join_policy === 'approval' ? 'approval' : 'open');
+    setGroupOnlyAdminsCanSend(!!group.only_admins_can_send);
+    setGroupAllowMemberInvites(group.allow_member_invites !== false);
+    setGroupCallEnabled(group.call_enabled !== false);
     setGroupModalVisible(true);
   };
-
   const openHelpCenter = () => {
     router.push('/(main)/help-center' as any);
   };
@@ -279,6 +310,19 @@ export default function ContactsScreen() {
     }
   };
 
+  const pickGroupAvatar = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets.length > 0) {
+      setGroupAvatar(result.assets[0].uri);
+    }
+  };
+
   const saveGroup = async () => {
     const trimmedName = groupName.trim();
     if (!trimmedName) {
@@ -291,7 +335,37 @@ export default function ContactsScreen() {
       setIsSavingGroup(true);
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
       const minBmcNumber = Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0);
-      const payload = { name: trimmedName, description: groupDescription, minBmcBalance: minBmcNumber };
+      let finalGroupAvatar = groupAvatar;
+
+      if (groupAvatar && (groupAvatar.startsWith('blob:') || groupAvatar.startsWith('file:'))) {
+        const formData = new FormData();
+        if (Platform.OS === 'web') {
+          const res = await fetch(groupAvatar);
+          const blob = await res.blob();
+          formData.append('file', blob, 'group-avatar.jpg');
+        } else {
+          formData.append('file', {
+            uri: groupAvatar,
+            name: 'group-avatar.jpg',
+            type: 'image/jpeg',
+          } as any);
+        }
+        const uploadRes = await axios.post(`${API_URL}/upload`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+        finalGroupAvatar = uploadRes.data.url;
+      }
+
+      const payload = {
+        name: trimmedName,
+        description: groupDescription,
+        avatarUrl: finalGroupAvatar,
+        minBmcBalance: minBmcNumber,
+        joinPolicy: groupJoinPolicy,
+        onlyAdminsCanSend: groupOnlyAdminsCanSend,
+        allowMemberInvites: groupAllowMemberInvites,
+        callEnabled: groupCallEnabled,
+      };
       const headers = { Authorization: `Bearer ${token}` };
 
       if (editingGroupId) {
@@ -308,6 +382,11 @@ export default function ContactsScreen() {
       setGroupName('');
       setGroupDescription('');
       setGroupMinBmc('0');
+      setGroupAvatar('');
+      setGroupJoinPolicy('open');
+      setGroupOnlyAdminsCanSend(false);
+      setGroupAllowMemberInvites(true);
+      setGroupCallEnabled(true);
     } catch (e: any) {
       console.error(e);
       const errorMsg = e.response?.data?.error || 'Gagal menyimpan rumpun';
@@ -321,9 +400,14 @@ export default function ContactsScreen() {
   const joinGroup = async (group: any) => {
     try {
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      await axios.post(`${API_URL}/groups/${group.id}/join`, {}, {
+      const res = await axios.post(`${API_URL}/groups/${group.id}/join`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.status === 202 || res.data?.pendingApproval) {
+        if (Platform.OS === 'web') alert('Permintaan join sudah dikirim. Tunggu admin menyetujui.');
+        else Alert.alert('Menunggu Admin', 'Permintaan join sudah dikirim. Tunggu admin menyetujui.');
+        return;
+      }
       openChat(group.id, group.name, 'group');
     } catch (e: any) {
       const errorMsg = e.response?.data?.error || 'Failed to join group';
@@ -436,7 +520,11 @@ export default function ContactsScreen() {
       return (
         <TouchableOpacity style={styles.contactItem} onPress={() => joinGroup(item)}>
           <View style={[styles.avatar, { backgroundColor: '#3B82F6' }]}>
-            <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+            {item.avatar_url ? (
+              <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarText}>{item.name.charAt(0)}</Text>
+            )}
           </View>
           <View style={styles.contactInfo}>
             <Text style={styles.contactName}>{item.name}</Text>
@@ -504,7 +592,7 @@ export default function ContactsScreen() {
           </TouchableOpacity>
           <View>
             <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
-              <Text style={styles.greeting}>Halo, {settings?.hide_name ? 'Anonymous' : currentUser} ▾</Text>
+              <Text style={styles.greeting}>Halo, {settings?.hide_name ? 'Anonymous' : currentUser} v</Text>
               <Text style={styles.usernameTag}>
                 @{currentUsername}{currentBmcId === '0' ? '_bmc' : currentBmcId ? `_bmc${currentBmcId}` : ''}
               </Text>
@@ -512,7 +600,7 @@ export default function ContactsScreen() {
           </View>
         </View>
         <TouchableOpacity onPress={() => setDropdownVisible(true)}>
-          <Text style={styles.logoutText}>☰ Menu</Text>
+          <Text style={styles.logoutText}>Menu</Text>
         </TouchableOpacity>
       </View>
 
@@ -655,7 +743,7 @@ export default function ContactsScreen() {
       <Modal visible={isAirdropModalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { alignItems: 'center' }]}>
-            <Text style={{ fontSize: 40, marginBottom: 10 }}>🎁</Text>
+            <Text style={{ fontSize: 20, marginBottom: 10, color: '#10B981', fontWeight: '800' }}>BMC</Text>
             <Text style={[styles.modalTitle, { color: '#10B981' }]}>Daily BMC Airdrop</Text>
             {airdropData && (
               <>
@@ -731,38 +819,96 @@ export default function ContactsScreen() {
       {/* Create Group Modal */}
       <Modal visible={isGroupModalVisible} transparent={true} animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>{editingGroupId ? 'Pengaturan Rumpun' : 'Buat Rumpun Baru'}</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Nama Rumpun"
-              placeholderTextColor="#64748b"
-              value={groupName}
-              onChangeText={setGroupName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Deskripsi Singkat (Opsional)"
-              placeholderTextColor="#64748b"
-              value={groupDescription}
-              onChangeText={setGroupDescription}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Minimum BMC Balance (0 untuk terbuka)"
-              placeholderTextColor="#64748b"
-              keyboardType="numeric"
-              value={groupMinBmc}
-              onChangeText={setGroupMinBmc}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => { setGroupModalVisible(false); setEditingGroupId(null); }} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>Batal</Text>
+          <View style={[styles.modalContent, styles.groupModalContent]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalTitle}>{editingGroupId ? 'Pengaturan Rumpun' : 'Buat Rumpun Baru'}</Text>
+              <TouchableOpacity style={styles.groupAvatarPicker} onPress={pickGroupAvatar}>
+                <View style={[styles.avatar, styles.groupAvatarLarge]}>
+                  {groupAvatar ? (
+                    <Image source={{ uri: groupAvatar }} style={styles.avatarImage} />
+                  ) : (
+                    <Ionicons name="people-outline" size={28} color="#F8FAFC" />
+                  )}
+                </View>
+                <View style={styles.groupAvatarTextWrap}>
+                  <Text style={styles.inputLabel}>Avatar Rumpun</Text>
+                  <Text style={styles.groupHint}>Ketuk untuk upload logo/foto rumpun.</Text>
+                </View>
               </TouchableOpacity>
-              <TouchableOpacity onPress={saveGroup} style={styles.saveBtn} disabled={isSavingGroup}>
-                {isSavingGroup ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{editingGroupId ? 'Simpan' : 'Buat'}</Text>}
-              </TouchableOpacity>
-            </View>
+
+              <TextInput
+                style={styles.input}
+                placeholder="Nama Rumpun"
+                placeholderTextColor="#64748b"
+                value={groupName}
+                onChangeText={setGroupName}
+              />
+              <TextInput
+                style={[styles.input, styles.textAreaInput]}
+                placeholder="Deskripsi Singkat (Opsional)"
+                placeholderTextColor="#64748b"
+                value={groupDescription}
+                onChangeText={setGroupDescription}
+                multiline
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="Minimum BMC Balance (0 untuk terbuka)"
+                placeholderTextColor="#64748b"
+                keyboardType="numeric"
+                value={groupMinBmc}
+                onChangeText={setGroupMinBmc}
+              />
+
+              <Text style={styles.inputLabel}>Cara Join</Text>
+              <View style={styles.segmentRow}>
+                <TouchableOpacity style={[styles.segmentButton, groupJoinPolicy === 'open' && styles.segmentButtonActive]} onPress={() => setGroupJoinPolicy('open')}>
+                  <Text style={[styles.segmentText, groupJoinPolicy === 'open' && styles.segmentTextActive]}>Terbuka</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.segmentButton, groupJoinPolicy === 'approval' && styles.segmentButtonActive]} onPress={() => setGroupJoinPolicy('approval')}>
+                  <Text style={[styles.segmentText, groupJoinPolicy === 'approval' && styles.segmentTextActive]}>Disetujui Admin</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextWrap}>
+                  <Text style={styles.settingTitle}>Hanya admin bisa kirim pesan</Text>
+                  <Text style={styles.groupHint}>Cocok untuk channel pengumuman.</Text>
+                </View>
+                <TouchableOpacity style={[styles.toggleBtn, groupOnlyAdminsCanSend && styles.toggleBtnActive]} onPress={() => setGroupOnlyAdminsCanSend(!groupOnlyAdminsCanSend)}>
+                  <View style={[styles.toggleKnob, groupOnlyAdminsCanSend && styles.toggleKnobActive]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextWrap}>
+                  <Text style={styles.settingTitle}>Member boleh invite</Text>
+                  <Text style={styles.groupHint}>Admin tetap bisa regenerasi link nanti.</Text>
+                </View>
+                <TouchableOpacity style={[styles.toggleBtn, groupAllowMemberInvites && styles.toggleBtnActive]} onPress={() => setGroupAllowMemberInvites(!groupAllowMemberInvites)}>
+                  <View style={[styles.toggleKnob, groupAllowMemberInvites && styles.toggleKnobActive]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingRow}>
+                <View style={styles.settingTextWrap}>
+                  <Text style={styles.settingTitle}>Voice/video call rumpun</Text>
+                  <Text style={styles.groupHint}>Menyiapkan izin fitur call untuk rumpun.</Text>
+                </View>
+                <TouchableOpacity style={[styles.toggleBtn, groupCallEnabled && styles.toggleBtnActive]} onPress={() => setGroupCallEnabled(!groupCallEnabled)}>
+                  <View style={[styles.toggleKnob, groupCallEnabled && styles.toggleKnobActive]} />
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity onPress={() => { setGroupModalVisible(false); setEditingGroupId(null); }} style={styles.cancelBtn}>
+                  <Text style={styles.cancelBtnText}>Batal</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={saveGroup} style={styles.saveBtn} disabled={isSavingGroup}>
+                  {isSavingGroup ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{editingGroupId ? 'Simpan' : 'Buat'}</Text>}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -773,19 +919,19 @@ export default function ContactsScreen() {
             <View style={styles.actionSheetHandle} />
             <Text style={styles.actionSheetTitle}>Pengaturan Akun</Text>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setProfileModalVisible(true); }}>
-              <Text style={styles.actionSheetText}>👤 Profil Saya</Text>
+              <Text style={styles.actionSheetText}>Profil Saya</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); loadAirdropData(); }}>
-              <Text style={[styles.actionSheetText, { color: '#10B981' }]}>🎁 Klaim Airdrop BMC</Text>
+              <Text style={[styles.actionSheetText, { color: '#10B981' }]}>Klaim Airdrop BMC</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
-              <Text style={styles.actionSheetText}>⚙️ Atur Alamat Dompet</Text>
+              <Text style={styles.actionSheetText}>Atur Alamat Dompet</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setSettingsModalVisible(true); }}>
-              <Text style={styles.actionSheetText}>🔒 Pengaturan Privasi</Text>
+              <Text style={styles.actionSheetText}>Pengaturan Privasi</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionSheetItem, { borderBottomWidth: 0 }]} onPress={() => { setDropdownVisible(false); handleLogout(); }}>
-              <Text style={[styles.actionSheetText, { color: '#EF4444' }]}>🚪 Keluar</Text>
+              <Text style={[styles.actionSheetText, { color: '#EF4444' }]}>Keluar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -1090,7 +1236,83 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 24,
   },
-  modalTitle: {
+  groupModalContent: {
+    maxHeight: '88%',
+  },
+  groupAvatarPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginBottom: 16,
+  },
+  groupAvatarLarge: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    marginRight: 12,
+    backgroundColor: '#0EA5E9',
+  },
+  groupAvatarTextWrap: {
+    flex: 1,
+  },
+  groupHint: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  textAreaInput: {
+    minHeight: 82,
+    textAlignVertical: 'top',
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+  },
+  segmentButtonActive: {
+    borderColor: '#10B981',
+    backgroundColor: '#064E3B',
+  },
+  segmentText: {
+    color: '#94A3B8',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  segmentTextActive: {
+    color: '#A7F3D0',
+  },
+  settingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#334155',
+  },
+  settingTextWrap: {
+    flex: 1,
+  },
+  settingTitle: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 2,
+  },  modalTitle: {
     color: '#fff',
     fontSize: 20,
     fontWeight: 'bold',

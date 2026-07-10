@@ -13,6 +13,16 @@ export const getMessagesByRoom = async (req: Request, res: Response): Promise<vo
     const messages = await prisma.message.findMany({
       where: { room_id: room_id as string },
       orderBy: { timestamp: 'asc' },
+      include: {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            display_name: true,
+            avatar_url: true,
+          }
+        }
+      },
     });
 
     res.status(200).json(messages);
