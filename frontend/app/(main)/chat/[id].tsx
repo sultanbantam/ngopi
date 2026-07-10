@@ -10,6 +10,8 @@ import { Audio } from 'expo-av';
 import axios from 'axios';
 import BambupediaRoom from '../bambupedia';
 
+const NoTranslateText = Text as any;
+
 interface Message {
   id: string;
   sender_id: string;
@@ -804,7 +806,7 @@ function PrivateChatRoomScreen() {
               {repliedMsg && (
                 <View style={[styles.repliedBanner, item.isMine ? styles.myRepliedBanner : styles.theirRepliedBanner]}>
                   <Text style={styles.repliedBannerSender}>{repliedMsg.isMine ? 'You' : 'Them'}</Text>
-                  <Text style={styles.repliedBannerContent} numberOfLines={1}>{repliedMsg.content || 'Attachment'}</Text>
+                  <NoTranslateText style={styles.repliedBannerContent} numberOfLines={1} className="notranslate" translate="no">{repliedMsg.content || 'Attachment'}</NoTranslateText>
                 </View>
               )}
               {item.type === 'image' && item.attachment_url ? (
@@ -816,11 +818,11 @@ function PrivateChatRoomScreen() {
               ) : item.type === 'document' && item.attachment_url ? (
                 <TouchableOpacity style={styles.documentContainer} onPress={() => downloadFile(item.attachment_url!, item.content || 'document.pdf')}>
                   <Text style={styles.documentIcon}>📄</Text>
-                  <Text style={styles.documentName}>{item.content}</Text>
+                  <NoTranslateText style={styles.documentName} className="notranslate" translate="no">{item.content}</NoTranslateText>
                 </TouchableOpacity>
               ) : (
                 <View>
-                  <Text style={styles.messageText}>{item.content}</Text>
+                  <NoTranslateText style={styles.messageText} className="notranslate" translate="no">{item.content}</NoTranslateText>
                   {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
                 </View>
               )}
@@ -1398,4 +1400,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
+
+
 

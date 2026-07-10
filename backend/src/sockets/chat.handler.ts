@@ -33,6 +33,16 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
           type,
           attachment_url: attachment_url || null,
           parent_message_id: parent_message_id || null,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              username: true,
+              display_name: true,
+              avatar_url: true,
+            }
+          }
         }
       });
 
@@ -209,4 +219,5 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
     }
   });
 };
+
 

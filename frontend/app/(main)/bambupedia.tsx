@@ -32,6 +32,7 @@ const TIP_ICON = '\uD83D\uDCA1';
 const SYSTEM_ICON = '\uD83E\uDD16';
 const WAVE_ICON = '\uD83D\uDC4B';
 const SMILE = '\uD83D\uDE0A';
+const NoTranslateText = Text as any;
 
 type MessageType = 'text' | 'audio' | 'image' | 'file' | 'document' | 'system';
 
@@ -520,11 +521,11 @@ export default function BambupediaRoom() {
   const renderMentionedText = (content: string, style: any) => {
     const parts = content.split(/(@[A-Za-z0-9_.-]+)/g);
     return (
-      <Text style={style}>
+      <NoTranslateText style={style} className="notranslate" translate="no">
         {parts.map((part, index) => /^@[A-Za-z0-9_.-]+$/.test(part)
           ? <Text key={`${part}-${index}`} style={styles.mentionText}>{part}</Text>
           : <Text key={`${part}-${index}`}>{part}</Text>)}
-      </Text>
+      </NoTranslateText>
     );
   };
 
@@ -932,6 +933,8 @@ const styles = StyleSheet.create({
   documentAttachment: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, backgroundColor: 'rgba(15, 23, 42, 0.55)', paddingHorizontal: 10, marginBottom: 5 },
   documentName: { color: '#E2E8F0', fontSize: 13, fontWeight: '700', flexShrink: 1 },
 });
+
+
 
 
 
