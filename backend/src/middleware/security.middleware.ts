@@ -45,7 +45,6 @@ const encodeOutputValue = (value: unknown, key = ''): unknown => {
 
 export const sanitizeRequest = (req: Request, _res: Response, next: NextFunction): void => {
   if (req.body) req.body = sanitizeInputValue(req.body) as any;
-  if (req.query) req.query = sanitizeInputValue(req.query) as any;
   if (req.params) req.params = sanitizeInputValue(req.params) as any;
   next();
 };
