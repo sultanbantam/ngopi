@@ -82,15 +82,16 @@ const ECOSYSTEM_INFO_PLATFORMS: EcosystemInfoPlatform[] = [
 ];
 
 const FEATURE_TIPS = [
-  `${LOCK_ICON} Tahukah kamu? BambooChat mendukung enkripsi end-to-end untuk pesan pribadimu.`,
-  `${PHONE_ICON} Kamu bisa memakai voice call dan video call langsung dari halaman kontak.`,
-  `${BAMBOO_ICON} Rumpun Bambupedia adalah lobby publik untuk menyapa anggota BambooChat lain.`,
-  `${GEM_ICON} BMC Token dapat dipakai untuk mengakses grup eksklusif dengan token gating.`,
-  `${PAPERCLIP_ICON} Pesan pribadi mendukung pengiriman gambar, audio, video, dan dokumen.`,
-  `${PEOPLE_ICON} Buat rumpun/grup baru dari tab Rumpun di daftar kontak.`,
-  `${BELL_ICON} Aktifkan notifikasi browser agar tidak ketinggalan pesan penting.`,
-  `${PIN_ICON} Pin pesan penting di chat pribadi supaya mudah ditemukan lagi.`,
-  `${SMILE_ICON} Beri reaksi emoji pada pesan untuk merespons lebih cepat.`,
+  `${LOCK_ICON} Keamanan: BambooChat mendukung percakapan terenkripsi untuk pesan pribadi. Tetap gunakan akun sendiri dan jangan bagikan kode login kepada orang lain.`,
+  `${BAMBOO_ICON} Cara mulai: setelah login, buka Kontak untuk private message atau masuk ke Rumpun Bambupedia untuk ngobrol bersama komunitas.`,
+  `${PEOPLE_ICON} Cara buat rumpun/grup: buka Kontak, pilih tab Rumpun, lalu tekan Buat Rumpun. Biaya minimum bisa dibuat 0 BMC untuk grup terbuka.`,
+  `${GEM_ICON} Pengaturan rumpun: admin bisa mengatur nama, avatar, deskripsi, biaya join BMC, approval anggota, undangan, dan daftar anggota.`,
+  `${PEOPLE_ICON} Admin rumpun dapat menambahkan anggota, menyetujui permintaan join, dan membagikan link undangan ke media sosial lain.`,
+  `${SMILE_ICON} Mention teman dengan format @username. Saat mengetik @, pilih nama dari suggestion agar user yang dituju mudah melihat sapaanmu.`,
+  `${PAPERCLIP_ICON} Kirim file dari tombol attachment. Gambar bisa dibuka langsung, sedangkan dokumen dapat dibuka atau diunduh dari menu file.`,
+  `${PHONE_ICON} Voice call dan video call tersedia dari chat pribadi. Pastikan izin microphone dan kamera browser sudah aktif.`,
+  `${BELL_ICON} Aktifkan notifikasi browser agar pesan pribadi, mention, file, panggilan, dan sapaan penting tidak terlewat.`,
+  `${PIN_ICON} Pin pesan penting di chat pribadi supaya informasi utama mudah ditemukan lagi.`,
 ];
 
 type BambupediaUser = {
