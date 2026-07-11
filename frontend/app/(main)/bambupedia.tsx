@@ -185,7 +185,6 @@ export default function BambupediaRoom() {
   const isCompact = width < 720;
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [pinnedMessage, setPinnedMessage] = useState<ChatMessage | null>(null);
   const [inputText, setInputText] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
@@ -295,7 +294,7 @@ export default function BambupediaRoom() {
       socket.on('bambupedia_online_users', handleMembers);
       socket.on('bambupedia_members', handleMembers);
       socket.on('bambupedia_message', appendMessage);
-      socket.on('bambupedia_pinned_message', setPinnedMessage);
+      socket.on('system_message', appendMessage);
       socket.on('bambupedia_system_tip', handleTip);
       socket.on('bambupedia_user_joined', handleUserJoined);
 
@@ -305,7 +304,7 @@ export default function BambupediaRoom() {
         socket.off('bambupedia_online_users', handleMembers);
         socket.off('bambupedia_members', handleMembers);
         socket.off('bambupedia_message', appendMessage);
-        socket.off('bambupedia_pinned_message', setPinnedMessage);
+        socket.off('system_message', appendMessage);
         socket.off('bambupedia_system_tip', handleTip);
         socket.off('bambupedia_user_joined', handleUserJoined);
       };
@@ -529,6 +528,24 @@ export default function BambupediaRoom() {
     );
   };
 
+  const renderSystemContent = (message: ChatMessage) => {
+    if (message.sender_name === 'BambooBot') {
+      const [headline = '', ...bodyLines] = (message.content || '').split('\n');
+      return (
+        <View>
+          {headline ? (
+            <NoTranslateText style={[styles.systemText, styles.ecosystemTitle]} className="notranslate" translate="no">
+              {headline}
+            </NoTranslateText>
+          ) : null}
+          {bodyLines.length > 0 ? renderMentionedText(bodyLines.join('\n'), styles.systemText) : null}
+        </View>
+      );
+    }
+
+    return renderMentionedText(message.content, styles.systemText);
+  };
+
   const renderAttachment = (message: ChatMessage) => {
     const messageType = message.message_type || 'text';
     if (!message.attachment_url) return null;
@@ -596,10 +613,11 @@ export default function BambupediaRoom() {
 
     if (isSystem) {
       const isTip = item.type === 'tip';
+      const systemSender = item.sender_name || 'SISTEM';
       return (
         <View style={[styles.systemMessage, isTip ? styles.tipMessage : styles.joinMessage, isMentioned && styles.mentionedSystemMessage]}>
-          <Text style={[styles.systemLabel, isTip ? styles.tipLabel : styles.joinLabel]}>{isTip ? `${TIP_ICON} TIPS` : `${SYSTEM_ICON} SISTEM`}</Text>
-          {renderMentionedText(item.content, styles.systemText)}
+          <Text style={[styles.systemLabel, isTip ? styles.tipLabel : styles.joinLabel]}>{isTip ? `${TIP_ICON} TIPS` : `${SYSTEM_ICON} ${systemSender}`}</Text>
+          {renderSystemContent(item)}
         </View>
       );
     }
@@ -723,15 +741,6 @@ export default function BambupediaRoom() {
       </View>
 
       <KeyboardAvoidingView style={styles.chatArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        {pinnedMessage && (
-          <View style={styles.pinnedHubCard}>
-            <View style={styles.pinnedTitleRow}>
-              <Ionicons name="information-circle" size={18} color="#34D399" />
-              <Text style={styles.pinnedHubTitle}>Pusat Informasi Ekosistem</Text>
-            </View>
-            <Text style={styles.pinnedHubText} numberOfLines={isCompact ? 7 : 8}>{pinnedMessage.content}</Text>
-          </View>
-        )}
 
         <FlatList
           ref={flatListRef}
@@ -827,10 +836,6 @@ const styles = StyleSheet.create({
   headerTitle: { color: '#F8FAFC', fontSize: 20, fontWeight: '800', marginRight: 4, flexShrink: 1 },
   headerSubtitle: { color: '#94A3B8', fontSize: 12, marginTop: 3 },
   chatArea: { flex: 1, minHeight: 0 },
-  pinnedHubCard: { backgroundColor: '#103421', borderBottomWidth: 1, borderBottomColor: '#1F513A', paddingHorizontal: 20, paddingVertical: 12 },
-  pinnedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
-  pinnedHubTitle: { color: '#34D399', fontSize: 15, fontWeight: '800' },
-  pinnedHubText: { color: '#D1FAE5', fontSize: 14, lineHeight: 22 },
   messageList: { flex: 1, minHeight: 0, backgroundColor: '#0B1220' },
   messageListContent: { paddingHorizontal: 14, paddingVertical: 16, gap: 10 },
   messageRow: { width: '100%', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start' },
@@ -851,6 +856,7 @@ const styles = StyleSheet.create({
   joinLabel: { color: '#67E8F9' },
   tipLabel: { color: '#BEF264' },
   systemText: { color: '#E2E8F0', fontSize: 14, lineHeight: 21 },
+  ecosystemTitle: { color: '#F8FAFC', fontSize: 15, fontWeight: '900', marginBottom: 4 },
   composerWrap: { backgroundColor: '#1E293B', borderTopWidth: 1, borderTopColor: '#334155', paddingHorizontal: 14, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 20 : 12 },
   quickActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   roundAction: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#28364B', alignItems: 'center', justifyContent: 'center' },

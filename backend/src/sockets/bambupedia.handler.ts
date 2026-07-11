@@ -18,6 +18,68 @@ const BELL_ICON = '\uD83D\uDD14';
 const PIN_ICON = '\uD83D\uDCCC';
 const SMILE_ICON = '\uD83D\uDE0A';
 const BOT_ICON = '\uD83E\uDD16';
+const ECOSYSTEM_INFO_INTERVAL_MS = 60 * 1000;
+const ECOSYSTEM_INFO_INITIAL_DELAY_MS = 60 * 1000;
+const LINK_ICON = '\uD83D\uDD17';
+const LEAF_ICON = '\uD83C\uDF3F';
+const ROBOT_ICON = '\uD83E\uDD16';
+const BALLOT_ICON = '\uD83D\uDDF3\uFE0F';
+const GAME_ICON = '\uD83C\uDFAE';
+const BUILDING_ICON = '\uD83C\uDFD7\uFE0F';
+const CHART_ICON = '\uD83D\uDCC8';
+const WHALE_ICON = '\uD83D\uDC0B';
+
+type EcosystemInfoPlatform = {
+  icon: string;
+  name: string;
+  url: string;
+  description: string;
+};
+
+const ECOSYSTEM_INFO_PLATFORMS: EcosystemInfoPlatform[] = [
+  {
+    icon: LEAF_ICON,
+    name: 'BaMbooChain ID',
+    url: 'https://www.bamboochain.id',
+    description: 'BambooChain adalah super app ekonomi hijau yang menghubungkan pengetahuan, teknologi, pasar, komunitas, dan pendanaan dalam satu ekosistem bambu terintegrasi. Melalui BambooChain, petani, peneliti, pelaku usaha, pemerintah, komunitas, dan masyarakat dapat belajar, berkolaborasi, mengelola proyek, memperdagangkan produk, serta membangun solusi berkelanjutan untuk lingkungan dan ekonomi masa depan.',
+  },
+  {
+    icon: ROBOT_ICON,
+    name: 'AdViPI',
+    url: 'https://www.advipi.click',
+    description: 'Platform AI yang membantu membuat iklan gambar dan video pendek secara otomatis. Cukup masukkan informasi produk atau layanan, AdViPI akan menghasilkan copywriting, desain visual, dan konten promosi siap tayang untuk media sosial, marketplace, dan ekosistem Pi Network.',
+  },
+  {
+    icon: BALLOT_ICON,
+    name: 'VotiVa',
+    url: 'https://www.votiva.click',
+    description: 'Platform AI Election Intelligence yang membantu kandidat, partai politik, dan tim kampanye mengelola pemilih, relawan, analisis sentimen, peta geospasial, serta komunikasi digital dalam satu dashboard cerdas untuk mendukung strategi pemenangan yang lebih tepat, cepat, dan berbasis data.',
+  },
+  {
+    icon: GAME_ICON,
+    name: 'BambooGame',
+    url: 'https://www.bamboogame.click',
+    description: 'Permainan konstruksi bambu 3D yang mengajak pemain menyusun profil dan panel Modular BlockBamboo menjadi berbagai desain bangunan secara kreatif, edukatif, dan menyenangkan.',
+  },
+  {
+    icon: BUILDING_ICON,
+    name: 'AIchitect',
+    url: 'https://www.aichitect.click',
+    description: 'Platform cerdas untuk planner, arsitek, engineer, dan tim manajemen proyek dalam merencanakan, merancang, menghitung, serta mengendalikan proyek secara terintegrasi. Didukung teknologi AI, AIchitect membantu mempercepat kolaborasi, meningkatkan akurasi, dan menghasilkan keputusan proyek yang lebih efektif dari tahap konsep hingga pelaksanaan.',
+  },
+  {
+    icon: CHART_ICON,
+    name: 'XignalX',
+    url: 'https://www.xignalx.click',
+    description: 'Aplikasi signal trading crypto dan saham yang membantu pengguna membaca peluang pasar melalui analisis data, indikator teknikal, dan notifikasi sinyal secara cepat. Dengan XignalX, pengguna dapat memantau tren, menemukan momentum beli atau jual, serta mengambil keputusan trading dengan lebih terukur.',
+  },
+  {
+    icon: WHALE_ICON,
+    name: 'Whale of Savu',
+    url: 'https://www.whaleofsavu.org',
+    description: 'Platform digital ekowisata dan konservasi laut yang menghubungkan wisatawan dengan pengalaman melihat paus hidup di Laut Sawu, menjelajahi Pulau Lembata, serta mendukung pelestarian alam dan pemberdayaan masyarakat lokal melalui teknologi, AI, dan Web3.',
+  },
+];
 
 const FEATURE_TIPS = [
   `${LOCK_ICON} Tahukah kamu? BambooChat mendukung enkripsi end-to-end untuk pesan pribadimu.`,
@@ -75,6 +137,10 @@ type BambupediaMessage = {
 const bambupediaSessions = new Map<string, { member: BambupediaMember; socketIds: Set<string> }>();
 let tipIndex = 0;
 let tipsInterval: ReturnType<typeof setInterval> | null = null;
+let ecosystemInfoIndex = 0;
+let ecosystemInfoInitialTimeout: ReturnType<typeof setTimeout> | null = null;
+let ecosystemInfoInterval: ReturnType<typeof setInterval> | null = null;
+let lastEcosystemInfoMessage: BambupediaMessage | null = null;
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -182,7 +248,7 @@ const notifyMentionedUsers = async (io: Server, message: BambupediaMessage, send
   }
 };
 
-const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', content: string): BambupediaMessage => {
+const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', content: string, senderName?: string): BambupediaMessage => {
   const id = makeId(prefix);
   return {
     id,
@@ -194,12 +260,47 @@ const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', 
     content,
     message_text: content,
     sender_id: 'system',
-    sender_name: type === 'pinned' ? 'BAMBOO HUB' : 'SISTEM',
+    sender_name: senderName || (type === 'pinned' ? 'BAMBOO HUB' : 'SISTEM'),
     mentioned_users: extractMentionedUsers(content),
     created_at: new Date().toISOString(),
   };
 };
 
+
+const formatEcosystemInfoMessage = (platform: EcosystemInfoPlatform) => `${platform.icon} ${platform.name}\n${LINK_ICON} ${platform.url}\n${platform.description}`;
+
+const emitEcosystemInfoMessage = (io: Server) => {
+  const platform = ECOSYSTEM_INFO_PLATFORMS[ecosystemInfoIndex % ECOSYSTEM_INFO_PLATFORMS.length] || ECOSYSTEM_INFO_PLATFORMS[0];
+  if (!platform) return;
+
+  ecosystemInfoIndex = (ecosystemInfoIndex + 1) % ECOSYSTEM_INFO_PLATFORMS.length;
+  const message = createSystemMessage('sys-ecosystem', 'system', formatEcosystemInfoMessage(platform), 'BambooBot');
+  lastEcosystemInfoMessage = message;
+  io.to(BAMBUPEDIA_ROOM).emit('system_message', message);
+  io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', message);
+  console.log(`[Bambupedia] ecosystem info sent: ${platform.name}`);
+};
+
+export const startBambupediaEcosystemInfo = (io: Server) => {
+  if (ecosystemInfoInitialTimeout || ecosystemInfoInterval) return;
+
+  ecosystemInfoInitialTimeout = setTimeout(() => {
+    emitEcosystemInfoMessage(io);
+    ecosystemInfoInitialTimeout = null;
+    ecosystemInfoInterval = setInterval(() => emitEcosystemInfoMessage(io), ECOSYSTEM_INFO_INTERVAL_MS);
+  }, ECOSYSTEM_INFO_INITIAL_DELAY_MS);
+};
+
+export const stopBambupediaEcosystemInfo = () => {
+  if (ecosystemInfoInitialTimeout) {
+    clearTimeout(ecosystemInfoInitialTimeout);
+    ecosystemInfoInitialTimeout = null;
+  }
+  if (ecosystemInfoInterval) {
+    clearInterval(ecosystemInfoInterval);
+    ecosystemInfoInterval = null;
+  }
+};
 const looksLikePlatformQuestion = (content: string) => {
   const lower = content.toLowerCase();
   const hasQuestionMark = content.includes('?');
@@ -246,8 +347,9 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
 
   void emitBambupediaMembers(io);
 
-  const pinnedMessage = createSystemMessage('sys-pinned', 'pinned', getPlatformDirectoryMessage());
-  socket.emit('bambupedia_pinned_message', pinnedMessage);
+  if (lastEcosystemInfoMessage) {
+    socket.emit('bambupedia_message', lastEcosystemInfoMessage);
+  }
 
   const welcomeMessage = createSystemMessage('sys-welcome', 'system', `${BAMBOO_ICON} Selamat datang, ${member.display_name}! Senang kamu bergabung di ${BAMBUPEDIA_ROOM_NAME}! ${WAVE_ICON}`);
   io.to(BAMBUPEDIA_ROOM).emit('bambupedia_user_joined', { user: member, message: welcomeMessage, created_at: welcomeMessage.created_at });

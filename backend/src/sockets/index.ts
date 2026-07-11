@@ -1,7 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { handleChatEvents } from './chat.handler';
-import { emitBambupediaMembers, handleBambupediaEvents, startBambupediaTips } from './bambupedia.handler';
+import { emitBambupediaMembers, handleBambupediaEvents, startBambupediaEcosystemInfo } from './bambupedia.handler';
 import { handleTicketEvents } from './ticket.handler';
 import { prisma } from '../utils/prisma';
 
@@ -25,8 +25,8 @@ const broadcastOnlineList = async (io: Server) => {
 };
 
 export const setupSocket = (io: Server) => {
-  // Start rotating feature tips for Bambupedia room
-  startBambupediaTips(io);
+  // Start scheduled ecosystem platform messages for Bambupedia room
+  startBambupediaEcosystemInfo(io);
   // Middleware for authentication
   io.use((socket: Socket, next) => {
     const token = socket.handshake.query.token as string;
