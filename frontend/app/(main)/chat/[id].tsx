@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Keyboard
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { socketService } from '../../../src/utils/socket';
 import { encryptMessage, decryptMessage } from '../../../src/utils/crypto';
+import { deriveSharedSecret, isValidPublicKey, NACL_SECRET_PREFIX } from '../../../src/utils/e2ee';
 import * as SecureStore from '../../../src/utils/storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -22,7 +23,7 @@ const normalizeAttachmentUrl = (url?: string | null) => {
   return url;
 };
 
-const looksEncrypted = (value?: string | null) => !!value && value.startsWith('U2FsdGVkX1');
+const looksEncrypted = (value?: string | null) => !!value && (value.startsWith('U2FsdGVkX1') || value.startsWith('nacl:v1:'));
 
 const decodeMessageContent = (content: unknown, type: string | undefined, secretKey: string) => {
   if (typeof content !== 'string' || !content) return '';
@@ -291,21 +292,31 @@ function PrivateChatRoomScreen() {
       }
       
       const partnerId = roomId as string;
-      const sharedKey = isGroupChat ? partnerId : [myId, partnerId].sort().join('-');
-      setSecretKey(sharedKey);
-      setActualRoomId(sharedKey);
+      const roomKey = isGroupChat ? partnerId : [myId, partnerId].sort().join('-');
+      let encryptionSecret = roomKey;
+      setSecretKey(roomKey);
+      setActualRoomId(roomKey);
       setMyUserId(myId);
 
       // Fetch history
       try {
         const token = await SecureStore.getItemAsync('token') || localStorage.getItem('token');
-        
-        // Fetch all users for online list
-        axios.get(`https://api.bamboochat.click/api/auth/users`, {
+        const usersResponse = await axios.get(`https://api.bamboochat.click/api/auth/users`, {
           headers: { Authorization: `Bearer ${token}` }
-        }).then(res => setAllUsers(res.data)).catch(console.error);
+        });
+        const userDirectory = Array.isArray(usersResponse.data) ? usersResponse.data : [];
+        setAllUsers(userDirectory);
 
-        const response = await axios.get(`https://api.bamboochat.click/api/messages/${sharedKey}`, {
+        if (!isGroupChat) {
+          const privateKey = Platform.OS === 'web' ? localStorage.getItem('private_key') || '' : (await SecureStore.getItemAsync('private_key')) || '';
+          const partner = userDirectory.find((item: any) => item.id === partnerId);
+          if (privateKey && isValidPublicKey(partner?.public_key)) {
+            encryptionSecret = `${NACL_SECRET_PREFIX}${deriveSharedSecret(privateKey, partner.public_key)}`;
+          }
+        }
+        setSecretKey(encryptionSecret);
+
+        const response = await axios.get(`https://api.bamboochat.click/api/messages/${roomKey}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const history = response.data.map((msg: any) => {
@@ -313,7 +324,7 @@ function PrivateChatRoomScreen() {
           return {
             id: msg.id,
             sender_id: msg.sender_id,
-            content: decodeMessageContent(msg.content, messageType, sharedKey),
+            content: decodeMessageContent(msg.content, messageType, encryptionSecret),
             isMine: msg.sender_id === myId,
             timestamp: msg.timestamp,
             isRead: msg.is_read,
@@ -333,17 +344,17 @@ function PrivateChatRoomScreen() {
       // Join room
       const socket = await socketService.connect();
       if (socket) {
-        socket.emit('join_room', sharedKey);
+        socket.emit('join_room', roomKey);
 
         const handleReceiveMessage = (data: any) => {
-          if (data.room_id !== sharedKey) return;
+          if (data.room_id !== roomKey) return;
           if (data.sender_id === myId) return;
 
           const messageType = data.type || 'text';
           setMessages(prev => [...prev, {
             id: data.id || Math.random().toString(),
             sender_id: data.sender_id,
-            content: decodeMessageContent(data.content, messageType, sharedKey),
+            content: decodeMessageContent(data.content, messageType, encryptionSecret),
             isMine: false,
             timestamp: new Date().toISOString(),
             type: messageType,
@@ -353,7 +364,7 @@ function PrivateChatRoomScreen() {
             is_pinned: data.is_pinned
           }]);
 
-          socket.emit('mark_messages_read', { sender_id: data.sender_id, room_id: sharedKey });
+          socket.emit('mark_messages_read', { sender_id: data.sender_id, room_id: roomKey });
         };
 
         const handleSocketError = (err: any) => {
@@ -370,7 +381,7 @@ function PrivateChatRoomScreen() {
         };
 
         const handleMessagesRead = (data: any) => {
-          if (data.room_id === sharedKey) {
+          if (data.room_id === roomKey) {
             setMessages(prev => prev.map(msg => ({ ...msg, isRead: true })));
           }
         };
@@ -382,7 +393,7 @@ function PrivateChatRoomScreen() {
         const handleMessageEdited = (data: any) => {
           setMessages(prev => prev.map(msg => {
             if (msg.id === data.id) {
-              return { ...msg, content: decodeMessageContent(data.content, data.type, sharedKey), is_edited: true, sender: data.sender || msg.sender };
+              return { ...msg, content: decodeMessageContent(data.content, data.type, encryptionSecret), is_edited: true, sender: data.sender || msg.sender };
             }
             return msg;
           }));
@@ -440,7 +451,7 @@ function PrivateChatRoomScreen() {
         });
 
         socket.emit('request_online_list');
-        socket.emit('mark_messages_read', { sender_id: partnerId, room_id: sharedKey });
+        socket.emit('mark_messages_read', { sender_id: partnerId, room_id: roomKey });
       }
     };
     initRoom();

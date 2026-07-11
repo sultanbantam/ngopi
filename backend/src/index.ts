@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import helmet from 'helmet';
 import http from 'http';
 import { Server } from 'socket.io';
 import authRoutes from './routes/auth.routes';
@@ -15,8 +16,9 @@ import faqRoutes from './routes/faq.routes';
 import aiRoutes from './routes/ai.routes';
 import ticketRoutes from './routes/ticket.routes';
 import adminRoutes from './routes/admin.routes';
-import { verifyJWT } from './middleware/auth.middleware';
 import { setupSocket } from './sockets';
+import { apiLimiter } from './middleware/rateLimiter';
+import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
 import path from 'path';
 
 dotenv.config();
@@ -25,10 +27,28 @@ const app = express();
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: true,
+    directives: {
+      defaultSrc: ["'self'"],
+      connectSrc: ["'self'", 'https://www.bamboochat.click', 'https://bamboochat.click', 'wss://api.bamboochat.click'],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      mediaSrc: ["'self'", 'data:', 'blob:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+app.use(cors({ origin: corsOrigin, credentials: true, methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(cookieParser());
+app.use(sanitizeRequest);
+app.use(encodeJsonResponse);
+app.use('/api', apiLimiter);
 
 // Serve static files from uploads folder
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -47,7 +67,7 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
-app.get('/api/health', (req, res) => {
+app.get('/api/health', (_req, res) => {
   res.status(200).json({ status: 'ok' });
 });
 
@@ -58,7 +78,7 @@ const server = http.createServer(app);
 const io = new Server(server, {
   maxHttpBufferSize: 1e8, // 100 MB
   cors: {
-    origin: true,
+    origin: corsOrigin,
     methods: ['GET', 'POST'],
     credentials: true,
   }

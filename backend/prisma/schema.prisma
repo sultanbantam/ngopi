@@ -7,31 +7,35 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(uuid())
-  username       String   @unique
-  password_hash  String
-  display_name   String
-  role           String   @default("user")
-  public_key     String?
-  wallet_address String?
-  avatar_url     String?
-  bio            String?
-  status         String?
-  is_online      Boolean  @default(false)
-  last_seen      DateTime @default(now())
-  created_at     DateTime @default(now())
-  bmc_id         Int      @default(autoincrement())
+  id                   String    @id @default(uuid())
+  username             String    @unique
+  password_hash        String
+  display_name         String
+  role                 String    @default("user")
+  mfa_secret_encrypted String?
+  mfa_enabled          Boolean   @default(false)
+  mfa_verified_at      DateTime?
+  public_key           String?
+  wallet_address       String?
+  avatar_url           String?
+  bio                  String?
+  status               String?
+  is_online            Boolean   @default(false)
+  last_seen            DateTime  @default(now())
+  created_at           DateTime  @default(now())
+  bmc_id               Int       @default(autoincrement())
 
-  messages      Message[]
-  groupsCreated Group[]   @relation("GroupCreator")
-  groupMembers  GroupMember[]
-  settings      UserSettings?
-  airdropClaims AirdropClaim[]
-  platformAssignments Platform[] @relation("PlatformSupportAgent")
-  ticketsCreated Ticket[] @relation("TicketCreator")
-  ticketsAssigned Ticket[] @relation("TicketAgent")
-  ticketMessages TicketMessage[]
-  ticketAuditLogs TicketAuditLog[]
+  messages            Message[]
+  groupsCreated       Group[]          @relation("GroupCreator")
+  groupMembers        GroupMember[]
+  settings            UserSettings?
+  airdropClaims       AirdropClaim[]
+  platformAssignments Platform[]       @relation("PlatformSupportAgent")
+  ticketsCreated      Ticket[]         @relation("TicketCreator")
+  ticketsAssigned     Ticket[]         @relation("TicketAgent")
+  ticketMessages      TicketMessage[]
+  ticketAuditLogs     TicketAuditLog[]
+  refreshTokens       RefreshToken[]
 }
 
 model Message {
@@ -44,34 +48,34 @@ model Message {
   is_delivered      Boolean  @default(false)
   is_read           Boolean  @default(false)
   timestamp         DateTime @default(now())
-  reactions         Json?    // Store reactions, e.g. {"sender_id": "emoji"}
+  reactions         Json? // Store reactions, e.g. {"sender_id": "emoji"}
   is_edited         Boolean  @default(false)
   is_pinned         Boolean  @default(false)
   is_deleted        Boolean  @default(false)
   deleted_for_all   Boolean  @default(false)
-  parent_message_id String?  // For reply/quote feature
-  forwarded_from_id String?  // Original message ID if forwarded
+  parent_message_id String? // For reply/quote feature
+  forwarded_from_id String? // Original message ID if forwarded
 
-  sender         User     @relation(fields: [sender_id], references: [id])
-  parent         Message? @relation("MessageReplies", fields: [parent_message_id], references: [id])
-  replies        Message[] @relation("MessageReplies")
+  sender  User      @relation(fields: [sender_id], references: [id])
+  parent  Message?  @relation("MessageReplies", fields: [parent_message_id], references: [id])
+  replies Message[] @relation("MessageReplies")
 }
 
 model Group {
-  id                       String   @id @default(uuid())
-  name                     String
-  description              String?
-  avatar_url               String?
-  invite_code              String?  @unique
-  join_policy              String   @default("open")
-  only_admins_can_send     Boolean  @default(false)
-  allow_member_invites     Boolean  @default(true)
-  call_enabled             Boolean  @default(true)
-  min_bmc_balance          Float    @default(0)
-  created_by               String
-  created_at               DateTime @default(now())
+  id                   String   @id @default(uuid())
+  name                 String
+  description          String?
+  avatar_url           String?
+  invite_code          String?  @unique
+  join_policy          String   @default("open")
+  only_admins_can_send Boolean  @default(false)
+  allow_member_invites Boolean  @default(true)
+  call_enabled         Boolean  @default(true)
+  min_bmc_balance      Float    @default(0)
+  created_by           String
+  created_at           DateTime @default(now())
 
-  creator User @relation("GroupCreator", fields: [created_by], references: [id])
+  creator User          @relation("GroupCreator", fields: [created_by], references: [id])
   members GroupMember[]
 }
 
@@ -84,8 +88,8 @@ model GroupMember {
   invited_by String?
   joined_at  DateTime @default(now())
 
-  group      Group @relation(fields: [group_id], references: [id])
-  user       User  @relation(fields: [user_id], references: [id])
+  group Group @relation(fields: [group_id], references: [id])
+  user  User  @relation(fields: [user_id], references: [id])
 
   @@unique([group_id, user_id])
 }
@@ -111,6 +115,7 @@ model AirdropClaim {
 
   @@index([user_id, claimed_at])
 }
+
 enum TicketStatus {
   open
   in_progress
@@ -128,7 +133,7 @@ model Platform {
   support_agent_id String?
   created_at       DateTime @default(now())
 
-  support_agent User? @relation("PlatformSupportAgent", fields: [support_agent_id], references: [id])
+  support_agent User?    @relation("PlatformSupportAgent", fields: [support_agent_id], references: [id])
   faqs          Faq[]
   tickets       Ticket[]
 
@@ -162,9 +167,9 @@ model Ticket {
   created_at        DateTime     @default(now())
   updated_at        DateTime     @updatedAt
 
-  user           User            @relation("TicketCreator", fields: [user_id], references: [id])
-  platform       Platform        @relation(fields: [platform_id], references: [id])
-  assigned_agent User?           @relation("TicketAgent", fields: [assigned_agent_id], references: [id])
+  user           User             @relation("TicketCreator", fields: [user_id], references: [id])
+  platform       Platform         @relation(fields: [platform_id], references: [id])
+  assigned_agent User?            @relation("TicketAgent", fields: [assigned_agent_id], references: [id])
   messages       TicketMessage[]
   auditLogs      TicketAuditLog[]
 
@@ -206,4 +211,24 @@ model TicketAuditLog {
   @@index([ticket_id])
   @@index([actor_id])
   @@map("ticket_audit_logs")
+}
+
+model RefreshToken {
+  id                   String    @id @default(uuid())
+  user_id              String
+  token_hash           String    @unique
+  family_id            String
+  expires_at           DateTime
+  revoked_at           DateTime?
+  replaced_by_token_id String?
+  created_ip           String?
+  user_agent           String?
+  created_at           DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([family_id])
+  @@index([expires_at])
+  @@map("refresh_tokens")
 }

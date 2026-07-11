@@ -7,14 +7,16 @@ import {
   getTicketMessages,
   listMyTickets,
 } from '../controllers/ticket.controller';
+import { validateRequest } from '../middleware/validation';
+import { createTicketSchema, idParamsSchema, ticketMessageSchema } from '../utils/validation';
 
 const router = Router();
 
 router.use(verifyJWT);
-router.post('/', createTicket);
+router.post('/', validateRequest({ body: createTicketSchema }), createTicket);
 router.get('/my', listMyTickets);
-router.get('/:id/messages', getTicketMessages);
-router.post('/:id/messages', addUserTicketMessage);
-router.patch('/:id/close', closeMyTicket);
+router.get('/:id/messages', validateRequest({ params: idParamsSchema }), getTicketMessages);
+router.post('/:id/messages', validateRequest({ params: idParamsSchema, body: ticketMessageSchema }), addUserTicketMessage);
+router.patch('/:id/close', validateRequest({ params: idParamsSchema }), closeMyTicket);
 
 export default router;

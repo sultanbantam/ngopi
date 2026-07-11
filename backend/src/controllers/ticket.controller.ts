@@ -1,9 +1,26 @@
 import { Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { AuthRequest } from '../middleware/auth.middleware';
+import { EncryptionService } from '../services/encryption.service';
 
-const STAFF_ROLES = ['admin', 'agent'];
+const STAFF_ROLES = ['agent_cs', 'admin', 'superadmin'];
 const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+
+const encryptAtRest = (content: string) => EncryptionService.encryptString(content) as string;
+
+const decryptTicketMessage = <T extends { content: string }>(message: T): T => ({
+  ...message,
+  content: EncryptionService.decryptStringSafe(message.content) || message.content,
+});
+
+const decryptTicketPreview = <T>(ticket: T): T => {
+  const ticketWithMessages = ticket as T & { messages?: Array<{ content: string }> };
+  if (!Array.isArray(ticketWithMessages.messages)) return ticket;
+  return {
+    ...ticketWithMessages,
+    messages: ticketWithMessages.messages.map(decryptTicketMessage),
+  } as T;
+};
 
 const ticketInclude = {
   platform: {
@@ -105,7 +122,7 @@ export const createTicket = async (req: AuthRequest, res: Response): Promise<voi
         messages: {
           create: {
             sender_id: userId,
-            content: message,
+            content: encryptAtRest(message),
           },
         },
         auditLogs: {
@@ -140,7 +157,7 @@ export const listMyTickets = async (req: AuthRequest, res: Response): Promise<vo
       orderBy: { updated_at: 'desc' },
     });
 
-    res.json(tickets);
+    res.json(tickets.map(decryptTicketPreview));
   } catch (error) {
     console.error('List my tickets error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -187,7 +204,7 @@ export const getTicketMessages = async (req: AuthRequest, res: Response): Promis
       orderBy: { created_at: 'asc' },
     });
 
-    res.json(messages);
+    res.json(messages.map(decryptTicketMessage));
   } catch (error) {
     console.error('Get ticket messages error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -222,7 +239,7 @@ export const addUserTicketMessage = async (req: AuthRequest, res: Response): Pro
       data: {
         ticket_id: ticket.id,
         sender_id: userId,
-        content,
+        content: encryptAtRest(content),
       },
       include: {
         sender: { select: { id: true, username: true, display_name: true, role: true } },
@@ -232,7 +249,7 @@ export const addUserTicketMessage = async (req: AuthRequest, res: Response): Pro
     await prisma.ticket.update({ where: { id: ticket.id }, data: { updated_at: new Date() } });
     await writeAudit(ticket.id, userId, 'user_replied');
 
-    res.status(201).json(message);
+    res.status(201).json(decryptTicketMessage(message));
   } catch (error) {
     console.error('Add user ticket message error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -291,7 +308,7 @@ export const listAdminTickets = async (req: AuthRequest, res: Response): Promise
       orderBy: { updated_at: 'desc' },
     });
 
-    res.json(tickets);
+    res.json(tickets.map(decryptTicketPreview));
   } catch (error) {
     console.error('List admin tickets error:', error);
     res.status(500).json({ error: 'Internal server error' });
@@ -384,7 +401,7 @@ export const addAdminTicketMessage = async (req: AuthRequest, res: Response): Pr
       data: {
         ticket_id: ticket.id,
         sender_id: userId,
-        content,
+        content: encryptAtRest(content),
         is_internal: isInternal,
       },
       include: {
@@ -398,7 +415,7 @@ export const addAdminTicketMessage = async (req: AuthRequest, res: Response): Pr
     await prisma.ticket.update({ where: { id: ticket.id }, data: updateData });
     await writeAudit(ticket.id, userId, isInternal ? 'internal_note_added' : 'agent_replied');
 
-    res.status(201).json(message);
+    res.status(201).json(decryptTicketMessage(message));
   } catch (error) {
     console.error('Add admin ticket message error:', error);
     res.status(500).json({ error: 'Internal server error' });

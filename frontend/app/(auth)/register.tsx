@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
+import { generateDeviceKeyPair } from '../../src/utils/e2ee';
 
 const API_URL = 'https://api.bamboochat.click/api';
 
@@ -14,7 +15,6 @@ export default function RegisterScreen() {
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [publicKey, setPublicKey] = useState('TEMP_PUB_KEY'); // MVP simplification
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,12 +27,13 @@ export default function RegisterScreen() {
     setError('');
 
     try {
+      const deviceKeys = generateDeviceKeyPair();
       const response = await axios.post(`${API_URL}/auth/register`, { 
         username, 
         password, 
         display_name: displayName,
-        public_key: publicKey
-      });
+        public_key: deviceKeys.publicKey
+      }, { withCredentials: true });
       const { token, user } = response.data;
       
       if (Platform.OS === 'web') {
@@ -40,11 +41,13 @@ export default function RegisterScreen() {
         localStorage.setItem('temp_key', password);
         localStorage.setItem('username', username);
         localStorage.setItem('userId', user.id);
+        localStorage.setItem('private_key', deviceKeys.privateKey);
       } else {
         await SecureStore.setItemAsync('token', token);
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', username);
         await SecureStore.setItemAsync('userId', user.id);
+        await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
 
       router.replace('/(main)/bambupedia');

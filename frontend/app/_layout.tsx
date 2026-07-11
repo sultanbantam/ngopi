@@ -1,8 +1,5 @@
 import { Stack } from 'expo-router';
-import axios from 'axios';
-
-// Skip ngrok browser warning for all API requests
-axios.defaults.headers.common['ngrok-skip-browser-warning'] = '69420';
+import '../src/interceptors/axios.interceptor';
 export default function RootLayout() {
   return (
     <Stack screenOptions={{ headerShown: false }}>

@@ -15,6 +15,8 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
+  const [challengeToken, setChallengeToken] = useState('');
   const params = useLocalSearchParams();
 
   useEffect(() => {
@@ -48,7 +50,12 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, { username, password });
+      const response = await axios.post(`${API_URL}/auth/login`, { username, password, mfa_code: mfaCode || undefined }, { withCredentials: true });
+      if (response.status === 202 || response.data?.requires_mfa) {
+        setChallengeToken(response.data?.challenge_token || challengeToken);
+        setError('Masukkan kode MFA 6 digit dari aplikasi authenticator.');
+        return;
+      }
       const { token, user } = response.data;
       
       if (Platform.OS === 'web') {
@@ -111,6 +118,18 @@ export default function LoginScreen() {
             <Text style={{ color: '#94A3B8' }}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
+
+        {challengeToken ? (
+          <TextInput
+            style={styles.input}
+            placeholder="Kode MFA 6 digit"
+            placeholderTextColor="#64748b"
+            value={mfaCode}
+            onChangeText={setMfaCode}
+            keyboardType="number-pad"
+            maxLength={6}
+          />
+        ) : null}
 
         <TouchableOpacity onPress={() => alert('Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin atau gunakan login BambooChain wallet Anda.')}>
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>

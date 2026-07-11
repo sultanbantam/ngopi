@@ -1,8 +1,16 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from '../utils/prisma';
+import { EncryptionService } from '../services/encryption.service';
 
-const STAFF_ROLES = ['admin', 'agent'];
+const STAFF_ROLES = ['agent_cs', 'admin', 'superadmin'];
 const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+
+const encryptAtRest = (content: string) => EncryptionService.encryptString(content) as string;
+
+const decryptTicketMessage = <T extends { content: string }>(message: T): T => ({
+  ...message,
+  content: EncryptionService.decryptStringSafe(message.content) || message.content,
+});
 
 const getRole = async (userId: string) => {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
@@ -77,7 +85,7 @@ export const handleTicketEvents = (io: Server, socket: Socket, user: { id: strin
         data: {
           ticket_id: ticket.id,
           sender_id: user.id,
-          content,
+          content: encryptAtRest(content),
           is_internal: isInternal,
         },
         include: {

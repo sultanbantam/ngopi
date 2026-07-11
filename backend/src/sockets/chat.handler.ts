@@ -1,12 +1,20 @@
 import { Server, Socket } from 'socket.io';
 import { prisma } from '../utils/prisma';
 import { checkTokenGate } from '../middleware/tokenGating.middleware';
+import { EncryptionService } from '../services/encryption.service';
 
 const getSenderSelect = () => ({
   id: true,
   username: true,
   display_name: true,
   avatar_url: true,
+});
+
+const encryptAtRest = (content?: string | null) => content ? EncryptionService.encryptString(content) : null;
+
+const decryptMessageRecord = <T extends { content?: string | null }>(message: T): T => ({
+  ...message,
+  content: EncryptionService.decryptStringSafe(message.content) ?? message.content,
 });
 
 const getActiveGroupMember = async (groupId: string, userId: string) => {
@@ -74,7 +82,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         data: {
           room_id,
           sender_id: user.id,
-          content: content || null,
+          content: encryptAtRest(content),
           type,
           attachment_url: attachment_url || null,
           parent_message_id: parent_message_id || null,
@@ -87,10 +95,11 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
       });
 
       if (receiver_id) {
-        io.to(receiver_id).emit('receive_message', savedMessage);
-        io.to(user.id).emit('receive_message', savedMessage);
+        const outboundMessage = decryptMessageRecord(savedMessage);
+        io.to(receiver_id).emit('receive_message', outboundMessage);
+        io.to(user.id).emit('receive_message', outboundMessage);
       } else {
-        io.to(room_id).emit('receive_message', savedMessage);
+        io.to(room_id).emit('receive_message', decryptMessageRecord(savedMessage));
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -154,8 +163,9 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         include: { sender: { select: getSenderSelect() } }
       });
 
-      io.to(room_id).emit('message_reacted', updatedMsg);
-      if (receiver_id) io.to(receiver_id).emit('message_reacted', updatedMsg);
+      const outboundMessage = decryptMessageRecord(updatedMsg);
+      io.to(room_id).emit('message_reacted', outboundMessage);
+      if (receiver_id) io.to(receiver_id).emit('message_reacted', outboundMessage);
     } catch (e) {
       console.error(e);
     }
@@ -166,11 +176,12 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
       const { message_id, room_id, receiver_id, new_content } = data;
       const updatedMsg = await prisma.message.update({
         where: { id: message_id },
-        data: { content: new_content, is_edited: true },
+        data: { content: encryptAtRest(new_content), is_edited: true },
         include: { sender: { select: getSenderSelect() } }
       });
-      io.to(room_id).emit('message_edited', updatedMsg);
-      if (receiver_id) io.to(receiver_id).emit('message_edited', updatedMsg);
+      const outboundMessage = decryptMessageRecord(updatedMsg);
+      io.to(room_id).emit('message_edited', outboundMessage);
+      if (receiver_id) io.to(receiver_id).emit('message_edited', outboundMessage);
     } catch (e) {
       console.error(e);
     }
@@ -220,7 +231,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         data: {
           room_id: target_room_id,
           sender_id: user.id,
-          content: originalMsg.content,
+          content: encryptAtRest(originalMsg.content),
           type: originalMsg.type,
           attachment_url: originalMsg.attachment_url,
           forwarded_from_id: original_message_id
@@ -229,10 +240,11 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
       });
 
       if (target_receiver_id) {
-        io.to(target_receiver_id).emit('receive_message', forwardedMsg);
-        io.to(user.id).emit('receive_message', forwardedMsg);
+        const outboundMessage = decryptMessageRecord(forwardedMsg);
+        io.to(target_receiver_id).emit('receive_message', outboundMessage);
+        io.to(user.id).emit('receive_message', outboundMessage);
       } else {
-        io.to(target_room_id).emit('receive_message', forwardedMsg);
+        io.to(target_room_id).emit('receive_message', decryptMessageRecord(forwardedMsg));
       }
     } catch (e) {
       console.error('Forward message error:', e);
@@ -247,8 +259,9 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         data: { is_pinned },
         include: { sender: { select: getSenderSelect() } }
       });
-      io.to(room_id).emit('message_pinned', updatedMsg);
-      if (receiver_id) io.to(receiver_id).emit('message_pinned', updatedMsg);
+      const outboundMessage = decryptMessageRecord(updatedMsg);
+      io.to(room_id).emit('message_pinned', outboundMessage);
+      if (receiver_id) io.to(receiver_id).emit('message_pinned', outboundMessage);
     } catch (e) {
       console.error(e);
     }
