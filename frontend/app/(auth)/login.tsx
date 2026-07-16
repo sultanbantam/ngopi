@@ -3,8 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
-
-const API_URL = 'https://api.bamboochat.click/api';
+import { API_URL, refreshAccessToken, setStoredToken } from '../../src/utils/session';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const logoImage = require('../../assets/logo.png');
@@ -22,16 +21,33 @@ export default function LoginScreen() {
   useEffect(() => {
     const handleSSO = async () => {
       if (params.error) {
-        setError(params.error === 'sso_failed' ? 'SSO Login Failed' : String(params.error));
+        const errorCode = String(params.error);
+        setError(errorCode === 'sso_failed' ? 'SSO Login Failed' : errorCode === 'session_expired' ? 'Sesi login berakhir. Silakan login ulang.' : errorCode);
       }
       if (params.sso_token) {
         setLoading(true);
         if (Platform.OS === 'web') {
-          localStorage.setItem('token', String(params.sso_token));
+          await setStoredToken(String(params.sso_token));
           localStorage.setItem('username', String(params.sso_username || ''));
           localStorage.setItem('userId', String(params.sso_userid || ''));
         } else {
-          await SecureStore.setItemAsync('token', String(params.sso_token));
+          await setStoredToken(String(params.sso_token));
+          await SecureStore.setItemAsync('username', String(params.sso_username || ''));
+          await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
+        }
+        router.replace('/(main)/bambupedia');
+      } else if (params.sso === 'success') {
+        setLoading(true);
+        const token = await refreshAccessToken(true);
+        if (!token) {
+          setLoading(false);
+          setError('SSO berhasil, tetapi sesi belum bisa dibuat. Silakan coba login ulang.');
+          return;
+        }
+        if (Platform.OS === 'web') {
+          localStorage.setItem('username', String(params.sso_username || ''));
+          localStorage.setItem('userId', String(params.sso_userid || ''));
+        } else {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
@@ -59,12 +75,12 @@ export default function LoginScreen() {
       const { token, user } = response.data;
       
       if (Platform.OS === 'web') {
-        localStorage.setItem('token', token);
+        await setStoredToken(token);
         localStorage.setItem('temp_key', password);
         localStorage.setItem('username', username);
         localStorage.setItem('userId', user.id);
       } else {
-        await SecureStore.setItemAsync('token', token);
+        await setStoredToken(token);
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', username);
         await SecureStore.setItemAsync('userId', user.id);
@@ -263,4 +279,3 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   }
 });
-

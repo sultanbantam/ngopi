@@ -1,53 +1,12 @@
 import { io, Socket } from 'socket.io-client';
 import { Platform } from 'react-native';
-import * as SecureStore from './storage';
+import { clearStoredSession, getValidAccessToken, refreshAccessToken } from './session';
 
 const SOCKET_URL = 'https://api.bamboochat.click';
-const API_URL = 'https://api.bamboochat.click/api';
-
-const getStoredToken = async () => {
-  if (Platform.OS === 'web') return localStorage.getItem('token') || '';
-  return (await SecureStore.getItemAsync('token')) || '';
-};
-
-const setStoredToken = async (token: string) => {
-  if (Platform.OS === 'web') {
-    localStorage.setItem('token', token);
-    return;
-  }
-  await SecureStore.setItemAsync('token', token);
-};
 
 class SocketService {
   public socket: Socket | null = null;
   private authRetryCount = 0;
-  private refreshPromise: Promise<string | null> | null = null;
-
-  private async refreshAccessToken() {
-    if (this.refreshPromise) return this.refreshPromise;
-
-    this.refreshPromise = fetch(`${API_URL}/auth/refresh`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        'ngrok-skip-browser-warning': '69420'
-      }
-    })
-      .then(async (response) => {
-        if (!response.ok) return null;
-        const data = await response.json();
-        const token = typeof data?.token === 'string' ? data.token : null;
-        if (token) await setStoredToken(token);
-        return token;
-      })
-      .catch(() => null)
-      .finally(() => {
-        this.refreshPromise = null;
-      });
-
-    return this.refreshPromise;
-  }
 
   private isAuthError(error: unknown) {
     const message = error instanceof Error ? error.message : String(error || '');
@@ -66,6 +25,16 @@ class SocketService {
     });
   }
 
+  private async handleExpiredSession(error: unknown) {
+    console.error('WebSocket authentication failed:', error);
+    await clearStoredSession();
+    this.disconnect();
+
+    if (Platform.OS === 'web') {
+      window.location.href = '/login?error=session_expired';
+    }
+  }
+
   public async connect(): Promise<Socket | null> {
     if (this.socket) {
       if (!this.socket.connected && this.socket.disconnected) {
@@ -74,9 +43,11 @@ class SocketService {
       return this.socket;
     }
 
-    const token = (await this.refreshAccessToken()) || (await getStoredToken());
-
-    if (!token) return null;
+    const token = await getValidAccessToken();
+    if (!token) {
+      await this.handleExpiredSession('No valid token available');
+      return null;
+    }
 
     this.socket = this.createSocket(token);
 
@@ -96,14 +67,14 @@ class SocketService {
       }
 
       if (this.authRetryCount >= 1) {
-        console.error('WebSocket authentication failed:', error);
+        await this.handleExpiredSession(error);
         return;
       }
 
       this.authRetryCount += 1;
-      const nextToken = await this.refreshAccessToken();
+      const nextToken = await refreshAccessToken(true);
       if (!nextToken || !this.socket) {
-        console.error('WebSocket authentication failed:', error);
+        await this.handleExpiredSession(error);
         return;
       }
 

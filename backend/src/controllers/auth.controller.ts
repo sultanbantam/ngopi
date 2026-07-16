@@ -20,7 +20,31 @@ const BAMBOOCHAIN_CLIENT_SECRET = process.env.BAMBOOCHAIN_CLIENT_SECRET || '';
 const BAMBOOCHAIN_OAUTH_URL = process.env.BAMBOOCHAIN_OAUTH_URL || 'https://bamboochain.id/#/authorize';
 const BAMBOOCHAIN_TOKEN_URL = process.env.BAMBOOCHAIN_TOKEN_URL || 'https://bamboochain.id/api/oauth/token';
 const REDIRECT_URI = process.env.BAMBOOCHAIN_REDIRECT_URI || 'https://api.bamboochat.click/api/auth/bamboochain/callback';
-const FRONTEND_URL = process.env.FRONTEND_URL || 'https://www.bamboochat.click';
+const DEFAULT_FRONTEND_URL = 'https://www.bamboochat.click';
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
+
+const normalizeFrontendUrl = (value?: string) => {
+  const raw = (value || DEFAULT_FRONTEND_URL).trim().replace(/\/+$/, '');
+  try {
+    const url = new URL(raw);
+    if (LOOPBACK_HOSTS.has(url.hostname) && process.env.ALLOW_LOCAL_FRONTEND_REDIRECT !== 'true') {
+      console.warn('Ignoring local FRONTEND_URL for BambooChain redirect', { frontend_url: raw });
+      return DEFAULT_FRONTEND_URL;
+    }
+    return url.origin;
+  } catch {
+    console.warn('Invalid FRONTEND_URL for BambooChain redirect', { frontend_url: raw });
+    return DEFAULT_FRONTEND_URL;
+  }
+};
+
+const FRONTEND_URL = normalizeFrontendUrl(process.env.FRONTEND_URL);
+
+const buildFrontendRedirect = (pathname: string, params: Record<string, string>) => {
+  const url = new URL(pathname, FRONTEND_URL);
+  Object.entries(params).forEach(([key, value]) => url.searchParams.set(key, value));
+  return url.toString();
+};
 
 const serializeUser = (user: { id: string; username: string; display_name: string | null; bmc_id: number; role: string; mfa_enabled?: boolean | null }) => ({
   id: user.id,
@@ -291,9 +315,9 @@ export const bamboochainCallback = async (req: Request, res: Response): Promise<
 
     const tokens = await issueTokenPair(user, authMetadata(req));
     setAuthCookies(res, tokens.accessToken, tokens.refreshToken);
-    res.redirect(`${FRONTEND_URL}/login?sso_token=${tokens.accessToken}&sso_username=${user.username}&sso_userid=${user.id}`);
+    res.redirect(buildFrontendRedirect('/login', { sso: 'success', sso_username: user.username, sso_userid: user.id }));
   } catch (error: any) {
     console.error('BambooChain SSO Callback Error:', error?.response?.data || error.message);
-    res.redirect(`${FRONTEND_URL}/login?error=sso_failed`);
+    res.redirect(buildFrontendRedirect('/login', { error: 'sso_failed' }));
   }
 };

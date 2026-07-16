@@ -1,0 +1,105 @@
+import { Platform } from 'react-native';
+import * as SecureStore from './storage';
+
+export const API_URL = 'https://api.bamboochat.click/api';
+
+const TOKEN_REFRESH_WINDOW_MS = 2 * 60 * 1000;
+const REFRESH_RETRY_COOLDOWN_MS = 5 * 1000;
+const SESSION_KEYS = ['token', 'username', 'userId', 'temp_key', 'private_key'];
+
+let refreshPromise: Promise<string | null> | null = null;
+let lastRefreshFailureAt = 0;
+
+const getStorageValue = async (key: string) => {
+  if (Platform.OS === 'web') return localStorage.getItem(key) || '';
+  return (await SecureStore.getItemAsync(key)) || '';
+};
+
+const setStorageValue = async (key: string, value: string) => {
+  if (Platform.OS === 'web') {
+    localStorage.setItem(key, value);
+    return;
+  }
+  await SecureStore.setItemAsync(key, value);
+};
+
+const deleteStorageValue = async (key: string) => {
+  if (Platform.OS === 'web') {
+    localStorage.removeItem(key);
+    return;
+  }
+  await SecureStore.deleteItemAsync(key);
+};
+
+const decodeJwtPayload = (token: string): { exp?: number } | null => {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload || typeof globalThis.atob !== 'function') return null;
+    const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(globalThis.atob(padded));
+  } catch {
+    return null;
+  }
+};
+
+export const getStoredToken = () => getStorageValue('token');
+export const setStoredToken = (token: string) => setStorageValue('token', token);
+
+export const isAccessTokenExpiring = (token: string, windowMs = TOKEN_REFRESH_WINDOW_MS) => {
+  const payload = decodeJwtPayload(token);
+  if (!payload?.exp) return false;
+  return payload.exp * 1000 <= Date.now() + windowMs;
+};
+
+export const refreshAccessToken = async (force = false) => {
+  if (refreshPromise) return refreshPromise;
+  if (!force && lastRefreshFailureAt && Date.now() - lastRefreshFailureAt < REFRESH_RETRY_COOLDOWN_MS) {
+    return null;
+  }
+
+  refreshPromise = fetch(`${API_URL}/auth/refresh`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': '69420'
+    }
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        lastRefreshFailureAt = Date.now();
+        return null;
+      }
+      const data = await response.json();
+      const token = typeof data?.token === 'string' ? data.token : null;
+      if (token) {
+        await setStoredToken(token);
+        lastRefreshFailureAt = 0;
+      }
+      return token;
+    })
+    .catch(() => {
+      lastRefreshFailureAt = Date.now();
+      return null;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+};
+
+export const getValidAccessToken = async () => {
+  const token = await getStoredToken();
+  if (token && !isAccessTokenExpiring(token)) return token;
+
+  const refreshedToken = await refreshAccessToken(Boolean(token));
+  if (refreshedToken) return refreshedToken;
+
+  return token && !isAccessTokenExpiring(token, 0) ? token : '';
+};
+
+export const clearStoredSession = async () => {
+  await Promise.all(SESSION_KEYS.map((key) => deleteStorageValue(key)));
+};
