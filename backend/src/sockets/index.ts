@@ -7,6 +7,51 @@ import { prisma } from '../utils/prisma';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
 
+type SocketTokenPayload = {
+  id: string;
+  username: string;
+  role?: string;
+  token_type?: string;
+};
+
+const readSingleValue = (value: unknown) => {
+  if (typeof value === 'string' && value.trim()) return value;
+  if (Array.isArray(value)) {
+    return value.find((item): item is string => typeof item === 'string' && item.trim().length > 0) || null;
+  }
+  return null;
+};
+
+const decodeCookieValue = (value: string) => {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+};
+
+const getCookieValue = (cookieHeader: string | string[] | undefined, name: string) => {
+  const header = Array.isArray(cookieHeader) ? cookieHeader.join(';') : cookieHeader;
+  if (!header) return null;
+
+  for (const cookie of header.split(';')) {
+    const [rawName, ...rawValueParts] = cookie.trim().split('=');
+    if (rawName === name && rawValueParts.length > 0) {
+      return decodeCookieValue(rawValueParts.join('='));
+    }
+  }
+
+  return null;
+};
+
+const getSocketAuthToken = (socket: Socket) => {
+  const auth = socket.handshake.auth as Record<string, unknown> | undefined;
+  const authToken = readSingleValue(auth?.token);
+  const queryToken = readSingleValue(socket.handshake.query.token);
+  const cookieToken = getCookieValue(socket.handshake.headers.cookie, 'token');
+  return authToken || queryToken || cookieToken;
+};
+
 const broadcastOnlineList = async (io: Server) => {
   try {
     const onlineUsers = await prisma.user.findMany({
@@ -30,14 +75,18 @@ export const setupSocket = (io: Server) => {
   startBambupediaTips(io);
   // Middleware for authentication
   io.use((socket: Socket, next) => {
-    const token = socket.handshake.query.token as string;
-    
+    const token = getSocketAuthToken(socket);
+
     if (!token) {
       return next(new Error('Authentication error: No token provided'));
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { id: string; username: string };
+      const decoded = jwt.verify(token, JWT_SECRET) as SocketTokenPayload;
+      if (decoded.token_type && decoded.token_type !== 'access') {
+        return next(new Error('Authentication error: Invalid token type'));
+      }
+
       // Attach user info to socket
       (socket as any).user = decoded;
       next();
@@ -133,6 +182,3 @@ export const setupSocket = (io: Server) => {
     });
   });
 };
-
-
-
