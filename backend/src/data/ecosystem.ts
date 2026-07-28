@@ -375,6 +375,96 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
       },
     ],
   },
+  {
+    name: 'bamboochat',
+    display_name: 'BambooChat',
+    description: 'Platform komunikasi komunitas ekosistem Bambu untuk Bambupedia, pesan privat, berbagi dokumen, reaksi, serta voice call dan video call.',
+    website_url: 'https://bamboochat.click',
+    icon: 'BC',
+    aliases: ['bamboochat', 'bamboo chat', 'bmc chat', 'bambupedia', 'rumpun bambupedia', 'chat'],
+    faqs: [
+      {
+        question: 'Tutorial cepat: bagaimana mulai menggunakan BambooChat?',
+        answer: '1. Buka https://bamboochat.click.\n2. Pilih Sign Up, buat username minimal 3 karakter dan password minimal 8 karakter, lalu konfirmasi password.\n3. Login dengan akun tersebut. Sesi akan tetap tersimpan sampai Anda memilih keluar.\n4. Setelah masuk, Anda berada di Rumpun Bambupedia untuk membaca informasi dan berdiskusi.\n5. Buka Kontak untuk memilih pengguna atau rumpun.\n6. Di chat, Anda dapat mengirim pesan, gambar, dokumen, voice message, dan reaksi.\n7. Gunakan ikon telepon atau kamera untuk voice call dan video call; izinkan mikrofon/kamera saat diminta.\n8. Buka Pusat Bantuan untuk membaca FAQ, bertanya kepada BambooCS AI, atau membuat tiket.',
+        keywords: ['tutorial', 'panduan', 'mulai', 'cara menggunakan', 'pemula', 'langkah'],
+      },
+      {
+        question: 'Apa itu BambooChat?',
+        answer: 'BambooChat adalah platform komunikasi ekosistem Bambu. Fitur utamanya meliputi Rumpun Bambupedia, pesan privat, rumpun komunitas, lampiran, voice message, reaksi, notifikasi, voice call, video call, BambooBot, dan Pusat Bantuan BambooCS.',
+        keywords: ['apa itu', 'bamboochat', 'fitur', 'fungsi', 'komunikasi'],
+      },
+      {
+        question: 'Bagaimana cara membuat akun BambooChat?',
+        answer: 'Buka halaman Sign Up, masukkan username 3-30 karakter menggunakan huruf kecil, angka, titik, garis bawah, atau tanda minus. Gunakan password minimal 8 karakter dan isi konfirmasi yang sama. Jika gagal, baca penjelasan validasi yang tampil di formulir.',
+        keywords: ['signup', 'sign up', 'daftar', 'akun', 'username', 'password', 'validasi'],
+      },
+      {
+        question: 'Mengapa saya tidak perlu login ulang setiap membuka BambooChat?',
+        answer: 'BambooChat menyimpan sesi secara aman dan memperbarui token akses menggunakan refresh token. Selama Anda tidak memilih Keluar dan sesi masih sah, aplikasi akan membuka room terakhir. Jika server atau jaringan terganggu, status dapat terlihat offline tanpa otomatis menghapus sesi.',
+        keywords: ['login ulang', 'sesi', 'refresh token', 'offline', 'tetap login'],
+      },
+      {
+        question: 'Apa fungsi Rumpun Bambupedia?',
+        answer: 'Rumpun Bambupedia adalah ruang komunitas publik untuk informasi ekosistem Bambu, diskusi, sapaan, mention pengguna, dan jawaban BambooBot. Tautan resmi yang dibagikan BambooBot dapat langsung diketuk.',
+        keywords: ['bambupedia', 'rumpun', 'room', 'komunitas', 'tautan'],
+      },
+      {
+        question: 'Bagaimana menggunakan BambooBot di Bambupedia?',
+        answer: 'Tulis pertanyaan tentang platform ekosistem Bambu. Gunakan !list untuk melihat daftar platform dan !info nama-platform untuk meminta ringkasan serta link resmi. Anda juga dapat bertanya dengan bahasa biasa; BambooBot akan mencocokkan pertanyaan dengan knowledge base.',
+        keywords: ['bamboobot', 'bot', '!list', '!info', 'perintah', 'knowledge base'],
+      },
+      {
+        question: 'Bagaimana mengirim pesan privat?',
+        answer: 'Buka menu Kontak atau daftar anggota Bambupedia, pilih ikon chat pada pengguna tujuan, lalu tulis pesan. Anda dapat mengirim teks, gambar, dokumen, voice message, membalas pesan, meneruskan pesan, dan memberi reaksi.',
+        keywords: ['private message', 'pesan privat', 'kontak', 'chat', 'reaksi', 'dokumen'],
+      },
+      {
+        question: 'Bagaimana melakukan voice call atau video call?',
+        answer: 'Buka chat dengan pengguna tujuan lalu tekan ikon telepon untuk voice call atau ikon kamera untuk video call. Izinkan akses mikrofon dan kamera. Penelepon mendengar nada tunggu, sedangkan penerima mendengar ringtone sampai panggilan dijawab atau berakhir setelah sekitar 30 detik.',
+        keywords: ['voice call', 'video call', 'telepon', 'kamera', 'mikrofon', 'ringtone'],
+      },
+      {
+        question: 'Apa yang harus dilakukan jika panggilan tidak memiliki suara atau video?',
+        answer: 'Pastikan izin mikrofon/kamera aktif, volume perangkat tidak senyap, dan tidak ada aplikasi lain yang memakai media. Tutup tab BambooChat lama lalu buka kembali. Jika tombol Nyalakan suara muncul, ketuk tombol tersebut. BambooChat memakai TURN relay untuk membantu koneksi pada jaringan seluler atau NAT ketat.',
+        keywords: ['tidak ada suara', 'video hitam', 'koneksi media gagal', 'turn', 'izin', 'nyalakan suara'],
+      },
+      {
+        question: 'Bagaimana cara mengatur notifikasi dan nada panggilan?',
+        answer: 'Buka panel Notifikasi lalu ketuk ikon mode panggilan untuk memilih ringtone, getar, atau senyap. Panggilan masuk berdering berulang maksimal sekitar 30 detik. Jika tidak dijawab, riwayat notifikasi menampilkan panggilan tak terjawab.',
+        keywords: ['notifikasi', 'ringtone', 'getar', 'senyap', 'misscall', 'panggilan tak terjawab'],
+      },
+      {
+        question: 'Notifikasi apa saja yang disimpan?',
+        answer: 'Pusat notifikasi menyimpan pesan privat, dokumen atau media yang relevan, reaksi terhadap pesan Anda, dan panggilan tak terjawab. Panggilan masuk yang sedang berlangsung bersifat sementara dan tidak seharusnya tersimpan sebagai dua notifikasi.',
+        keywords: ['notifikasi disimpan', 'duplikat', 'pesan', 'dokumen', 'reaksi', 'misscall'],
+      },
+      {
+        question: 'Bagaimana membuat atau bergabung dengan rumpun?',
+        answer: 'Buka menu Kontak untuk melihat rumpun yang tersedia atau membuat rumpun baru. Rumpun dapat memakai kebijakan terbuka, persetujuan admin, atau persyaratan minimum saldo BMC. Pastikan alamat wallet publik sudah terhubung jika rumpun menggunakan token gating.',
+        keywords: ['rumpun', 'grup', 'buat grup', 'bergabung', 'approval', 'bmc', 'token gating'],
+      },
+      {
+        question: 'Bagaimana menjaga keamanan akun BambooChat?',
+        answer: 'Gunakan password unik, jangan membagikan password, private key, seed phrase, kode MFA, atau token sesi. Periksa domain harus https://bamboochat.click sebelum login. Hanya bagikan alamat wallet publik jika diperlukan dan segera keluar ketika memakai perangkat umum.',
+        keywords: ['keamanan', 'password', 'private key', 'seed phrase', 'mfa', 'phishing'],
+      },
+      {
+        question: 'Mengapa status saya menjadi offline?',
+        answer: 'Status offline muncul ketika aplikasi ditutup, koneksi internet terputus, atau socket tidak tersambung. Akun dan keanggotaan rumpun tidak hilang. Saat aplikasi dibuka dan jaringan kembali normal, status akan diperbarui menjadi online.',
+        keywords: ['offline', 'status', 'socket', 'jaringan', 'room tetap'],
+      },
+      {
+        question: 'Bagaimana melaporkan masalah kepada BambooCS?',
+        answer: 'Buka Pusat Bantuan, pilih platform BambooChat, tulis pertanyaan, lalu pilih Tanya AI. Jika belum selesai, pilih Buat Tiket. Sertakan waktu kejadian, perangkat/browser, langkah yang dilakukan, pesan error, serta screenshot tanpa data rahasia.',
+        keywords: ['bamboocs', 'tiket', 'lapor masalah', 'screenshot', 'dukungan', 'help center'],
+      },
+      {
+        question: 'Browser apa yang disarankan untuk BambooChat?',
+        answer: 'Gunakan Chrome, Edge, Brave, atau browser modern versi terbaru. Untuk panggilan, berikan izin notifikasi, mikrofon, dan kamera. Setelah deployment baru, tutup tab lama atau lakukan hard refresh agar bundle terbaru dimuat.',
+        keywords: ['browser', 'chrome', 'edge', 'brave', 'hard refresh', 'versi terbaru'],
+      },
+    ],
+  },
 ];
 
 export const PLATFORM_NAMES = ECOSYSTEM_PLATFORMS.map((platform) => platform.name);

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Platform, Image } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
 import { router } from 'expo-router';
-import * as SecureStore from '../src/utils/storage';
+import { getLastRefreshFailureReason, getValidAccessToken, hasStoredSession } from '../src/utils/session';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const logoImage = require('../assets/logo.png');
@@ -10,14 +10,11 @@ export default function IndexScreen() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        let token = null;
-        if (Platform.OS === 'web') {
-          token = localStorage.getItem('token');
-        } else {
-          token = await SecureStore.getItemAsync('token');
-        }
-        
-        if (token) {
+        const hadSession = await hasStoredSession();
+        const token = await getValidAccessToken();
+        const canOpenOffline = hadSession && getLastRefreshFailureReason() === 'unavailable';
+
+        if (token || canOpenOffline) {
           router.replace('/(main)/bambupedia');
         } else {
           router.replace('/(auth)/login');
@@ -50,4 +47,3 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   }
 });
-

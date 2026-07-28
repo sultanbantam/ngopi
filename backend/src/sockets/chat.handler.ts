@@ -163,9 +163,11 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         include: { sender: { select: getSenderSelect() } }
       });
 
-      const outboundMessage = decryptMessageRecord(updatedMsg);
-      io.to(room_id).emit('message_reacted', outboundMessage);
-      if (receiver_id) io.to(receiver_id).emit('message_reacted', outboundMessage);
+      const outboundMessage = {
+        ...decryptMessageRecord(updatedMsg),
+        reacted_by: { id: user.id, username: user.username },
+      };
+      io.to(receiver_id ? [room_id, receiver_id] : room_id).emit('message_reacted', outboundMessage);
     } catch (e) {
       console.error(e);
     }

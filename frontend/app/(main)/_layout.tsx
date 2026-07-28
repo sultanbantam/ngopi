@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stack, Slot, router, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,12 @@ import * as SecureStore from '../../src/utils/storage';
 
 const API_URL = 'https://api.bamboochat.click/api';
 const NOTIFICATION_STORAGE_KEY = 'bamboochat.notifications.v1';
+const CALL_ALERT_STORAGE_KEY = 'bamboochat.call-alert-mode.v1';
+const CALL_RING_DURATION_MS = 30_000;
+const CALL_RING_REPEAT_MS = 2_500;
+
+type CallAlertMode = 'ringtone' | 'vibrate' | 'silent';
+
 
 type AppNotification = {
   id: string;
@@ -20,6 +26,22 @@ type AppNotification = {
 };
 
 type DirectoryUser = { id: string; username: string; display_name?: string; avatar_url?: string | null };
+
+const normalizeStoredNotifications = (items: unknown): AppNotification[] => {
+  if (!Array.isArray(items)) return [];
+  const semanticKeys = new Set<string>();
+  return items.filter((item): item is AppNotification => {
+    if (!item || typeof item !== 'object') return false;
+    const notification = item as AppNotification;
+    if (!notification.id || !notification.title || !notification.createdAt) return false;
+    if (/^(incoming call|video call)$/i.test(notification.title.trim())) return false;
+    const key = `${notification.title}|${notification.body}|${notification.createdAt.slice(0, 16)}`;
+    if (semanticKeys.has(key)) return false;
+    semanticKeys.add(key);
+    return true;
+  }).slice(0, 60);
+};
+
 export default function MainLayout() {
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 768;
@@ -30,8 +52,15 @@ export default function MainLayout() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationCenterVisible, setNotificationCenterVisible] = useState(false);
   const [userDirectory, setUserDirectory] = useState<Record<string, DirectoryUser>>({});
+  const [toastTarget, setToastTarget] = useState<AppNotification['target']>();
+  const [callAlertMode, setCallAlertMode] = useState<CallAlertMode>('ringtone');
+
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const handledCallIdsRef = useRef(new Set<string>());
+  const pendingCallsRef = useRef<Record<string, { data: any; stopAlert: () => void; timeout: ReturnType<typeof setTimeout>; browserNotification?: Notification }>>({});
+  const shownNotificationIdsRef = useRef(new Set<string>());
+
   const unreadCount = useMemo(() => notifications.filter((item) => !item.read).length, [notifications]);
 
   // Minta izin notifikasi browser dan ambil user ID
@@ -48,10 +77,14 @@ export default function MainLayout() {
         const storedNotifications = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
         if (storedNotifications) {
           try {
-            setNotifications(JSON.parse(storedNotifications));
+            setNotifications(normalizeStoredNotifications(JSON.parse(storedNotifications)));
           } catch (error) {
             console.log('Failed to load notifications:', error);
           }
+        }
+        const storedCallAlertMode = localStorage.getItem(CALL_ALERT_STORAGE_KEY);
+        if (storedCallAlertMode === 'ringtone' || storedCallAlertMode === 'vibrate' || storedCallAlertMode === 'silent') {
+          setCallAlertMode(storedCallAlertMode);
         }
         if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
           Notification.requestPermission();
@@ -115,10 +148,51 @@ export default function MainLayout() {
       console.log('Audio error:', e);
     }
   };
+  const startCallAlert = () => {
+    if (Platform.OS !== 'web' || callAlertMode === 'silent') return () => {};
+    if (callAlertMode === 'vibrate') {
+      navigator.vibrate?.([450, 250, 450, 600]);
+      const vibrationInterval = setInterval(() => navigator.vibrate?.([450, 250, 450, 600]), CALL_RING_REPEAT_MS);
+      return () => { clearInterval(vibrationInterval); navigator.vibrate?.(0); };
+    }
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const notes = [659, 784, 988];
+      const oscillators: OscillatorNode[] = [];
+      for (let cycleMs = 0; cycleMs < CALL_RING_DURATION_MS; cycleMs += CALL_RING_REPEAT_MS) {
+        notes.forEach((frequency, index) => {
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          const startsAt = audioCtx.currentTime + (cycleMs / 1000) + index * 0.18;
+          oscillator.type = index === 1 ? 'triangle' : 'sine';
+          oscillator.frequency.setValueAtTime(frequency, startsAt);
+          gainNode.gain.setValueAtTime(0.0001, startsAt);
+          gainNode.gain.exponentialRampToValueAtTime(0.35, startsAt + 0.03);
+          gainNode.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.28);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start(startsAt);
+          oscillator.stop(startsAt + 0.3);
+          oscillators.push(oscillator);
+        });
+      }
+      void audioCtx.resume();
+      return () => {
+        oscillators.forEach((oscillator) => { try { oscillator.stop(); } catch { /* already stopped */ } });
+        void audioCtx.close();
+      };
+    } catch (error) {
+      console.log('Call alert audio error:', error);
+      return () => {};
+    }
+  };
 
-  const showNotification = (title: string, body: string, target?: AppNotification['target']) => {
+  const showNotification = (title: string, body: string, target?: AppNotification['target'], notificationId?: string) => {
+    const id = notificationId || `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (shownNotificationIdsRef.current.has(id)) return;
+    shownNotificationIdsRef.current.add(id);
     const notification: AppNotification = {
-      id: `notif-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      id,
       title,
       body,
       target,
@@ -127,6 +201,7 @@ export default function MainLayout() {
     };
 
     setNotifications((previous) => [notification, ...previous].slice(0, 60));
+    setToastTarget(target);
     setToastMessage(`${title}: ${body}`);
     setTimeout(() => setToastMessage(null), 4500);
     playNotificationSound();
@@ -166,6 +241,7 @@ export default function MainLayout() {
 
   useEffect(() => {
     let subscribedSocket: any = null;
+    let active = true;
 
     const getSenderName = (data: any) => {
       const user = data?.sender_id ? userDirectory[data.sender_id] : null;
@@ -180,7 +256,15 @@ export default function MainLayout() {
     };
 
     const handleReaction = (data: any) => {
-      showNotification('Reaction', `${getSenderName(data)} memberi reaksi`);
+      const actor = data?.reacted_by;
+      if (!currentUserId || data?.sender_id !== currentUserId || actor?.id === currentUserId) return;
+      const actorName = actor?.display_name || actor?.username || 'Seseorang';
+      const reaction = data?.reactions?.[actor?.id] || '';
+      if (!reaction) return;
+      showNotification('Reaksi pesan', `${actorName} memberi reaksi ${reaction}`.trim(), actor?.id ? {
+        pathname: '/(main)/chat/[id]',
+        params: { id: actor.id, name: actorName },
+      } : undefined, `reaction-${data?.id}-${actor?.id}-${reaction}`);
     };
 
     const handleNewMessage = (data: any) => {
@@ -189,57 +273,122 @@ export default function MainLayout() {
         showNotification('BambooChat', `${senderName} ${describeMessage(data)}`, {
           pathname: '/(main)/chat/[id]',
           params: { id: data.sender_id, name: senderName },
-        });
+        }, `message-${data.id}`);
+      }
+    };
+
+    const finishPendingCall = (callId: string, missed: boolean) => {
+      const pending = pendingCallsRef.current[callId];
+      if (!pending) return;
+      pending.stopAlert();
+      clearTimeout(pending.timeout);
+      pending.browserNotification?.close();
+      if (Platform.OS === 'web') navigator.vibrate?.(0);
+      delete pendingCallsRef.current[callId];
+
+      if (missed) {
+        const callerName = pending.data?.name || 'Seseorang';
+        showNotification(
+          pending.data?.isVideo ? 'Video call tak terjawab' : 'Panggilan tak terjawab',
+          `${callerName} mencoba menghubungi kamu.`,
+          { pathname: '/(main)/chat/[id]', params: { id: pending.data.from, name: callerName } },
+          `missed-call-${callId}`,
+        );
       }
     };
 
     const handleCallIncoming = (data: any) => {
       if (currentUserId && data?.from === currentUserId) return;
+      const fallbackId = `legacy-${data?.from}-${data?.room_id}-${String(data?.signal?.sdp || '').slice(-32)}`;
+      const callId = String(data?.call_id || fallbackId);
+      if (handledCallIdsRef.current.has(callId)) return;
+      handledCallIdsRef.current.add(callId);
+
       const callerName = data?.name || 'Seseorang';
       const incomingSignal = data?.signal ? encodeURIComponent(JSON.stringify(data.signal)) : undefined;
-      showNotification(data?.isVideo ? 'Video Call' : 'Incoming Call', `${callerName} memanggil kamu. Ketuk untuk jawab.`, {
+      const target: AppNotification['target'] = {
         pathname: '/(main)/call/[id]',
         params: {
           id: data.from,
           name: callerName,
           isVideo: data?.isVideo ? 'true' : 'false',
           isCaller: 'false',
+          callId,
           ...(incomingSignal ? { incomingSignal } : {}),
         },
-      });
+      };
+
+      const stopAlert = startCallAlert();
+      const timeout = setTimeout(() => finishPendingCall(callId, true), CALL_RING_DURATION_MS);
+      pendingCallsRef.current[callId] = { data, stopAlert, timeout };
+      setToastTarget(target);
+      setToastMessage(`${data?.isVideo ? 'Video call' : 'Panggilan masuk'} dari ${callerName} - ketuk untuk jawab`);
+
+      if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
+        const browserNotification = new Notification(data?.isVideo ? 'Video Call BambooChat' : 'Panggilan BambooChat', {
+          body: `${callerName} memanggil kamu. Ketuk untuk jawab.`,
+          tag: callId,
+          requireInteraction: true,
+        });
+        pendingCallsRef.current[callId].browserNotification = browserNotification;
+        browserNotification.onclick = () => {
+          window.focus();
+          finishPendingCall(callId, false);
+          setToastMessage(null);
+          setToastTarget(undefined);
+          router.push(target as any);
+        };
+      }
     };
 
-    const handleBambupediaMention = (data: any) => {
-      if (currentUserId && data.sender_id === currentUserId) return;
-      showNotification('Mention Bambupedia', `${data.sender_name || 'Seseorang'} menandai kamu`, {
-        pathname: '/(main)/bambupedia',
-      });
+    const handleCallEnded = (payload: any) => {
+      const callId = payload?.call_id ? String(payload.call_id) : Object.keys(pendingCallsRef.current)[0];
+      if (callId) finishPendingCall(callId, true);
     };
 
     const setupListeners = async () => {
       const socket = await socketService.connect();
-      if (!socket) return;
+      if (!socket || !active) return;
       subscribedSocket = socket;
       socket.on('message_reacted', handleReaction);
       socket.on('receive_message', handleNewMessage);
       socket.on('call_incoming', handleCallIncoming);
-      socket.on('bambupedia_mention', handleBambupediaMention);
+      socket.on('call_ended', handleCallEnded);
     };
 
     setupListeners();
 
     return () => {
+      active = false;
       subscribedSocket?.off('message_reacted', handleReaction);
       subscribedSocket?.off('receive_message', handleNewMessage);
       subscribedSocket?.off('call_incoming', handleCallIncoming);
-      subscribedSocket?.off('bambupedia_mention', handleBambupediaMention);
+      subscribedSocket?.off('call_ended', handleCallEnded);
     };
-  }, [currentUserId, userDirectory]);
+  }, [currentUserId, userDirectory, callAlertMode]);
 
+  useEffect(() => {
+    if (!pathname.includes('/call/')) return;
+    Object.entries(pendingCallsRef.current).forEach(([callId, pending]) => {
+      pending.stopAlert();
+      clearTimeout(pending.timeout);
+      pending.browserNotification?.close();
+      delete pendingCallsRef.current[callId];
+    });
+    if (Platform.OS === 'web') navigator.vibrate?.(0);
+    setToastMessage(null);
+    setToastTarget(undefined);
+  }, [pathname]);
+
+  const cycleCallAlertMode = () => {
+    const nextMode: CallAlertMode = callAlertMode === 'ringtone' ? 'vibrate' : callAlertMode === 'vibrate' ? 'silent' : 'ringtone';
+    setCallAlertMode(nextMode);
+    if (Platform.OS === 'web') localStorage.setItem(CALL_ALERT_STORAGE_KEY, nextMode);
+  };
   const renderToast = () => {
     if (!toastMessage) return null;
     return (
-      <TouchableOpacity style={styles.toastContainer} onPress={() => setNotificationCenterVisible(true)} activeOpacity={0.9}>
+      <TouchableOpacity style={styles.toastContainer} onPress={() => toastTarget ? router.push(toastTarget as any) : setNotificationCenterVisible(true)} activeOpacity={0.9}>
         <Text style={styles.toastText}>{toastMessage}</Text>
       </TouchableOpacity>
     );
@@ -263,11 +412,16 @@ export default function MainLayout() {
             <View style={styles.notificationHeader}>
               <View>
                 <Text style={styles.notificationTitle}>Notifikasi</Text>
-                <Text style={styles.notificationSubtitle}>{unreadCount} belum dibaca</Text>
+                <Text style={styles.notificationSubtitle}>{unreadCount} belum dibaca - panggilan: {callAlertMode === 'ringtone' ? 'ringtone BMC' : callAlertMode === 'vibrate' ? 'getar' : 'senyap'}</Text>
               </View>
-              <TouchableOpacity style={styles.notificationCloseButton} onPress={() => setNotificationCenterVisible(false)}>
-                <Ionicons name="close" size={22} color="#E2E8F0" />
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity style={styles.notificationCloseButton} onPress={cycleCallAlertMode}>
+                  <Ionicons name={callAlertMode === 'ringtone' ? 'musical-notes' : callAlertMode === 'vibrate' ? 'phone-portrait' : 'volume-mute'} size={20} color="#E2E8F0" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.notificationCloseButton} onPress={() => setNotificationCenterVisible(false)}>
+                  <Ionicons name="close" size={22} color="#E2E8F0" />
+                </TouchableOpacity>
+              </View>
             </View>
 
             {notifications.length > 0 ? (
@@ -326,7 +480,7 @@ export default function MainLayout() {
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="call/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="help-center" options={{ title: "Pusat Bantuan" }} />
+        <Stack.Screen name="help-center" options={{ headerShown: false }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>
       {renderToast()}

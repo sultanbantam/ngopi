@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>YourFuture | BMC AI Agent Platform</title>
+    <meta
+      name="description"
+      content="Platform AI untuk membuat Business Model Canvas, menganalisis asumsi bisnis, dan menyiapkan konten sosial media."
+    />
+    <meta property="og:image" content="https://www.yourfuture.fun/assets/yourfuture-logo-512.png" />
+    <meta name="theme-color" content="#17211f" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="apple-touch-icon" href="assets/yourfuture-logo-192.png" />
+    <link rel="preload" href="assets/bmc-hero.png" as="image" />
+    <link rel="preload" href="assets/yourfuture-logo-transparent.png" as="image" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar" aria-label="Navigasi utama">
+      <a class="brand" href="#hero" aria-label="YourFuture BMC AI Agent Platform">
+        <span class="brand-mark brand-logo-mark">
+          <img src="assets/yourfuture-logo-192.png" width="38" height="38" alt="" />
+        </span>
+        <span>
+          <strong>YourFuture</strong>
+          <small>BMC AI Agent</small>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="Bagian halaman">
+        <a href="#workspace">Generator</a>
+        <a class="admin-only" href="#knowledge-base" hidden>Knowledge</a>
+        <a href="#social-agent">Social Agent</a>
+        <a href="#pricing">Harga</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+      <div class="topbar-actions">
+        <div class="language-toggle" role="group" aria-label="Language">
+          <button class="lang-button active" type="button" data-lang="id" aria-pressed="true">ID</button>
+          <button class="lang-button" type="button" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+        <a class="topbar-cta" href="#workspace">Mulai</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero" id="hero" aria-label="Buat Business Model Canvas dengan AI">
+        <img class="hero-media" src="assets/bmc-hero.png" alt="Para founder sedang menyusun Business Model Canvas dengan bantuan AI" />
+        <div class="hero-shade"></div>
+        <div class="hero-content">
+          <p class="eyebrow">Untuk founder, UMKM, dan ide bisnis tahap awal</p>
+          <h1>BMC AI Agent Platform</h1>
+          <p class="hero-copy">
+            Ubah ide bisnis menjadi Business Model Canvas lengkap dalam beberapa menit, lalu refine dengan chatbot dan siapkan konten sosial media untuk menarik calon pelanggan.
+          </p>
+          <form class="hero-form" id="hero-form">
+            <label class="sr-only" for="hero-idea">Tulis ide bisnis</label>
+            <input id="hero-idea" type="text" placeholder="Contoh: kedai kopi langganan untuk pekerja hybrid di Jakarta" />
+            <button type="submit">Buat BMC</button>
+          </form>
+          <div class="hero-metrics" aria-label="Ringkasan fitur">
+            <span><strong>9</strong> blok BMC</span>
+            <span><strong>3</strong> risiko utama</span>
+            <span><strong>5</strong> platform sosial</span>
+          </div>
+        </div>
+        <figure class="hero-logo-card" aria-label="YourFuture BMC AI Agent">
+          <img src="assets/yourfuture-logo-transparent.png" alt="YourFuture AI Business Model Canvas assistant" />
+        </figure>
+      </section>
+
+      <section class="workspace-section" id="workspace">
+        <div class="section-heading">
+          <p class="eyebrow">Core Feature 1</p>
+          <h2>Landing Page dengan BMC AI Chatbot</h2>
+          <p>
+            Masukkan ide, rekam suara, atau unggah dokumen. Aplikasi ini menghasilkan BMC terstruktur, asumsi risiko, dan bahan diskusi lanjutan.
+          </p>
+        </div>
+
+        <div class="app-shell">
+          <aside class="tool-panel" aria-label="Panel input BMC">
+            <div class="panel-header">
+              <div>
+                <span class="panel-kicker">Input ide</span>
+                <h3>Jelaskan bisnis Anda</h3>
+              </div>
+              <span class="status-pill" id="save-status">Siap</span>
+            </div>
+
+            <label for="idea-input">Ide bisnis</label>
+            <textarea
+              id="idea-input"
+              rows="9"
+              placeholder="Tuliskan target pelanggan, produk, harga, lokasi, masalah yang ingin diselesaikan, atau bahan mentah apa pun yang Anda punya."
+            ></textarea>
+
+            <div class="input-actions">
+              <button class="icon-button primary" id="generate-btn" type="button" title="Buat BMC">
+                <span aria-hidden="true">+</span>
+                <span>Buat BMC</span>
+              </button>
+              <button class="icon-button" id="voice-btn" type="button" title="Gunakan suara">
+                <span aria-hidden="true">mic</span>
+                <span>Suara</span>
+              </button>
+              <label class="file-button" title="Unggah dokumen">
+                <span aria-hidden="true">file</span>
+                <span>Upload</span>
+                <input id="file-input" type="file" accept=".txt,.md,.pdf,.docx,.pptx" />
+              </label>
+            </div>
+
+            <div class="helper-grid" aria-label="Contoh ide bisnis">
+              <button class="prompt-chip" type="button" data-idea="Aplikasi langganan menu sehat rumahan untuk pekerja kantor di Jakarta yang ingin makan teratur tanpa memasak.">
+                Menu sehat
+              </button>
+              <button class="prompt-chip" type="button" data-idea="Platform kursus singkat AI untuk pemilik UMKM Indonesia yang ingin membuat konten dan laporan bisnis lebih cepat.">
+                Kursus AI UMKM
+              </button>
+              <button class="prompt-chip" type="button" data-idea="Marketplace produk pertanian lokal yang menghubungkan petani kecil dengan restoran dan katering di kota besar.">
+                Agritech lokal
+              </button>
+            </div>
+
+            <div class="export-box">
+              <h4>Export</h4>
+              <div class="export-actions">
+                <button id="export-md" type="button">Markdown</button>
+                <button id="export-html" type="button">HTML</button>
+                <button id="print-pdf" type="button">Print PDF</button>
+              </div>
+            </div>
+          </aside>
+
+          <section class="canvas-panel" aria-label="Business Model Canvas">
+            <div class="canvas-toolbar">
+              <div>
+                <span class="panel-kicker">AI generated BMC</span>
+                <h3 id="canvas-title">Business Model Canvas</h3>
+              </div>
+              <div class="view-tabs" role="tablist" aria-label="Tampilan BMC">
+                <button class="tab-button active" type="button" data-tab="canvas">Canvas</button>
+                <button class="tab-button" type="button" data-tab="risk">Risiko</button>
+                <button class="tab-button" type="button" data-tab="chat">Chat</button>
+              </div>
+            </div>
+
+            <div class="tab-view active" id="tab-canvas">
+              <div class="bmc-grid" id="bmc-grid" aria-live="polite"></div>
+            </div>
+
+            <div class="tab-view" id="tab-risk">
+              <div class="risk-layout">
+                <div>
+                  <span class="panel-kicker">Assumption radar</span>
+                  <h3>Asumsi paling berisiko</h3>
+                  <p class="muted">AI menandai bagian yang perlu diuji sebelum Anda menghabiskan terlalu banyak biaya.</p>
+                </div>
+                <div id="risk-list" class="risk-list"></div>
+              </div>
+            </div>
+
+            <div class="tab-view" id="tab-chat">
+              <div class="chat-layout">
+                <div class="chat-log" id="chat-log" aria-live="polite"></div>
+                <form class="chat-form" id="chat-form">
+                  <label class="sr-only" for="chat-input">Tanya AI</label>
+                  <input id="chat-input" type="text" placeholder="Tanya: revenue stream saya apa yang paling kuat?" />
+                  <button type="submit">Kirim</button>
+                </form>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="knowledge-section admin-only" id="knowledge-base" hidden>
+        <div class="section-heading compact">
+          <p class="eyebrow">Knowledge Base</p>
+          <h2>Upload Buku dan Paper Kurasi</h2>
+        </div>
+        <form class="admin-gate" id="admin-gate">
+          <h3>Area admin</h3>
+          <p>Masukkan admin key untuk membuka upload knowledge. User biasa tidak melihat halaman ini.</p>
+          <div class="admin-gate-row">
+            <input id="admin-key-input" type="password" autocomplete="current-password" placeholder="Admin key" />
+            <button class="icon-button primary" type="submit"><span aria-hidden="true">key</span><span>Buka Admin</span></button>
+          </div>
+          <p class="knowledge-status" id="admin-gate-status">Knowledge base hanya untuk admin.</p>
+        </form>
+        <div class="knowledge-workbench" id="knowledge-workbench" hidden>
+          <form class="knowledge-form" id="knowledge-form">
+            <label for="knowledge-title">Judul sumber</label>
+            <input id="knowledge-title" type="text" placeholder="Contoh: Business Model Generation - bab Value Proposition" />
+            <div class="knowledge-row">
+              <label>
+                Penulis
+                <input id="knowledge-author" type="text" placeholder="Nama penulis" />
+              </label>
+              <label>
+                Tahun
+                <input id="knowledge-year" type="text" placeholder="2010" />
+              </label>
+            </div>
+            <label for="knowledge-tags">Tag</label>
+            <input id="knowledge-tags" type="text" placeholder="customer-segments, pricing, validation" />
+            <label for="knowledge-file">File teks</label>
+            <input id="knowledge-file" type="file" accept=".txt,.md" />
+            <label for="knowledge-content">Isi kurasi</label>
+            <textarea id="knowledge-content" rows="8" placeholder="Paste ringkasan atau teks yang sudah boleh dipakai oleh AI."></textarea>
+            <div class="knowledge-actions">
+              <button class="icon-button primary" type="submit"><span aria-hidden="true">+</span><span>Upload Knowledge</span></button>
+              <button class="icon-button" id="knowledge-refresh" type="button"><span aria-hidden="true">sync</span><span>Refresh</span></button>
+              <button class="icon-button" id="admin-logout" type="button"><span aria-hidden="true">lock</span><span>Keluar Admin</span></button>
+            </div>
+            <p class="knowledge-status" id="knowledge-status">Knowledge siap menerima sumber kurasi.</p>
+          </form>
+          <div class="knowledge-list" id="knowledge-list" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="steps-section" id="how-it-works">
+        <div class="section-heading compact">
+          <p class="eyebrow">Workflow</p>
+          <h2>Dari ide mentah ke BMC yang bisa diuji</h2>
+        </div>
+        <div class="step-grid">
+          <article>
+            <span>01</span>
+            <h3>Masukkan konteks</h3>
+            <p>Teks, suara, atau dokumen menjadi bahan awal untuk memahami masalah, pelanggan, dan penawaran.</p>
+          </article>
+          <article>
+            <span>02</span>
+            <h3>Generate 9 blok</h3>
+            <p>Agent menyusun customer segments, value proposition, channel, revenue, hingga cost structure.</p>
+          </article>
+          <article>
+            <span>03</span>
+            <h3>Uji asumsi</h3>
+            <p>Risiko paling mahal diprioritaskan, lalu AI menyarankan eksperimen sederhana untuk validasi.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="social-section" id="social-agent">
+        <div class="section-heading">
+          <p class="eyebrow">Core Feature 2</p>
+          <h2>Social Media AI Agent</h2>
+          <p>
+            Buat draft konten BMC dan entrepreneurship untuk Instagram, LinkedIn, X, TikTok, dan Facebook. Cocok sebagai lapisan awal sebelum integrasi MCP publishing.
+          </p>
+        </div>
+
+        <div class="social-workbench">
+          <div class="social-controls">
+            <label for="topic-input">Topik konten</label>
+            <input id="topic-input" type="text" placeholder="Contoh: kesalahan umum saat membuat BMC" />
+            <div class="topic-row" id="topic-row"></div>
+            <label>Platform</label>
+            <div class="platform-row" id="platform-row"></div>
+            <button class="icon-button primary" id="generate-posts" type="button">
+              <span aria-hidden="true">+</span>
+              <span>Buat 5 Post</span>
+            </button>
+            <div class="social-scheduler">
+              <label for="schedule-at">Jadwal mulai</label>
+              <input id="schedule-at" type="datetime-local" />
+              <div class="social-actions">
+                <button class="icon-button" id="save-social-drafts" type="button"><span aria-hidden="true">save</span><span>Simpan Draft</span></button>
+                <button class="icon-button" id="schedule-social-posts" type="button"><span aria-hidden="true">time</span><span>Jadwalkan</span></button>
+                <button class="icon-button" id="publish-due-posts" type="button"><span aria-hidden="true">send</span><span>Publish Due</span></button>
+              </div>
+              <p class="social-status" id="social-status">Draft sosial siap dibuat.</p>
+            </div>
+          </div>
+          <div>
+            <div class="post-board" id="post-board" aria-live="polite"></div>
+            <div class="social-queue" id="social-queue" aria-live="polite"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="features-section" id="features">
+        <div class="section-heading compact">
+          <p class="eyebrow">Fitur produk</p>
+          <h2>Dirancang untuk founder yang butuh arah cepat</h2>
+        </div>
+        <div class="feature-grid">
+          <article>
+            <h3>Voice input</h3>
+            <p>Gunakan Web Speech API untuk menangkap ide saat pengguna belum siap menulis panjang.</p>
+          </article>
+          <article>
+            <h3>Document intake</h3>
+            <p>Unggah brief, catatan, atau deck awal sebagai konteks ide bisnis yang ingin diubah menjadi BMC.</p>
+          </article>
+          <article>
+            <h3>Risk analysis</h3>
+            <p>Agent membantu memisahkan ide yang menarik dari asumsi yang belum terbukti.</p>
+          </article>
+          <article>
+            <h3>Export ready</h3>
+            <p>Output BMC bisa diunduh sebagai Markdown, HTML, atau dicetak menjadi PDF dari browser.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="pricing-section" id="pricing">
+        <div class="section-heading compact">
+          <p class="eyebrow">Monetisasi</p>
+          <h2>Paket yang mengikuti brief</h2>
+        </div>
+        <div class="pricing-grid">
+          <article class="price-card featured">
+            <span class="price-label">Tier 1</span>
+            <h3>Rp50.000/bulan</h3>
+            <p>BMC generation, basic AI chat, simpan kanvas, export.</p>
+            <a href="#workspace">Coba sekarang</a>
+          </article>
+          <article class="price-card">
+            <span class="price-label">Output</span>
+            <h3>Rp30.000</h3>
+            <p>Pembelian satu kali untuk hasil BMC Indonesia atau $5-10 global.</p>
+          </article>
+          <article class="price-card">
+            <span class="price-label">Premium</span>
+            <h3>Rp500k-1jt/jam</h3>
+            <p>Konsultasi langsung dengan founder untuk validasi dan strategi go-to-market.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="testimonials-section" id="testimonials">
+        <div class="section-heading compact">
+          <p class="eyebrow">Validasi pasar</p>
+          <h2>Untuk pengguna yang ingin mulai dengan jelas</h2>
+        </div>
+        <div class="testimonial-grid">
+          <figure>
+            <blockquote>"Saya bisa melihat pelanggan, channel, dan biaya utama dalam satu layar sebelum mulai produksi."</blockquote>
+            <figcaption>Rani, founder F&B rumahan</figcaption>
+          </figure>
+          <figure>
+            <blockquote>"Bagian risiko membantu tim kami tahu eksperimen apa yang harus diuji minggu ini."</blockquote>
+            <figcaption>Bagas, mentor inkubator</figcaption>
+          </figure>
+          <figure>
+            <blockquote>"Konten sosialnya membuat edukasi BMC jadi konsisten tanpa mulai dari halaman kosong."</blockquote>
+            <figcaption>Nadia, konsultan UMKM</figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="faq-section" id="faq">
+        <div class="section-heading compact">
+          <p class="eyebrow">FAQ</p>
+          <h2>Pertanyaan umum</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>Apakah ini sudah memakai API OpenAI atau Claude?</summary>
+            <p>Frontend tetap punya fallback offline, dan backend Express sudah tersedia untuk memakai OpenAI API jika config.js diarahkan ke domain API Contabo.</p>
+          </details>
+          <details>
+            <summary>Apakah social agent langsung publish?</summary>
+            <p>Prototype ini membuat draft, jadwal, dan saran visual. Untuk publish otomatis, integrasikan MCP seperti Kadenzo atau Outpost dengan kredensial platform sosial.</p>
+          </details>
+          <details>
+            <summary>Apakah bisa dipakai untuk pasar Indonesia dan global?</summary>
+            <p>Ya. Konten default berbahasa Indonesia dan paket global sudah disiapkan dalam pricing. Copy dan prompt bisa dibuat bilingual pada fase berikutnya.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="final-cta" aria-label="Mulai sekarang">
+        <h2>Mulai Sekarang - Gratis Coba 7 Hari</h2>
+        <p>Uji ide pertama Anda, lihat risiko asumsi, lalu ubah insight menjadi konten akuisisi.</p>
+        <a href="#workspace">Buat BMC pertama</a>
+      </section>
+    </main>
+
+    <template id="block-template">
+      <article class="bmc-block">
+        <div class="block-head">
+          <span class="block-index"></span>
+          <h4></h4>
+        </div>
+        <ul></ul>
+        <button class="block-refine" type="button">Refine</button>
+      </article>
+    </template>
+
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

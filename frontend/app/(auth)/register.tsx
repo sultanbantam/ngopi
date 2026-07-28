@@ -4,11 +4,14 @@ import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 import { generateDeviceKeyPair } from '../../src/utils/e2ee';
+import { setStoredRefreshToken } from '../../src/utils/session';
+import { explainAuthError } from '../../src/utils/auth-errors';
 
 const API_URL = 'https://api.bamboochat.click/api';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const logoImage = require('../../assets/logo.png');
+
 
 export default function RegisterScreen() {
   const [username, setUsername] = useState('');
@@ -19,40 +22,68 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
 
   const handleRegister = async () => {
-    if (!username || !password || !displayName) {
-      setError('Please fill all fields');
+    const normalizedUsername = username.trim().toLowerCase();
+    const normalizedDisplayName = displayName.trim();
+    if (!normalizedUsername || !password || !normalizedDisplayName) {
+      setError('Nama tampilan, username, dan password wajib diisi.');
+      return;
+    }
+    if (!/^[a-z0-9_.-]{3,30}$/.test(normalizedUsername)) {
+      setError('Username harus 3-30 karakter dan hanya boleh berisi huruf kecil, angka, titik, garis bawah, atau tanda minus.');
+      return;
+    }
+    if (password.length < 8) {
+      setError('Password minimal 8 karakter.');
+      return;
+    }
+    if (password.length > 128) {
+      setError('Password maksimal 128 karakter.');
+      return;
+    }
+    if (normalizedDisplayName.length > 50) {
+      setError('Nama tampilan maksimal 50 karakter.');
       return;
     }
     setLoading(true);
     setError('');
 
+    let deviceKeys: ReturnType<typeof generateDeviceKeyPair>;
     try {
-      const deviceKeys = generateDeviceKeyPair();
+      deviceKeys = generateDeviceKeyPair();
+    } catch {
+      setError('Kunci keamanan perangkat gagal dibuat. Muat ulang halaman atau gunakan browser terbaru.');
+      setLoading(false);
+      return;
+    }
+
+    try {
       const response = await axios.post(`${API_URL}/auth/register`, { 
-        username, 
+        username: normalizedUsername,
         password, 
-        display_name: displayName,
+        display_name: normalizedDisplayName,
         public_key: deviceKeys.publicKey
-      }, { withCredentials: true });
-      const { token, user } = response.data;
+      }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
+      const { token, refresh_token: refreshToken, user } = response.data;
       
       if (Platform.OS === 'web') {
         localStorage.setItem('token', token);
         localStorage.setItem('temp_key', password);
-        localStorage.setItem('username', username);
+        localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
         localStorage.setItem('private_key', deviceKeys.privateKey);
       } else {
         await SecureStore.setItemAsync('token', token);
+        await setStoredRefreshToken(refreshToken);
         await SecureStore.setItemAsync('temp_key', password);
-        await SecureStore.setItemAsync('username', username);
+        await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);
         await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
 
       router.replace('/(main)/bambupedia');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+      setError(explainAuthError(err, 'register'));
+
     } finally {
       setLoading(false);
     }
@@ -66,7 +97,7 @@ export default function RegisterScreen() {
         </View>
         <Text style={styles.subtitle}>Join Bamboochain today</Text>
         
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
         <TextInput
           style={styles.input}
@@ -82,6 +113,7 @@ export default function RegisterScreen() {
           placeholderTextColor="#64748b"
           value={username}
           onChangeText={setUsername}
+          autoCorrect={false}
           autoCapitalize="none"
         />
         
@@ -92,12 +124,14 @@ export default function RegisterScreen() {
             placeholderTextColor="#64748b"
             value={password}
             onChangeText={setPassword}
+            textContentType="newPassword"
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
             <Text style={{ color: '#94A3B8' }}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
+        <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: -8, marginBottom: 12 }}>Minimal 8 karakter</Text>
 
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}

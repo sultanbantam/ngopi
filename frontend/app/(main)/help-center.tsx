@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
 import { API_URL, getAuthHeaders } from '../../src/utils/api';
@@ -12,6 +12,13 @@ type PlatformItem = {
   description: string;
   website_url: string;
   icon?: string | null;
+};
+
+type FaqItem = {
+  id: string;
+  question: string;
+  answer: string;
+  keywords: string[];
 };
 
 type TicketItem = {
@@ -54,9 +61,14 @@ const statusColors: Record<TicketItem['status'], string> = {
 const formatDate = (iso: string) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 
 export default function HelpCenterScreen() {
+  const { width } = useWindowDimensions();
+  const isCompact = width < 768;
   const [loading, setLoading] = useState(true);
   const [platforms, setPlatforms] = useState<PlatformItem[]>([]);
   const [selectedPlatformId, setSelectedPlatformId] = useState('');
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
+  const [faqLoading, setFaqLoading] = useState(false);
+  const [expandedFaqId, setExpandedFaqId] = useState('');
   const [question, setQuestion] = useState('');
   const [ticketTitle, setTicketTitle] = useState('');
   const [aiAnswer, setAiAnswer] = useState<any>(null);
@@ -99,9 +111,15 @@ export default function HelpCenterScreen() {
           axios.get(`${API_URL}/platforms`, { headers }),
           axios.get(`${API_URL}/tickets/my`, { headers }),
         ]);
-        setPlatforms(platformResponse.data);
+        const orderedPlatforms = [...platformResponse.data].sort((left: PlatformItem, right: PlatformItem) => {
+          if (left.name === 'bamboochat') return -1;
+          if (right.name === 'bamboochat') return 1;
+          return left.display_name.localeCompare(right.display_name);
+        });
+        setPlatforms(orderedPlatforms);
         setTickets(ticketResponse.data);
-        if (platformResponse.data[0]?.id) setSelectedPlatformId(platformResponse.data[0].id);
+        const preferredPlatform = orderedPlatforms[0];
+        if (preferredPlatform?.id) setSelectedPlatformId(preferredPlatform.id);
         if (ticketResponse.data[0]?.id) setSelectedTicketId(ticketResponse.data[0].id);
       } catch (error) {
         console.error('Help center init error:', error);
@@ -112,6 +130,37 @@ export default function HelpCenterScreen() {
 
     init();
   }, []);
+
+  useEffect(() => {
+    if (!selectedPlatformId) {
+      setFaqs([]);
+      return;
+    }
+
+    let active = true;
+    const loadFaqs = async () => {
+      try {
+        setFaqLoading(true);
+        const headers = await getAuthHeaders();
+        const response = await axios.get(API_URL + '/faqs', {
+          headers,
+          params: { platform_id: selectedPlatformId },
+        });
+        if (!active) return;
+        const nextFaqs = Array.isArray(response.data) ? response.data : [];
+        setFaqs(nextFaqs);
+        setExpandedFaqId(nextFaqs[0]?.id || '');
+      } catch (error) {
+        console.error('Load FAQs failed:', error);
+        if (active) setFaqs([]);
+      } finally {
+        if (active) setFaqLoading(false);
+      }
+    };
+
+    loadFaqs();
+    return () => { active = false; };
+  }, [selectedPlatformId]);
 
   useEffect(() => {
     if (!selectedTicketId) {
@@ -229,31 +278,34 @@ export default function HelpCenterScreen() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
+      <View style={[styles.header, isCompact && styles.headerCompact]}>
         <View>
           <Text style={styles.title}>Pusat Bantuan</Text>
           <Text style={styles.subtitle}>BambooCS AI dan tiket dukungan ekosistem</Text>
         </View>
-        <View style={styles.liveBadge}>
+        <View style={[styles.liveBadge, isCompact && styles.liveBadgeCompact]}>
           <Ionicons name="headset-outline" size={16} color="#34D399" />
           <Text style={styles.liveBadgeText}>BambooCS Online</Text>
         </View>
       </View>
 
-      <View style={styles.contentGrid}>
-        <View style={styles.platformPanel}>
+      <View style={[styles.contentGrid, isCompact && styles.contentGridCompact]}>
+        <View style={[styles.platformPanel, isCompact && styles.platformPanelCompact]}>
           <Text style={styles.sectionTitle}>Platform</Text>
           <FlatList
             data={platforms}
+            horizontal={isCompact}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={isCompact ? styles.platformListCompact : undefined}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => {
               const active = item.id === selectedPlatformId;
               return (
-                <TouchableOpacity style={[styles.platformItem, active && styles.platformItemActive]} onPress={() => setSelectedPlatformId(item.id)}>
+                <TouchableOpacity style={[styles.platformItem, isCompact && styles.platformItemCompact, active && styles.platformItemActive]} onPress={() => setSelectedPlatformId(item.id)}>
                   <View style={styles.platformIcon}><Text style={styles.platformIconText}>{item.icon || item.display_name.slice(0, 2)}</Text></View>
                   <View style={styles.platformInfo}>
                     <Text style={styles.platformName}>{item.display_name}</Text>
-                    <Text style={styles.platformLink}>{item.website_url}</Text>
+                    {!isCompact && <Text style={styles.platformLink}>{item.website_url}</Text>}
                   </View>
                 </TouchableOpacity>
               );
@@ -261,8 +313,39 @@ export default function HelpCenterScreen() {
           />
         </View>
 
-        <ScrollView style={styles.mainPanel} contentContainerStyle={styles.mainContent}>
-          <View style={styles.aiPanel}>
+        <ScrollView style={styles.mainPanel} contentContainerStyle={[styles.mainContent, isCompact && styles.mainContentCompact]}>
+          <View style={[styles.faqPanel, isCompact && styles.panelCompact]}>
+            <View style={styles.faqHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>Tutorial dan FAQ</Text>
+                <Text style={styles.faqSubtitle}>{selectedPlatform ? 'Panduan ' + selectedPlatform.display_name : 'Pilih platform'}</Text>
+              </View>
+              <View style={styles.faqCountBadge}>
+                <Text style={styles.faqCountText}>{faqs.length} artikel</Text>
+              </View>
+            </View>
+
+            {faqLoading ? (
+              <ActivityIndicator color="#34D399" />
+            ) : faqs.length > 0 ? (
+              faqs.map((item) => {
+                const expanded = item.id === expandedFaqId;
+                return (
+                  <View key={item.id} style={styles.faqItem}>
+                    <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setExpandedFaqId(expanded ? '' : item.id)}>
+                      <Text style={styles.faqQuestion}>{item.question}</Text>
+                      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#67E8F9" />
+                    </TouchableOpacity>
+                    {expanded && <Text style={styles.faqAnswer}>{item.answer}</Text>}
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.emptyText}>FAQ untuk platform ini belum tersedia.</Text>
+            )}
+          </View>
+
+          <View style={[styles.aiPanel, isCompact && styles.panelCompact]}>
             <Text style={styles.sectionTitle}>BambooCS AI</Text>
             {selectedPlatform && <Text style={styles.platformDescription}>{selectedPlatform.description}</Text>}
             <TextInput
@@ -411,17 +494,96 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 12,
   },
+  headerCompact: {
+    minHeight: 98,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  liveBadgeCompact: {
+    alignSelf: 'flex-start',
+  },
   contentGrid: {
     flex: 1,
-    flexDirection: Platform.OS === 'web' ? 'row' : 'column',
+    flexDirection: 'row',
+    minWidth: 0,
+  },
+  contentGridCompact: {
+    flexDirection: 'column',
   },
   platformPanel: {
-    width: Platform.OS === 'web' ? 280 : '100%',
-    maxHeight: Platform.OS === 'web' ? undefined : 230,
-    borderRightWidth: Platform.OS === 'web' ? 1 : 0,
-    borderBottomWidth: Platform.OS === 'web' ? 0 : 1,
+    width: 280,
+    borderRightWidth: 1,
+    borderBottomWidth: 0,
     borderColor: '#1E293B',
     padding: 14,
+  },
+  platformPanelCompact: {
+    width: '100%',
+    maxHeight: 126,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+  },
+  platformListCompact: {
+    paddingRight: 10,
+  },
+  faqPanel: {
+    backgroundColor: '#111827',
+    borderWidth: 1,
+    borderColor: '#1E3A4A',
+    borderRadius: 12,
+    padding: 16,
+  },
+  faqHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  faqSubtitle: {
+    color: '#94A3B8',
+    fontSize: 12,
+  },
+  faqCountBadge: {
+    backgroundColor: '#083344',
+    borderWidth: 1,
+    borderColor: '#155E75',
+    borderRadius: 12,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  faqCountText: {
+    color: '#A5F3FC',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  faqItem: {
+    borderTopWidth: 1,
+    borderTopColor: '#1E293B',
+  },
+  faqQuestionRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 11,
+  },
+  faqQuestion: {
+    flex: 1,
+    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  faqAnswer: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    lineHeight: 20,
+    paddingBottom: 14,
   },
   sectionTitle: {
     color: '#E2E8F0',
@@ -438,6 +600,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     borderWidth: 1,
     borderColor: '#1E293B',
+  },
+  platformItemCompact: {
+    width: 154,
+    minHeight: 52,
+    marginRight: 8,
+    marginBottom: 0,
+    padding: 7,
   },
   platformItemActive: {
     borderColor: '#10B981',
@@ -477,6 +646,15 @@ const styles = StyleSheet.create({
   mainContent: {
     padding: 16,
     gap: 14,
+  },
+  mainContentCompact: {
+    width: '100%',
+    padding: 10,
+    gap: 10,
+  },
+  panelCompact: {
+    width: '100%',
+    padding: 12,
   },
   aiPanel: {
     backgroundColor: '#111827',

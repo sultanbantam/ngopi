@@ -31,13 +31,23 @@ export const validateRequest = (schemas: RequestSchemas) => (req: Request, res: 
 
     if (error) {
       res.status(400).json({
-        error: 'Validation failed',
+        error: error.details[0]?.message || 'Validation failed',
         details: formatValidationError(error),
       });
       return;
     }
 
-    (req as any)[target] = value;
+    if (target === 'query') {
+      // Express 5 exposes req.query through a getter without a setter.
+      // Define an own property so downstream handlers receive Joi's sanitized value.
+      Object.defineProperty(req, 'query', {
+        value,
+        configurable: true,
+        enumerable: true,
+      });
+    } else {
+      (req as any)[target] = value;
+    }
   }
 
   next();

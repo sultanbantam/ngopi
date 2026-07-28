@@ -5,12 +5,14 @@ async function main() {
   const client = new Client({ connectionString });
   await client.connect();
   
-  const res = await client.query('SELECT username, bmc_id FROM "User"');
-  console.log(res.rows);
+  // founder bmc_id = 0 (special: tampil sebagai @founder_bmc tanpa angka)
+  await client.query("UPDATE \"User\" SET bmc_id = 0 WHERE username = 'founder'");
+  // sultan bmc_id = 1 (tampil sebagai @sultan_bmc1)
+  await client.query("UPDATE \"User\" SET bmc_id = 1 WHERE username = 'sultan'");
+  console.log("Updated: founder=bmc0 (special), sultan=bmc1");
   
-  await client.query("UPDATE \"User\" SET bmc_id = 1 WHERE username = 'founder'");
-  await client.query("UPDATE \"User\" SET bmc_id = 2 WHERE username = 'sultan'");
-  console.log("Updated founder and sultan bmc_ids.");
+  const res = await client.query('SELECT username, bmc_id FROM "User" ORDER BY bmc_id');
+  console.log(res.rows);
   
   await client.end();
 }

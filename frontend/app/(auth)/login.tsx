@@ -3,10 +3,12 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
-import { API_URL, refreshAccessToken, setStoredToken } from '../../src/utils/session';
+import { API_URL, refreshAccessToken, setStoredRefreshToken, setStoredToken } from '../../src/utils/session';
+import { explainAuthError } from '../../src/utils/auth-errors';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const logoImage = require('../../assets/logo.png');
+
 
 export default function LoginScreen() {
   const [username, setUsername] = useState('');
@@ -22,7 +24,7 @@ export default function LoginScreen() {
     const handleSSO = async () => {
       if (params.error) {
         const errorCode = String(params.error);
-        setError(errorCode === 'sso_failed' ? 'SSO Login Failed' : errorCode === 'session_expired' ? 'Sesi login berakhir. Silakan login ulang.' : errorCode);
+        setError(errorCode === 'sso_failed' ? 'Login BambooChain gagal. Silakan coba lagi atau gunakan username dan password.' : errorCode === 'session_expired' ? 'Sesi login 30 hari telah berakhir atau dicabut. Silakan login ulang.' : 'Login gagal. Silakan coba kembali.');
       }
       if (params.sso_token) {
         setLoading(true);
@@ -58,37 +60,47 @@ export default function LoginScreen() {
   }, [params]);
 
   const handleLogin = async () => {
-    if (!username || !password) {
-      setError('Please fill all fields');
+    const normalizedUsername = username.trim().toLowerCase();
+    if (!normalizedUsername || !password) {
+      setError('Username dan password wajib diisi.');
+      return;
+    }
+    if (!/^[a-z0-9_.-]{3,30}$/.test(normalizedUsername)) {
+      setError('Username harus 3-30 karakter: huruf kecil, angka, titik, garis bawah, atau tanda minus.');
+      return;
+    }
+    if (password.length > 128) {
+      setError('Password maksimal 128 karakter.');
       return;
     }
     setLoading(true);
     setError('');
 
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, { username, password, mfa_code: mfaCode || undefined }, { withCredentials: true });
+      const response = await axios.post(`${API_URL}/auth/login`, { username: normalizedUsername, password, mfa_code: mfaCode || undefined }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
       if (response.status === 202 || response.data?.requires_mfa) {
         setChallengeToken(response.data?.challenge_token || challengeToken);
         setError('Masukkan kode MFA 6 digit dari aplikasi authenticator.');
         return;
       }
-      const { token, user } = response.data;
+      const { token, refresh_token: refreshToken, user } = response.data;
       
       if (Platform.OS === 'web') {
         await setStoredToken(token);
         localStorage.setItem('temp_key', password);
-        localStorage.setItem('username', username);
+        localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
       } else {
         await setStoredToken(token);
+        await setStoredRefreshToken(refreshToken);
         await SecureStore.setItemAsync('temp_key', password);
-        await SecureStore.setItemAsync('username', username);
+        await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);
       }
 
       router.replace('/(main)/bambupedia');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(explainAuthError(err, 'login'));
     } finally {
       setLoading(false);
     }
@@ -110,7 +122,7 @@ export default function LoginScreen() {
         </View>
         <Text style={styles.subtitle}>Decentralized • Secure • Connected</Text>
         
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
         <TextInput
           style={styles.input}
@@ -119,6 +131,7 @@ export default function LoginScreen() {
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
+          autoCorrect={false}
         />
         
         <View style={styles.passwordContainer}>

@@ -411,16 +411,6 @@ function PrivateChatRoomScreen() {
           setRawOnlineList(data);
         };
 
-        const handleCallIncoming = (data: any) => {
-          if (data.from === myId) return;
-          if (window.confirm(`${data.name} sedang memanggil Anda. Jawab?`)) {
-            const signalStr = encodeURIComponent(JSON.stringify(data.signal));
-            router.push({
-              pathname: '/(main)/call/[id]',
-              params: { id: data.from, name: data.name, isVideo: data.isVideo ? 'true' : 'false', isCaller: 'false', incomingSignal: signalStr }
-            });
-          }
-        };
 
         socket.on('receive_message', handleReceiveMessage);
         socket.on('error', handleSocketError);
@@ -433,7 +423,6 @@ function PrivateChatRoomScreen() {
         socket.on('message_pinned', handleMessagePinned);
         socket.on('message_deleted', handleMessageDeleted);
         socket.on('online_list', handleOnlineList);
-        socket.on('call_incoming', handleCallIncoming);
 
         cleanupSocketListeners.push(() => {
           socket.off('receive_message', handleReceiveMessage);
@@ -447,7 +436,6 @@ function PrivateChatRoomScreen() {
           socket.off('message_pinned', handleMessagePinned);
           socket.off('message_deleted', handleMessageDeleted);
           socket.off('online_list', handleOnlineList);
-          socket.off('call_incoming', handleCallIncoming);
         });
 
         socket.emit('request_online_list');

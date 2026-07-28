@@ -191,6 +191,7 @@ export default function BambupediaRoom() {
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchMemberQuery, setSearchMemberQuery] = useState('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const [memberSummary, setMemberSummary] = useState({ online: 0, total: 0, label: 'Memuat anggota' });
@@ -352,6 +353,14 @@ export default function BambupediaRoom() {
     if (!query) return messages;
     return messages.filter((message) => `${message.content || ''} ${message.sender_name || ''}`.toLowerCase().includes(query));
   }, [messages, searchQuery]);
+
+  const visibleMembers = useMemo(() => {
+    const query = searchMemberQuery.trim().toLowerCase();
+    if (!query) return sortedMembers;
+    return sortedMembers.filter((member) => 
+      `${member.display_name || ''} ${member.username || ''}`.toLowerCase().includes(query)
+    );
+  }, [sortedMembers, searchMemberQuery]);
 
   const sendSocketMessage = (payload: { content?: string; message_type?: MessageType; attachment_url?: string | null }) => {
     if (!socketService.socket) return;
@@ -518,16 +527,38 @@ export default function BambupediaRoom() {
   };
 
   const renderMentionedText = (content: string, style: any) => {
-    const parts = content.split(/(@[A-Za-z0-9_.-]+)/g);
+    const parts = content.split(/(https?:\/\/[^\s]+|www\.[^\s]+|@[A-Za-z0-9_.-]+)/gi);
     return (
       <NoTranslateText style={style} className="notranslate" translate="no">
-        {parts.map((part, index) => /^@[A-Za-z0-9_.-]+$/.test(part)
-          ? <Text key={`${part}-${index}`} style={styles.mentionText}>{part}</Text>
-          : <Text key={`${part}-${index}`}>{part}</Text>)}
+        {parts.map((part, index) => {
+          if (/^@[A-Za-z0-9_.-]+$/.test(part)) {
+            return <Text key={part + '-' + index} style={styles.mentionText}>{part}</Text>;
+          }
+
+          if (/^(https?:\/\/|www\.)/i.test(part)) {
+            const url = part.replace(/[),.!?;:]+$/, '');
+            const trailingText = part.slice(url.length);
+            const href = /^www\./i.test(url) ? 'https://' + url : url;
+            return (
+              <React.Fragment key={part + '-' + index}>
+                <Text
+                  style={styles.linkText}
+                  onPress={() => openAttachment(href)}
+                  accessibilityRole="link"
+                  accessibilityLabel={'Buka tautan ' + url}
+                >
+                  {url}
+                </Text>
+                {trailingText ? <Text>{trailingText}</Text> : null}
+              </React.Fragment>
+            );
+          }
+
+          return <Text key={part + '-' + index}>{part}</Text>;
+        })}
       </NoTranslateText>
     );
   };
-
   const renderSystemContent = (message: ChatMessage) => {
     if (message.sender_name === 'BambooBot') {
       const [headline = '', ...bodyLines] = (message.content || '').split('\n');
@@ -672,13 +703,17 @@ export default function BambupediaRoom() {
           <View style={[styles.drawerSection, styles.membersSection]}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.drawerSectionTitle}>Daftar User/Rumpun</Text>
-              <Text style={styles.memberCounter}>{sortedMembers.length}</Text>
+              <Text style={styles.memberCounter}>{visibleMembers.length}</Text>
+            </View>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color="#94A3B8" />
+              <TextInput style={styles.searchInput} value={searchMemberQuery} onChangeText={setSearchMemberQuery} placeholder="Cari nama user..." placeholderTextColor="#64748B" />
             </View>
             <View style={styles.drawerMemberList}>
-              {sortedMembers.length === 0 ? (
-                <Text style={styles.emptyMembers}>Menghubungkan daftar anggota...</Text>
+              {visibleMembers.length === 0 ? (
+                <Text style={styles.emptyMembers}>{sortedMembers.length === 0 ? "Menghubungkan daftar anggota..." : "User tidak ditemukan"}</Text>
               ) : (
-                sortedMembers.map((member) => <React.Fragment key={member.id}>{renderMember({ item: member })}</React.Fragment>)
+                visibleMembers.map((member) => <React.Fragment key={member.id}>{renderMember({ item: member })}</React.Fragment>)
               )}
             </View>
           </View>
@@ -735,8 +770,15 @@ export default function BambupediaRoom() {
         <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Cari pesan">
           <Ionicons name="search" size={22} color="#E2E8F0" />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Menu room">
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Menu Rumpun Bambupedia">
           <Ionicons name="ellipsis-vertical" size={22} color="#E2E8F0" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.headerIconButton}
+          onPress={() => router.push({ pathname: '/(main)/contacts', params: { openMenu: '1' } })}
+          accessibilityLabel="Pengaturan akun"
+        >
+          <Ionicons name="settings-outline" size={22} color="#E2E8F0" />
         </TouchableOpacity>
       </View>
 
@@ -847,6 +889,7 @@ const styles = StyleSheet.create({
   senderName: { color: '#8BE8D2', fontSize: 12, fontWeight: '800', marginBottom: 3 },
   messageText: { color: '#F8FAFC', fontSize: 15, lineHeight: 21 },
   mentionText: { color: '#67E8F9', fontWeight: '800' },
+  linkText: { color: '#38BDF8', fontWeight: '700', textDecorationLine: 'underline' },
   messageTime: { color: 'rgba(248,250,252,0.68)', fontSize: 10, alignSelf: 'flex-end', marginTop: 5 },
   systemMessage: { alignSelf: 'center', width: '100%', maxWidth: 760, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10 },
   joinMessage: { backgroundColor: '#132B3A', borderLeftWidth: 3, borderLeftColor: '#22D3EE' },

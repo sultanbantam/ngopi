@@ -5,14 +5,54 @@ import { socketService } from '../../../src/utils/socket';
 import * as SecureStore from '../../../src/utils/storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 
+const CALL_TIMEOUT_MS = 30_000;
+const ICE_GATHERING_TIMEOUT_MS = 5_000;
+const MEDIA_CONNECT_TIMEOUT_MS = 12_000;
+const ICE_RESTART_DELAY_MS = 2_500;
+const MEDIA_WATCHDOG_INTERVAL_MS = 5_000;
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302'] }];
+
+
+const formatCallDuration = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+const getIceServers = (socket: any) => new Promise<RTCIceServer[]>((resolve) => {
+  if (!socket) {
+    resolve(FALLBACK_ICE_SERVERS);
+    return;
+  }
+  socket.timeout(5_000).emit('get_ice_servers', (error: unknown, response: any) => {
+    const iceServers = response?.iceServers;
+    resolve(!error && Array.isArray(iceServers) && iceServers.length > 0 ? iceServers : FALLBACK_ICE_SERVERS);
+  });
+});
+
+const waitForIceGatheringComplete = (peer: RTCPeerConnection) => new Promise<void>((resolve) => {
+  if (peer.iceGatheringState === 'complete') {
+    resolve();
+    return;
+  }
+
+  let timeout: ReturnType<typeof setTimeout>;
+  const finish = () => {
+    clearTimeout(timeout);
+    peer.removeEventListener('icegatheringstatechange', handleStateChange);
+    resolve();
+  };
+  const handleStateChange = () => {
+    if (peer.iceGatheringState === 'complete') finish();
+  };
+  timeout = setTimeout(finish, ICE_GATHERING_TIMEOUT_MS);
+  peer.addEventListener('icegatheringstatechange', handleStateChange);
+});
+
 export default function CallScreen() {
-  const { id: partnerId, name, isVideo, isCaller = 'true', incomingSignal } = useLocalSearchParams();
+  const { id: partnerId, name, isVideo, isCaller = 'true', incomingSignal, callId } = useLocalSearchParams();
   const router = useRouter();
   
   const isVideoCall = isVideo === 'true';
   const caller = isCaller === 'true';
 
   const [status, setStatus] = useState(caller ? 'Calling...' : 'Connecting...');
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
   
   // Call controls state
   const [isMuted, setIsMuted] = useState(false);
@@ -31,6 +71,17 @@ export default function CallScreen() {
   const actualRoomIdRef = useRef<string>('');
   const pendingCandidates = useRef<any[]>([]);
   const hasNavigatedBack = useRef(false);
+  const callIdRef = useRef(String(callId || `call-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`));
+  const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const ringbackStopRef = useRef<() => void>(() => {});
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaConnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mediaWatchdogRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const durationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectedAtRef = useRef<number | null>(null);
+  const restartInProgressRef = useRef(false);
+  const lastInboundBytesRef = useRef(0);
+  const stalledMediaChecksRef = useRef(0);
 
   const playRemoteAudio = async () => {
     if (Platform.OS !== 'web') return;
@@ -50,6 +101,44 @@ export default function CallScreen() {
     }
   };
 
+  const stopOutgoingRingback = () => {
+    ringbackStopRef.current();
+    ringbackStopRef.current = () => {};
+  };
+
+  const startOutgoingRingback = () => {
+    if (Platform.OS !== 'web' || !caller) return;
+    stopOutgoingRingback();
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillators: OscillatorNode[] = [];
+      for (let cycleMs = 0; cycleMs < CALL_TIMEOUT_MS; cycleMs += 2_500) {
+        [425, 480].forEach((frequency, index) => {
+          const oscillator = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          const startsAt = audioCtx.currentTime + cycleMs / 1000 + index * 0.22;
+          oscillator.type = 'sine';
+          oscillator.frequency.setValueAtTime(frequency, startsAt);
+          gainNode.gain.setValueAtTime(0.0001, startsAt);
+          gainNode.gain.exponentialRampToValueAtTime(0.22, startsAt + 0.03);
+          gainNode.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.38);
+          oscillator.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          oscillator.start(startsAt);
+          oscillator.stop(startsAt + 0.4);
+          oscillators.push(oscillator);
+        });
+      }
+      void audioCtx.resume();
+      ringbackStopRef.current = () => {
+        oscillators.forEach((oscillator) => { try { oscillator.stop(); } catch { /* already stopped */ } });
+        void audioCtx.close();
+      };
+    } catch (error) {
+      console.log('Outgoing ringback error:', error);
+    }
+  };
+
   useEffect(() => {
     if (Platform.OS !== 'web') {
       alert('Fitur Panggilan (WebRTC) saat ini baru dioptimalkan untuk versi Web (Browser).');
@@ -61,6 +150,77 @@ export default function CallScreen() {
     let isCallActive = true;
     let activeSocket: any = null;
 
+    const clearReconnectTimer = () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    };
+
+    const startDurationCounter = () => {
+      if (!connectedAtRef.current) connectedAtRef.current = Date.now();
+      if (durationIntervalRef.current) return;
+      durationIntervalRef.current = setInterval(() => {
+        if (connectedAtRef.current) setElapsedSeconds(Math.floor((Date.now() - connectedAtRef.current) / 1000));
+      }, 1_000);
+    };
+
+    const requestIceRestart = () => {
+      if (!caller || !isCallActive || restartInProgressRef.current || reconnectTimerRef.current) return;
+      reconnectTimerRef.current = setTimeout(async () => {
+        reconnectTimerRef.current = null;
+        const peer = peerRef.current;
+        if (!peer || peer.signalingState === 'closed' || peer.signalingState !== 'stable' || !activeSocket) return;
+        restartInProgressRef.current = true;
+        setStatus('Memulihkan koneksi...');
+        try {
+          const restartOffer = await peer.createOffer({ iceRestart: true });
+          await peer.setLocalDescription(restartOffer);
+          await waitForIceGatheringComplete(peer);
+          activeSocket.emit('restart_call', {
+            signal: peer.localDescription,
+            to: partnerId,
+            room_id: actualRoomIdRef.current,
+            call_id: callIdRef.current,
+          });
+          reconnectTimerRef.current = setTimeout(() => {
+            reconnectTimerRef.current = null;
+            restartInProgressRef.current = false;
+            if (peer.connectionState !== 'connected') requestIceRestart();
+          }, MEDIA_CONNECT_TIMEOUT_MS);
+        } catch (error) {
+          console.error('ICE restart failed:', error);
+          restartInProgressRef.current = false;
+          setStatus('Koneksi media gagal');
+        }
+      }, ICE_RESTART_DELAY_MS);
+    };
+
+    const startMediaWatchdog = () => {
+      if (!caller || mediaWatchdogRef.current) return;
+      mediaWatchdogRef.current = setInterval(async () => {
+        const peer = peerRef.current;
+        if (!peer || peer.connectionState !== 'connected') return;
+        try {
+          const stats = await peer.getStats();
+          let inboundBytes = 0;
+          stats.forEach((report: any) => {
+            if (report.type === 'inbound-rtp' && !report.isRemote) inboundBytes += Number(report.bytesReceived || 0);
+          });
+          if (inboundBytes > lastInboundBytesRef.current) {
+            stalledMediaChecksRef.current = 0;
+          } else {
+            stalledMediaChecksRef.current += 1;
+          }
+          lastInboundBytesRef.current = inboundBytes;
+          if (stalledMediaChecksRef.current >= 2) {
+            stalledMediaChecksRef.current = 0;
+            requestIceRestart();
+          }
+        } catch (error) {
+          console.error('Media watchdog failed:', error);
+        }
+      }, MEDIA_WATCHDOG_INTERVAL_MS);
+    };
+
     const initCall = async () => {
       let myId = localStorage.getItem('userId') || '';
       if (!myId) myId = (await SecureStore.getItemAsync('userId')) || '';
@@ -68,6 +228,7 @@ export default function CallScreen() {
       const sharedKey = [myId, partnerId].sort().join('-');
       actualRoomIdRef.current = sharedKey;
       const socket = await socketService.connect();
+      const iceServers = await getIceServers(socket);
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -86,7 +247,7 @@ export default function CallScreen() {
         }
 
         // Setup RTCPeerConnection
-        const configuration = { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] };
+        const configuration = { iceServers };
         const peer = new (window as any).RTCPeerConnection(configuration);
         peerRef.current = peer;
 
@@ -97,13 +258,51 @@ export default function CallScreen() {
 
         // Handle incoming stream
         peer.ontrack = (event: any) => {
-          const remoteStream = event.streams[0];
+          const remoteStream = event.streams[0] || remoteStreamRef.current || new MediaStream();
+          if (!event.streams[0] && !remoteStream.getTracks().some((track: MediaStreamTrack) => track.id === event.track.id)) {
+            remoteStream.addTrack(event.track);
+          }
           remoteStreamRef.current = remoteStream;
-          setStatus('Connected');
+          if (mediaConnectTimeoutRef.current) clearTimeout(mediaConnectTimeoutRef.current);
+          mediaConnectTimeoutRef.current = null;
+          event.track.onunmute = () => void playRemoteAudio();
+          event.track.onended = () => {
+            if (!isCallActive) return;
+            setStatus('Media terputus, memulihkan...');
+            requestIceRestart();
+          };
           if (isVideoCall && userVideoRef.current) {
             userVideoRef.current.srcObject = remoteStream;
+            userVideoRef.current.muted = true;
+            void userVideoRef.current.play().catch((error: unknown) => console.log('Remote video play failed:', error));
           }
-          playRemoteAudio();
+          void playRemoteAudio();
+        };
+
+        peer.onconnectionstatechange = () => {
+          if (!isCallActive) return;
+          if (peer.connectionState === 'connected') {
+            stopOutgoingRingback();
+            clearReconnectTimer();
+            restartInProgressRef.current = false;
+            setStatus('Connected');
+            startDurationCounter();
+            startMediaWatchdog();
+            if (!remoteStreamRef.current?.getTracks().some((track) => track.readyState === 'live')) {
+              if (mediaConnectTimeoutRef.current) clearTimeout(mediaConnectTimeoutRef.current);
+              mediaConnectTimeoutRef.current = setTimeout(requestIceRestart, MEDIA_CONNECT_TIMEOUT_MS);
+            }
+          } else if (peer.connectionState === 'failed') {
+            setStatus('Koneksi media gagal, mencoba kembali...');
+            restartInProgressRef.current = false;
+            clearReconnectTimer();
+            requestIceRestart();
+          } else if (peer.connectionState === 'disconnected') {
+            setStatus('Koneksi terputus, mencoba kembali...');
+            requestIceRestart();
+          } else if (peer.connectionState === 'connecting') {
+            setStatus('Connecting...');
+          }
         };
 
         // Handle ICE candidates
@@ -112,24 +311,32 @@ export default function CallScreen() {
             socket.emit('ice_candidate', {
               candidate: event.candidate,
               to: partnerId,
-              room_id: sharedKey
+              room_id: sharedKey,
+              call_id: callIdRef.current,
             });
           }
         };
 
         if (caller) {
+          startOutgoingRingback();
           const offer = await peer.createOffer();
           await peer.setLocalDescription(offer);
+          await waitForIceGatheringComplete(peer);
 
           if (socket) {
             socket.emit('call_user', {
               userToCall: partnerId,
-              signalData: offer,
+              signalData: peer.localDescription,
               from: myId,
               name: localStorage.getItem('username'),
               room_id: sharedKey,
-              isVideo: isVideoCall
+              isVideo: isVideoCall,
+              call_id: callIdRef.current
             });
+            callTimeoutRef.current = setTimeout(() => {
+              setStatus('Tidak dijawab');
+              endCall(true);
+            }, CALL_TIMEOUT_MS);
           }
         } else {
           // Receiver logic
@@ -138,6 +345,7 @@ export default function CallScreen() {
             await peer.setRemoteDescription(new (window as any).RTCSessionDescription(signal));
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
+            await waitForIceGatheringComplete(peer);
             
             // Process pending candidates if any
             pendingCandidates.current.forEach(c => {
@@ -147,9 +355,10 @@ export default function CallScreen() {
 
             if (socket) {
               socket.emit('answer_call', {
-                signal: answer,
+                signal: peer.localDescription,
                 to: partnerId,
-                room_id: sharedKey
+                room_id: sharedKey,
+                call_id: callIdRef.current
               });
             }
           }
@@ -161,8 +370,13 @@ export default function CallScreen() {
     };
 
     // Socket listeners for signaling
-    const handleCallAccepted = async (signal: any) => {
-      setStatus('Connected');
+    const handleCallAccepted = async (payload: any) => {
+      if (payload?.call_id && String(payload.call_id) !== callIdRef.current) return;
+      stopOutgoingRingback();
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+      callTimeoutRef.current = null;
+      const signal = payload?.signal || payload;
+      setStatus('Connecting...');
       if (peerRef.current && caller) {
         await peerRef.current.setRemoteDescription(new (window as any).RTCSessionDescription(signal));
         pendingCandidates.current.forEach(c => {
@@ -172,7 +386,47 @@ export default function CallScreen() {
       }
     };
 
-    const handleIceCandidate = (candidate: any) => {
+    const handleRestartOffer = async (payload: any) => {
+      if (payload?.call_id && String(payload.call_id) !== callIdRef.current) return;
+      const peer = peerRef.current;
+      if (!peer || caller || !payload?.signal) return;
+      try {
+        restartInProgressRef.current = true;
+        setStatus('Memulihkan koneksi...');
+        await peer.setRemoteDescription(new (window as any).RTCSessionDescription(payload.signal));
+        const restartAnswer = await peer.createAnswer();
+        await peer.setLocalDescription(restartAnswer);
+        await waitForIceGatheringComplete(peer);
+        activeSocket?.emit('answer_restart_call', {
+          signal: peer.localDescription,
+          to: partnerId,
+          room_id: actualRoomIdRef.current,
+          call_id: callIdRef.current,
+        });
+        restartInProgressRef.current = false;
+      } catch (error) {
+        console.error('Answer ICE restart failed:', error);
+        restartInProgressRef.current = false;
+      }
+    };
+
+    const handleRestartAnswer = async (payload: any) => {
+      if (payload?.call_id && String(payload.call_id) !== callIdRef.current) return;
+      const peer = peerRef.current;
+      if (!peer || !caller || !payload?.signal) return;
+      try {
+        await peer.setRemoteDescription(new (window as any).RTCSessionDescription(payload.signal));
+        clearReconnectTimer();
+        restartInProgressRef.current = false;
+      } catch (error) {
+        console.error('Apply ICE restart answer failed:', error);
+        restartInProgressRef.current = false;
+      }
+    };
+
+    const handleIceCandidate = (payload: any) => {
+      if (payload?.call_id && String(payload.call_id) !== callIdRef.current) return;
+      const candidate = payload?.candidate || payload;
       if (peerRef.current && peerRef.current.remoteDescription) {
         peerRef.current.addIceCandidate(new (window as any).RTCIceCandidate(candidate)).catch((e:any) => console.error(e));
       } else {
@@ -180,7 +434,8 @@ export default function CallScreen() {
       }
     };
 
-    const handleCallEnded = () => {
+    const handleCallEnded = (payload: any) => {
+      if (payload?.call_id && String(payload.call_id) !== callIdRef.current) return;
       setStatus('Call Ended');
       endCall(false);
     };
@@ -190,6 +445,8 @@ export default function CallScreen() {
       activeSocket = socket;
       if (socket) {
         socket.on('call_accepted', handleCallAccepted);
+        socket.on('call_restart_offer', handleRestartOffer);
+        socket.on('call_restart_answer', handleRestartAnswer);
         socket.on('ice_candidate', handleIceCandidate);
         socket.on('call_ended', handleCallEnded);
       }
@@ -203,9 +460,12 @@ export default function CallScreen() {
 
     return () => {
       isCallActive = false;
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
       endCall(false, true); // true = isUnmounting
       if (activeSocket) {
         activeSocket.off('call_accepted', handleCallAccepted);
+        activeSocket.off('call_restart_offer', handleRestartOffer);
+        activeSocket.off('call_restart_answer', handleRestartAnswer);
         activeSocket.off('ice_candidate', handleIceCandidate);
         activeSocket.off('call_ended', handleCallEnded);
       }
@@ -213,10 +473,26 @@ export default function CallScreen() {
   }, []);
 
   const endCall = (emitEvent = true, isUnmounting = false) => {
+    stopOutgoingRingback();
+    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+    callTimeoutRef.current = null;
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    if (mediaConnectTimeoutRef.current) clearTimeout(mediaConnectTimeoutRef.current);
+    if (mediaWatchdogRef.current) clearInterval(mediaWatchdogRef.current);
+    if (durationIntervalRef.current) clearInterval(durationIntervalRef.current);
+    reconnectTimerRef.current = null;
+    mediaConnectTimeoutRef.current = null;
+    mediaWatchdogRef.current = null;
+    durationIntervalRef.current = null;
+    restartInProgressRef.current = false;
+    lastInboundBytesRef.current = 0;
+    stalledMediaChecksRef.current = 0;
+
     if (emitEvent && socketService.socket && actualRoomIdRef.current) {
       socketService.socket.emit('end_call', {
         to: partnerId,
-        room_id: actualRoomIdRef.current
+        room_id: actualRoomIdRef.current,
+        call_id: callIdRef.current
       });
     }
 
@@ -265,6 +541,7 @@ export default function CallScreen() {
             ref={userVideoRef as any}
             autoPlay
             playsInline
+            muted
             style={styles.remoteVideo as any}
           />
         </View>
@@ -286,8 +563,15 @@ export default function CallScreen() {
         </View>
       )}
 
-      {Platform.OS === 'web' && !isVideoCall && (
+      {Platform.OS === 'web' && (
         <audio ref={remoteAudioRef as any} autoPlay playsInline style={{ position: 'absolute', width: 1, height: 1, opacity: 0 }} />
+      )}
+
+      {isVideoCall && needsAudioTap && (
+        <TouchableOpacity style={[styles.enableAudioButton, styles.enableAudioOverlay]} onPress={playRemoteAudio}>
+          <Ionicons name="volume-high" size={20} color="#0F172A" />
+          <Text style={styles.enableAudioText}>Nyalakan suara</Text>
+        </TouchableOpacity>
       )}
 
       {/* Header */}
@@ -302,7 +586,7 @@ export default function CallScreen() {
             <Ionicons name="lock-closed" size={12} color="#A0AAB3" />
             <Text style={styles.encryptionText}> Terenkripsi secara end-to-end</Text>
           </View>
-          <Text style={styles.statusText}>{status}</Text>
+          <Text style={styles.statusText}>{status}{connectedAtRef.current ? ` - ${formatCallDuration(elapsedSeconds)}` : ''}</Text>
         </View>
         
         <TouchableOpacity style={styles.headerIconBtn}>
@@ -412,6 +696,12 @@ const styles = StyleSheet.create({
   enableAudioText: {
     color: '#0F172A',
     fontWeight: '800',
+  },
+  enableAudioOverlay: {
+    position: 'absolute',
+    top: 130,
+    alignSelf: 'center',
+    zIndex: 30,
   },
   remoteVideo: {
     width: '100%',

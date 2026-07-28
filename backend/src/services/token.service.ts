@@ -100,8 +100,8 @@ export const revokeRefreshToken = async (rawToken?: string | null) => {
 
 const cookieOptions = {
   httpOnly: true,
-  secure: isProduction,
-  sameSite: 'strict' as const,
+  secure: true,
+  sameSite: 'none' as const,
   path: '/',
 };
 

@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
+import { clearStoredSession, getStoredRefreshToken } from '../../src/utils/session';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -11,6 +12,7 @@ import axios from 'axios';
 const API_URL = 'https://api.bamboochat.click/api';
 
 export default function ContactsScreen() {
+  const { openMenu } = useLocalSearchParams<{ openMenu?: string }>();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
@@ -59,6 +61,10 @@ export default function ContactsScreen() {
 
   // Online Users State
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (openMenu === '1') setDropdownVisible(true);
+  }, [openMenu]);
 
   useEffect(() => {
     const init = async () => {
@@ -223,14 +229,18 @@ export default function ContactsScreen() {
   };
 
   const handleLogout = async () => {
-    socketService.disconnect();
-    if (Platform.OS === 'web') {
-      localStorage.clear();
-    } else {
-      await SecureStore.deleteItemAsync('token');
-      await SecureStore.deleteItemAsync('temp_key');
-      await SecureStore.deleteItemAsync('username');
+    try {
+      const refreshToken = await getStoredRefreshToken();
+      await axios.post(
+        `${API_URL}/auth/logout`,
+        refreshToken ? { refresh_token: refreshToken } : {},
+        { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } },
+      );
+    } catch (error) {
+      console.log('Server logout failed; clearing local session.', error);
     }
+    socketService.disconnect();
+    await clearStoredSession();
     router.replace('/(auth)/login');
   };
 
@@ -574,7 +584,14 @@ export default function ContactsScreen() {
 
   return (
     <View style={styles.container}>
-      <TouchableOpacity style={styles.backToBambupediaButton} onPress={() => router.replace('/(main)/bambupedia' as any)}>
+      <TouchableOpacity style={styles.backToBambupediaButton} onPress={() => {
+        setDropdownVisible(false);
+        if (Platform.OS === 'web') {
+          window.location.assign('/bambupedia');
+        } else {
+          router.replace('/(main)/bambupedia' as any);
+        }
+      }}>
         <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
         <Text style={styles.backToBambupediaText}>Kembali</Text>
       </TouchableOpacity>

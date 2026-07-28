@@ -1,6 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { Platform } from 'react-native';
-import { clearStoredSession, getValidAccessToken, refreshAccessToken } from './session';
+import { clearStoredSession, getLastRefreshFailureReason, getValidAccessToken, refreshAccessToken } from './session';
 
 const SOCKET_URL = 'https://api.bamboochat.click';
 
@@ -27,6 +27,12 @@ class SocketService {
 
   private async handleExpiredSession(error: unknown) {
     console.error('WebSocket authentication failed:', error);
+    if (getLastRefreshFailureReason() !== 'unauthorized') {
+      // Gangguan jaringan/server membuat user tetap berada di aplikasi sebagai offline.
+      this.disconnect();
+      return;
+    }
+
     await clearStoredSession();
     this.disconnect();
 

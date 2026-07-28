@@ -5,6 +5,7 @@ axios.defaults.withCredentials = true;
 axios.defaults.headers.common['ngrok-skip-browser-warning'] = '69420';
 
 axios.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
+  if (config.headers?.['x-skip-auth-refresh']) return config;
   const token = await getValidAccessToken();
   if (token && !config.headers.Authorization) {
     config.headers.Authorization = `Bearer ${token}`;
