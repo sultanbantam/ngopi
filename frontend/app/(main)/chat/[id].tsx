@@ -132,6 +132,18 @@ function PrivateChatRoomScreen() {
   const [inputText, setInputText] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [actualRoomId, setActualRoomId] = useState('');
+
+  // Pagination state
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+
+  // Upload progress state
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // Auto-scroll control
+  const shouldAutoScroll = useRef(true);
   
   // Real-time states
   const [isTyping, setIsTyping] = useState(false);
@@ -318,10 +330,12 @@ function PrivateChatRoomScreen() {
         }
         setSecretKey(encryptionSecret);
 
-        const response = await axios.get(`https://api.bamboochat.click/api/messages/${roomKey}`, {
+        const response = await axios.get(`https://api.bamboochat.click/api/messages/${roomKey}?limit=50`, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const history = response.data.map((msg: any) => {
+        const data = response.data;
+        const messageList = Array.isArray(data) ? data : (data.messages || []);
+        const history = messageList.map((msg: any) => {
           const messageType = msg.type || 'text';
           return {
             id: msg.id,
@@ -338,7 +352,9 @@ function PrivateChatRoomScreen() {
           };
         });
         setMessages(history);
-        setTimeout(() => flatListRef.current?.scrollToEnd(), 500);
+        setHasMoreMessages(data.hasMore ?? false);
+        setNextCursor(data.nextCursor ?? undefined);
+        // Auto-scroll will be triggered by onContentSizeChange
       } catch (err) {
         console.error('Failed to fetch history', err);
       }
@@ -365,6 +381,8 @@ function PrivateChatRoomScreen() {
             is_edited: data.is_edited,
             is_pinned: data.is_pinned
           }]);
+          // Auto-scroll to bottom on new message
+          setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
 
           socket.emit('mark_messages_read', { sender_id: data.sender_id, room_id: roomKey });
         };
@@ -523,8 +541,48 @@ function PrivateChatRoomScreen() {
     }
   };
 
+  // Load older messages (pagination)
+  const loadMoreMessages = async () => {
+    if (isLoadingMore || !hasMoreMessages || !nextCursor) return;
+    setIsLoadingMore(true);
+    try {
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const response = await axios.get(`https://api.bamboochat.click/api/messages/${actualRoomId}?cursor=${nextCursor}&limit=50`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = response.data;
+      const messageList = Array.isArray(data) ? data : (data.messages || []);
+      const olderMessages = messageList.map((msg: any) => {
+        const messageType = msg.type || 'text';
+        return {
+          id: msg.id,
+          sender_id: msg.sender_id,
+          content: decodeMessageContent(msg.content, messageType, secretKey),
+          isMine: msg.sender_id === myUserId,
+          timestamp: msg.timestamp,
+          isRead: msg.is_read,
+          type: messageType,
+          attachment_url: normalizeAttachmentUrl(msg.attachment_url),
+          reactions: msg.reactions || {},
+          is_edited: msg.is_edited,
+          is_pinned: msg.is_pinned
+        };
+      });
+      // Prepend older messages
+      setMessages(prev => [...olderMessages, ...prev]);
+      setHasMoreMessages(data.hasMore ?? false);
+      setNextCursor(data.nextCursor ?? undefined);
+    } catch (err) {
+      console.error('Failed to load more messages:', err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
   const uploadFile = async (uri: string, type: string, originalName?: string, mimeType?: string, rawFile?: any) => {
     try {
+      setIsUploading(true);
+      setUploadProgress(0);
       const resolvedMime = getMimeType(originalName, mimeType);
       const fallbackName = originalName || `upload_${Date.now()}.${resolvedMime.split('/')[1] || (type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin')}`;
 
@@ -571,13 +629,24 @@ function PrivateChatRoomScreen() {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await axios.post(`${API_URL}/upload`, formData, { headers });
+      const response = await axios.post(`${API_URL}/upload`, formData, {
+        headers,
+        onUploadProgress: (progressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+          }
+        },
+      });
       return normalizeAttachmentUrl(response.data.url);
     } catch (error: any) {
       console.error('Upload failed:', error?.response?.data || error?.message || error);
       const errMsg = error?.response?.data?.error || error?.message || 'Gagal mengunggah file';
       alert(`Upload failed: ${errMsg}`);
       return null;
+    } finally {
+      setIsUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -995,11 +1064,40 @@ function PrivateChatRoomScreen() {
         </View>
       )}
 
+      {/* Loading more indicator */}
+      {isLoadingMore && (
+        <View style={{ padding: 12, alignItems: 'center' }}>
+          <Text style={{ color: '#64748B', fontSize: 13 }}>Memuat pesan lama...</Text>
+        </View>
+      )}
+
       <FlatList
         ref={flatListRef}
         data={messages}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.messageList}
+        onContentSizeChange={() => {
+          if (shouldAutoScroll.current) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        onLayout={() => {
+          if (shouldAutoScroll.current) {
+            flatListRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        onScroll={(e) => {
+          const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+          // If user is near the bottom, enable auto-scroll
+          const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+          shouldAutoScroll.current = distanceFromBottom < 150;
+
+          // Load more when scrolling near the top
+          if (contentOffset.y < 100 && hasMoreMessages && !isLoadingMore) {
+            loadMoreMessages();
+          }
+        }}
+        scrollEventThrottle={100}
         renderItem={({ item }) => {
           const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
           return (
@@ -1258,6 +1356,19 @@ function PrivateChatRoomScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Upload Progress Bar */}
+      {isUploading && (
+        <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 16, paddingTop: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flex: 1, height: 4, backgroundColor: '#334155', borderRadius: 2, overflow: 'hidden' }}>
+              <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: '#10B981', borderRadius: 2 } as any} />
+            </View>
+            <Text style={{ color: '#94A3B8', fontSize: 12, minWidth: 36 }}>{uploadProgress}%</Text>
+          </View>
+          <Text style={{ color: '#64748B', fontSize: 11, marginTop: 4 }}>Mengunggah file...</Text>
+        </View>
+      )}
 
       <View style={styles.inputContainer}>
         {replyingToMessageId && (

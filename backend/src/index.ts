@@ -50,8 +50,18 @@ app.use(sanitizeRequest);
 app.use(encodeJsonResponse);
 app.use('/api', apiLimiter);
 
-// Serve static files from uploads folder
-app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+// Serve static files from uploads folder with long-term cache headers
+// Files are uniquely named (timestamp-based) so immutable caching is safe
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  maxAge: '365d',
+  immutable: true,
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  },
+}));
 
 // API Routes
 app.use('/api/auth', authRoutes);
