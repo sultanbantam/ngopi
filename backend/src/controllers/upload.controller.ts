@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import path from 'path';
 
 export const uploadFile = (req: Request, res: Response): void => {
   if (!req.file) {
@@ -13,11 +14,10 @@ export const uploadFile = (req: Request, res: Response): void => {
   const publicBaseUrl = process.env.PUBLIC_API_URL || `${protocol}://${host}`;
   const fileUrl = `${publicBaseUrl.replace(/\/$/, '')}/uploads/${req.file.filename}`;
 
-  const uploadedType = req.file.mimetype.startsWith('image/')
-    ? 'image'
-    : req.file.mimetype.startsWith('audio/')
-      ? 'audio'
-      : 'document';
+  const ext = path.extname(req.file.originalname || '').toLowerCase();
+  const isImage = req.file.mimetype.startsWith('image/') || ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.heic', '.heif', '.svg'].includes(ext);
+  const isAudio = req.file.mimetype.startsWith('audio/') || ['.mp3', '.m4a', '.webm', '.wav', '.ogg', '.aac', '.flac'].includes(ext);
+  const uploadedType = isImage ? 'image' : isAudio ? 'audio' : 'document';
 
   res.status(200).json({
     message: 'File uploaded successfully',

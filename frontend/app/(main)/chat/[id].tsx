@@ -11,6 +11,8 @@ import { Audio } from 'expo-av';
 import axios from 'axios';
 import BambupediaRoom from '../bambupedia';
 import { Ionicons } from '@expo/vector-icons';
+import { getMimeType } from '../../../src/utils/fileHelpers';
+import { API_URL } from '../../../src/utils/session';
 
 const NoTranslateText = Text as any;
 const API_ORIGIN = 'https://api.bamboochat.click';
@@ -521,50 +523,40 @@ function PrivateChatRoomScreen() {
     }
   };
 
-  const uploadFile = async (uri: string, type: string, originalName?: string) => {
+  const uploadFile = async (uri: string, type: string, originalName?: string, mimeType?: string) => {
     try {
+      const resolvedMime = getMimeType(originalName, mimeType);
+      const fallbackName = originalName || `upload_${Date.now()}.${resolvedMime.split('/')[1] || (type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin')}`;
+
       const formData = new FormData();
-      // Need to append file depending on platform
       if (Platform.OS === 'web') {
-        // fetch blob
         const res = await fetch(uri);
         const blob = await res.blob();
-        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'webm' : 'bin'}`;
-        formData.append('file', blob, originalName || fallbackName);
+        const fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+        formData.append('file', fileObj);
       } else {
-        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin'}`;
         formData.append('file', {
           uri,
-          name: originalName || fallbackName,
-          type: type === 'image' ? 'image/jpeg' : type === 'audio' ? 'audio/m4a' : 'application/octet-stream',
+          name: fallbackName,
+          type: resolvedMime,
         } as any);
       }
 
-      const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
-      return normalizeAttachmentUrl(response.data.url);
-    } catch (error) {
-      console.error('Upload failed:', error);
-      alert('Failed to upload file');
-      return null;
-    }
-  };
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const headers: Record<string, string> = {
+        'Content-Type': 'multipart/form-data',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
 
-  const downloadAttachment = async (url: string, filename: string) => {
-    try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(blobUrl);
-    } catch (error) {
-      console.error('Download failed:', error);
+      const response = await axios.post(`${API_URL}/upload`, formData, { headers });
+      return normalizeAttachmentUrl(response.data.url);
+    } catch (error: any) {
+      console.error('Upload failed:', error?.response?.data || error?.message || error);
+      const errMsg = error?.response?.data?.error || error?.message || 'Gagal mengunggah file';
+      alert(`Upload failed: ${errMsg}`);
+      return null;
     }
   };
 
@@ -576,8 +568,9 @@ function PrivateChatRoomScreen() {
     });
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
-      const uri = result.assets[0].uri;
-      const url = await uploadFile(uri, 'image');
+      const asset = result.assets[0];
+      const fileName = asset.fileName || `image_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
+      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType);
       
       if (url) {
         // Send image message
@@ -610,7 +603,7 @@ function PrivateChatRoomScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const doc = result.assets[0];
-      const url = await uploadFile(doc.uri, 'document', doc.name);
+      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType);
       
       if (url) {
         // We will store the original file name in the content (encrypted)
@@ -678,12 +671,15 @@ function PrivateChatRoomScreen() {
         const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
         
         const formData = new FormData();
-        formData.append('file', audioBlob, 'upload.webm');
+        const fileObj = new File([audioBlob], 'upload.webm', { type: 'audio/webm' });
+        formData.append('file', fileObj);
         
         try {
-          const response = await axios.post('https://api.bamboochat.click/api/upload', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+          const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const response = await axios.post(`${API_URL}/upload`, formData, { headers });
           const url = normalizeAttachmentUrl(response.data.url);
           
           if (url) {

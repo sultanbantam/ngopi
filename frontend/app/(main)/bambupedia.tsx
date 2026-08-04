@@ -23,6 +23,7 @@ import axios from 'axios';
 import { useRouter } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
+import { getMimeType } from '../../src/utils/fileHelpers';
 
 const API_URL = 'https://api.bamboochat.click/api';
 const ROOM_ID = 'bambupedia-room';
@@ -401,26 +402,33 @@ export default function BambupediaRoom() {
     } as any);
   };
 
-  const uploadFile = async (uri: string, type: MessageType, originalName?: string) => {
+  const uploadFile = async (uri: string, type: MessageType, originalName?: string, mimeType?: string) => {
     try {
+      const resolvedMime = getMimeType(originalName, mimeType);
+      const fallbackName = originalName || `upload_${Date.now()}.${resolvedMime.split('/')[1] || (type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin')}`;
+
       const formData = new FormData();
       if (Platform.OS === 'web') {
         const response = await fetch(uri);
         const blob = await response.blob();
-        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'webm' : 'bin'}`;
-        formData.append('file', blob, originalName || fallbackName);
+        const fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+        formData.append('file', fileObj);
       } else {
-        const fallbackName = `upload.${type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin'}`;
         formData.append('file', {
           uri,
-          name: originalName || fallbackName,
-          type: type === 'image' ? 'image/jpeg' : type === 'audio' ? 'audio/m4a' : 'application/octet-stream',
+          name: fallbackName,
+          type: resolvedMime,
         } as any);
       }
-      const response = await axios.post(`${API_URL}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+
+      const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+      const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const response = await axios.post(`${API_URL}/upload`, formData, { headers });
       return response.data.url as string;
-    } catch (error) {
-      console.error('Bambupedia upload failed:', error);
+    } catch (error: any) {
+      console.error('Bambupedia upload failed:', error?.response?.data || error?.message || error);
       return null;
     }
   };
@@ -428,7 +436,9 @@ export default function BambupediaRoom() {
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, quality: 0.8 });
     if (!result.canceled && result.assets?.[0]?.uri) {
-      const url = await uploadFile(result.assets[0].uri, 'image');
+      const asset = result.assets[0];
+      const fileName = asset.fileName || `image_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
+      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType);
       if (url) sendSocketMessage({ content: 'Image', message_type: 'image', attachment_url: url });
     }
   };
@@ -437,7 +447,7 @@ export default function BambupediaRoom() {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (!result.canceled && result.assets?.[0]?.uri) {
       const doc = result.assets[0];
-      const url = await uploadFile(doc.uri, 'document', doc.name);
+      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType);
       if (url) sendSocketMessage({ content: doc.name || 'Document', message_type: 'document', attachment_url: url });
     }
   };
@@ -475,9 +485,14 @@ export default function BambupediaRoom() {
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
         const formData = new FormData();
-        formData.append('file', audioBlob, 'bambupedia-voice.webm');
+        const fileObj = new File([audioBlob], 'bambupedia-voice.webm', { type: 'audio/webm' });
+        formData.append('file', fileObj);
         try {
-          const response = await axios.post(`${API_URL}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+          const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+          const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+          if (token) headers['Authorization'] = `Bearer ${token}`;
+
+          const response = await axios.post(`${API_URL}/upload`, formData, { headers });
           if (response.data.url) sendSocketMessage({ content: 'Voice message', message_type: 'audio', attachment_url: response.data.url });
         } catch (error) {
           console.error('Bambupedia voice upload failed:', error);
