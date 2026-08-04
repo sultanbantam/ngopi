@@ -402,16 +402,37 @@ export default function BambupediaRoom() {
     } as any);
   };
 
-  const uploadFile = async (uri: string, type: MessageType, originalName?: string, mimeType?: string) => {
+  const uploadFile = async (uri: string, type: MessageType, originalName?: string, mimeType?: string, rawFile?: any) => {
     try {
       const resolvedMime = getMimeType(originalName, mimeType);
       const fallbackName = originalName || `upload_${Date.now()}.${resolvedMime.split('/')[1] || (type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin')}`;
 
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        const fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+        let fileObj: File;
+        if (rawFile && (rawFile instanceof File || rawFile instanceof Blob)) {
+          fileObj = new File([rawFile], fallbackName, { type: resolvedMime || rawFile.type || 'application/octet-stream' });
+        } else if (uri.startsWith('data:')) {
+          const arr = uri.split(',');
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const blob = new Blob([u8arr], { type: resolvedMime || mimeMatch?.[1] || 'application/octet-stream' });
+          fileObj = new File([blob], fallbackName, { type: blob.type });
+        } else {
+          try {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+          } catch (fetchErr: any) {
+            console.warn('Bambupedia fetch uri failed:', fetchErr);
+            throw new Error(`Gagal membaca file lokal: ${fetchErr?.message || fetchErr}`);
+          }
+        }
         formData.append('file', fileObj);
       } else {
         formData.append('file', {
@@ -438,7 +459,7 @@ export default function BambupediaRoom() {
     if (!result.canceled && result.assets?.[0]?.uri) {
       const asset = result.assets[0];
       const fileName = asset.fileName || `image_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
-      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType);
+      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType, (asset as any).file);
       if (url) sendSocketMessage({ content: 'Image', message_type: 'image', attachment_url: url });
     }
   };
@@ -447,7 +468,7 @@ export default function BambupediaRoom() {
     const result = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true });
     if (!result.canceled && result.assets?.[0]?.uri) {
       const doc = result.assets[0];
-      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType);
+      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType, (doc as any).file);
       if (url) sendSocketMessage({ content: doc.name || 'Document', message_type: 'document', attachment_url: url });
     }
   };

@@ -523,16 +523,37 @@ function PrivateChatRoomScreen() {
     }
   };
 
-  const uploadFile = async (uri: string, type: string, originalName?: string, mimeType?: string) => {
+  const uploadFile = async (uri: string, type: string, originalName?: string, mimeType?: string, rawFile?: any) => {
     try {
       const resolvedMime = getMimeType(originalName, mimeType);
       const fallbackName = originalName || `upload_${Date.now()}.${resolvedMime.split('/')[1] || (type === 'image' ? 'jpg' : type === 'audio' ? 'm4a' : 'bin')}`;
 
       const formData = new FormData();
       if (Platform.OS === 'web') {
-        const res = await fetch(uri);
-        const blob = await res.blob();
-        const fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+        let fileObj: File;
+        if (rawFile && (rawFile instanceof File || rawFile instanceof Blob)) {
+          fileObj = new File([rawFile], fallbackName, { type: resolvedMime || rawFile.type || 'application/octet-stream' });
+        } else if (uri.startsWith('data:')) {
+          const arr = uri.split(',');
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const blob = new Blob([u8arr], { type: resolvedMime || mimeMatch?.[1] || 'application/octet-stream' });
+          fileObj = new File([blob], fallbackName, { type: blob.type });
+        } else {
+          try {
+            const res = await fetch(uri);
+            const blob = await res.blob();
+            fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+          } catch (fetchErr: any) {
+            console.warn('Fetch uri failed:', fetchErr);
+            throw new Error(`Gagal membaca file lokal: ${fetchErr?.message || fetchErr}`);
+          }
+        }
         formData.append('file', fileObj);
       } else {
         formData.append('file', {
@@ -570,7 +591,7 @@ function PrivateChatRoomScreen() {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const asset = result.assets[0];
       const fileName = asset.fileName || `image_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
-      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType);
+      const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType, (asset as any).file);
       
       if (url) {
         // Send image message
@@ -603,7 +624,7 @@ function PrivateChatRoomScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const doc = result.assets[0];
-      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType);
+      const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType, (doc as any).file);
       
       if (url) {
         // We will store the original file name in the content (encrypted)
