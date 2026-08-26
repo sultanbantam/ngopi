@@ -494,6 +494,14 @@ export default function CallScreen() {
         room_id: actualRoomIdRef.current,
         call_id: callIdRef.current
       });
+      if (caller && !connectedAtRef.current && status !== 'Call Ended') {
+        socketService.socket.emit('send_message', {
+          room_id: actualRoomIdRef.current,
+          receiver_id: partnerId,
+          content: isVideoCall ? 'Panggilan Video Tak Terjawab' : 'Panggilan Suara Tak Terjawab',
+          type: 'call'
+        });
+      }
     }
 
     if (streamRef.current) {

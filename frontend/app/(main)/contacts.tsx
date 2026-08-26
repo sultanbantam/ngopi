@@ -106,16 +106,18 @@ export default function ContactsScreen() {
       // Fetch users and groups
       try {
         const headers = { Authorization: `Bearer ${token}` };
-        const [usersRes, groupsRes, settingsRes] = await Promise.all([
+        const [usersRes, groupsRes, settingsRes, unreadRes] = await Promise.all([
           axios.get(`${API_URL}/auth/users`, { headers }),
           axios.get(`${API_URL}/groups`, { headers }),
-          axios.get(`${API_URL}/settings`, { headers }).catch(() => ({ data: {} }))
+          axios.get(`${API_URL}/settings`, { headers }).catch(() => ({ data: {} })),
+          axios.get(`${API_URL}/messages/unread/counts`, { headers }).catch(() => ({ data: {} }))
         ]);
         
         const allUsers = usersRes.data;
         setContacts(allUsers.filter((u: any) => u.id !== userId));
         setGroups(groupsRes.data);
         if (settingsRes.data) setSettings(settingsRes.data);
+        if (unreadRes.data) setUnreadCounts(unreadRes.data);
 
         if (inviteCode && token) {
           const joinRes = await axios.post(`${API_URL}/groups/invite/${inviteCode}/join`, {}, { headers });

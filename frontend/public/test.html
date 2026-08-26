@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Pi Test Payment</title>
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0F172A;
+            color: white;
+            text-align: center;
+            padding: 50px 20px;
+        }
+        .btn {
+            background-color: #10B981;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 20px;
+            cursor: pointer;
+        }
+        .btn-blue {
+            background-color: #3B82F6;
+        }
+        #message {
+            margin-top: 30px;
+            color: #FCD34D;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Test Payment (Pure HTML)</h2>
+    <p>Ini adalah halaman statis khusus untuk menembus Step 10.</p>
+    
+    <button class="btn" onclick="pay(true)">Bayar 1 Pi (Sandbox)</button>
+    <br><br>
+    <button class="btn btn-blue" onclick="pay(false)">Bayar 1 Pi (Mainnet)</button>
+
+    <div id="message">Tunggu...</div>
+
+    <script>
+        document.getElementById('message').innerText = 'Memuat Pi SDK...';
+        
+        // Coba init dengan sandbox true sebagai default
+        try {
+            window.Pi.init({ version: '2.0', sandbox: true });
+            document.getElementById('message').innerText = 'SDK Siap. Silakan klik tombol.';
+        } catch (e) {
+            document.getElementById('message').innerText = 'Gagal Init SDK: ' + e.message;
+        }
+
+        async function pay(isSandbox) {
+            document.getElementById('message').innerText = 'Menginisiasi pembayaran ' + (isSandbox ? 'Sandbox' : 'Mainnet') + '...';
+            
+            try {
+                // Re-init with correct sandbox mode if needed
+                window.Pi.init({ version: '2.0', sandbox: isSandbox });
+                
+                await window.Pi.authenticate(['username', 'payments'], function(payment) {
+                    console.log('Incomplete', payment);
+                });
+
+                const paymentData = {
+                    amount: 1,
+                    memo: 'Test Step 10',
+                    metadata: { type: 'test' }
+                };
+
+                const callbacks = {
+                    onReadyForServerApproval: function(paymentId) {
+                        document.getElementById('message').innerText = 'Menunggu Server Approval...';
+                        fetch('https://api.bamboochat.click/api/payments/approve', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paymentId: paymentId })
+                        }).catch(e => console.error(e));
+                    },
+                    onReadyForServerCompletion: function(paymentId, txid) {
+                        document.getElementById('message').innerText = 'Menyelesaikan di Server...';
+                        fetch('https://api.bamboochat.click/api/payments/complete', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ paymentId: paymentId, txid: txid })
+                        }).then(() => {
+                            document.getElementById('message').innerText = '✅ PEMBAYARAN BERHASIL! STEP 10 SELESAI!';
+                        }).catch(e => console.error(e));
+                    },
+                    onCancel: function(paymentId) {
+                        document.getElementById('message').innerText = 'Dibatalkan oleh user.';
+                    },
+                    onError: function(error, payment) {
+                        document.getElementById('message').innerText = 'Error: ' + error.message;
+                    }
+                };
+
+                window.Pi.createPayment(paymentData, callbacks);
+            } catch (error) {
+                document.getElementById('message').innerText = 'GAGAL: ' + (error.message || error);
+            }
+        }
+    </script>
+</body>
+</html>

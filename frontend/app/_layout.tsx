@@ -6,6 +6,9 @@ export default function RootLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(main)" options={{ headerShown: false }} />
+      <Stack.Screen name="privacy" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="terms" options={{ headerShown: false, presentation: 'modal' }} />
+      <Stack.Screen name="test-payment" options={{ headerShown: false }} />
     </Stack>
   );
 }

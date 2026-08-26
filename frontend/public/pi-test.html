@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pi Payment Test</title>
+    <script src="https://sdk.minepi.com/pi-sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #0F172A; color: white; }
+        button { background-color: #10B981; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 30px; cursor: pointer; }
+        #status { margin-top: 20px; color: #FCD34D; }
+    </style>
+</head>
+<body>
+    <h2>Pi Developer Test Payment</h2>
+    <button onclick="startPayment()">Bayar 1 Pi (Test)</button>
+    <p id="status"></p>
+
+    <script>
+        window.Pi.init({ version: '2.0', sandbox: true });
+
+        async function startPayment() {
+            const statusEl = document.getElementById('status');
+            statusEl.innerText = "Authenticating...";
+            
+            try {
+                await window.Pi.authenticate(['payments'], function(payment) {
+                    console.log('Incomplete payment found', payment);
+                });
+                
+                statusEl.innerText = "Initiating payment...";
+
+                const paymentData = {
+                    amount: 1,
+                    memo: 'Test transaction for Developer Portal step 10',
+                    metadata: { type: 'test' }
+                };
+
+                const callbacks = {
+                    onReadyForServerApproval: async function(paymentId) {
+                        statusEl.innerText = "Approving payment on server...";
+                        try {
+                            await axios.post('https://api.bamboochat.click/api/payments/approve', { paymentId });
+                        } catch(e) {
+                            statusEl.innerText = "Server approval failed: " + e.message;
+                        }
+                    },
+                    onReadyForServerCompletion: async function(paymentId, txid) {
+                        statusEl.innerText = "Completing payment on server...";
+                        try {
+                            await axios.post('https://api.bamboochat.click/api/payments/complete', { paymentId, txid });
+                            statusEl.innerText = "Payment Completed Successfully! ✅";
+                        } catch(e) {
+                            statusEl.innerText = "Server completion failed: " + e.message;
+                        }
+                    },
+                    onCancel: function(paymentId) {
+                        statusEl.innerText = "Payment cancelled.";
+                    },
+                    onError: function(error, payment) {
+                        statusEl.innerText = "Payment error: " + error.message;
+                    }
+                };
+
+                window.Pi.createPayment(paymentData, callbacks);
+            } catch (err) {
+                statusEl.innerText = "Failed: " + err.message + " (" + err + ")";
+            }
+        }
+    </script>
+</body>
+</html>

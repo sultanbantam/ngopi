@@ -163,6 +163,11 @@ function PrivateChatRoomScreen() {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [showEmojiPanel, setShowEmojiPanel] = useState(false);
 
+  // Chat Enhancements State
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const [isSearchMode, setIsSearchMode] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+
   // Online Contacts State
   const [rawOnlineList, setRawOnlineList] = useState<any[]>([]);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -1005,6 +1010,15 @@ function PrivateChatRoomScreen() {
 
   const pinnedMessage = messages.find(m => m.is_pinned);
 
+  const filteredMessages = React.useMemo(() => {
+    if (!searchQuery.trim()) return messages;
+    const lowerQuery = searchQuery.toLowerCase();
+    return messages.filter(m => {
+      const text = m.content || m.attachment_url || '';
+      return text.toLowerCase().includes(lowerQuery);
+    });
+  }, [messages, searchQuery]);
+
   const onlineUsersList = React.useMemo(() => {
     return rawOnlineList
       .filter(u => u.is_online && u.id !== myUserId && u.id !== roomId)
@@ -1022,40 +1036,61 @@ function PrivateChatRoomScreen() {
 
       {/* WhatsApp Custom Header */}
       <View style={styles.customHeader}>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
-        </TouchableOpacity>
-        <View style={styles.headerAvatar}>
-          {isGroupChat && groupDetails?.avatar_url ? (
-            <Image source={{ uri: groupDetails.avatar_url }} style={styles.avatarImage} />
-          ) : (
-            <Text style={styles.headerAvatarText}>{(groupDetails?.group_name || chatTitle)?.charAt(0) || 'U'}</Text>
-          )}
-        </View>
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>{groupDetails?.group_name || chatTitle || 'Chat Room'}</Text>
-          {isGroupChat ? (
-            <Text style={styles.headerSubtitleOffline}>
-              {isGroupDetailsLoading ? 'Memuat anggota...' : `${onlineGroupMembers.length} online - ${activeGroupMembers.length} anggota`}
-            </Text>
-          ) : isTyping ? (
-            <Text style={styles.headerSubtitle}>typing...</Text>
-          ) : partnerStatus ? (
-            <Text style={styles.headerSubtitleOffline}>{partnerStatus}</Text>
-          ) : null}
-        </View>
-        <View style={styles.headerRightIcons}>
-          {isGroupChat ? (
-            <TouchableOpacity style={styles.headerIconButton} onPress={openGroupInfo}>
-              <Ionicons name="information-circle-outline" size={24} color="#F8FAFC" />
+        {isSearchMode ? (
+          <>
+            <TouchableOpacity style={styles.backButton} onPress={() => { setIsSearchMode(false); setSearchQuery(''); }}>
+              <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
             </TouchableOpacity>
-          ) : (
-            <>
-              <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
-              <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
-            </>
-          )}
-        </View>
+            <TextInput
+              style={{ flex: 1, color: '#F8FAFC', fontSize: 16, paddingHorizontal: 10, outlineStyle: 'none' } as any}
+              placeholder="Cari pesan atau dokumen..."
+              placeholderTextColor="#94A3B8"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+            />
+          </>
+        ) : (
+          <>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
+            </TouchableOpacity>
+            <View style={styles.headerAvatar}>
+              {isGroupChat && groupDetails?.avatar_url ? (
+                <Image source={{ uri: groupDetails.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.headerAvatarText}>{(groupDetails?.group_name || chatTitle)?.charAt(0) || 'U'}</Text>
+              )}
+            </View>
+            <View style={styles.headerTitleContainer}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{groupDetails?.group_name || chatTitle || 'Chat Room'}</Text>
+              {isGroupChat ? (
+                <Text style={styles.headerSubtitleOffline}>
+                  {isGroupDetailsLoading ? 'Memuat anggota...' : `${onlineGroupMembers.length} online - ${activeGroupMembers.length} anggota`}
+                </Text>
+              ) : isTyping ? (
+                <Text style={styles.headerSubtitle}>typing...</Text>
+              ) : partnerStatus ? (
+                <Text style={styles.headerSubtitleOffline}>{partnerStatus}</Text>
+              ) : null}
+            </View>
+            <View style={styles.headerRightIcons}>
+              <TouchableOpacity style={styles.headerIconButton} onPress={() => setIsSearchMode(true)}>
+                <Ionicons name="search" size={22} color="#F8FAFC" />
+              </TouchableOpacity>
+              {isGroupChat ? (
+                <TouchableOpacity style={styles.headerIconButton} onPress={openGroupInfo}>
+                  <Ionicons name="information-circle-outline" size={24} color="#F8FAFC" />
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
+                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
+                </>
+              )}
+            </View>
+          </>
+        )}
       </View>
       {pinnedMessage && (
         <View style={styles.pinnedBanner}>
@@ -1073,7 +1108,7 @@ function PrivateChatRoomScreen() {
 
       <FlatList
         ref={flatListRef}
-        data={messages}
+        data={filteredMessages}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => {
@@ -1091,6 +1126,7 @@ function PrivateChatRoomScreen() {
           // If user is near the bottom, enable auto-scroll
           const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
           shouldAutoScroll.current = distanceFromBottom < 150;
+          setShowScrollButton(distanceFromBottom > 300);
 
           // Load more when scrolling near the top
           if (contentOffset.y < 100 && hasMoreMessages && !isLoadingMore) {
@@ -1160,6 +1196,15 @@ function PrivateChatRoomScreen() {
           );
         }}
       />
+
+      {showScrollButton && !isSearchMode && (
+        <TouchableOpacity 
+          style={styles.scrollToBottomBtn}
+          onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
+        >
+          <Ionicons name="chevron-down" size={24} color="#F8FAFC" />
+        </TouchableOpacity>
+      )}
 
       <Modal transparent visible={isGroupInfoVisible} animationType="slide" onRequestClose={() => setIsGroupInfoVisible(false)}>
         <View style={styles.groupInfoOverlay}>
@@ -1468,6 +1513,23 @@ function PrivateChatRoomScreen() {
 }
 
 const styles = StyleSheet.create({
+  scrollToBottomBtn: {
+    position: 'absolute',
+    bottom: 80,
+    right: 20,
+    backgroundColor: '#334155',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
+  },
   container: {
     flex: 1,
     backgroundColor: '#0F172A',

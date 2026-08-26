@@ -6,7 +6,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.bamboochat.click https://www.bamboochat.click https://bamboochat.click; connect-src 'self' https://api.bamboochat.click wss://api.bamboochat.click https://bamboochain.id https://www.bamboochain.id; media-src 'self' data: blob: https://api.bamboochat.click; font-src 'self' data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app-cdn.minepi.com https://sdk.minepi.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.bamboochat.click https://www.bamboochat.click https://bamboochat.click; connect-src 'self' https://api.bamboochat.click wss://api.bamboochat.click https://bamboochain.id https://www.bamboochain.id https://api.minepi.com; media-src 'self' data: blob: https://api.bamboochat.click; font-src 'self' data:; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
         },
         { "key": "X-Content-Type-Options", "value": "nosniff" },
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
@@ -16,6 +16,10 @@
     }
   ],
   "rewrites": [
+    {
+      "source": "/validation-key.txt",
+      "destination": "/validation-key.txt"
+    },
     {
       "source": "/(.*)",
       "destination": "/index.html"

@@ -16,6 +16,7 @@ import faqRoutes from './routes/faq.routes';
 import aiRoutes from './routes/ai.routes';
 import ticketRoutes from './routes/ticket.routes';
 import adminRoutes from './routes/admin.routes';
+import paymentRoutes from './routes/payment.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -75,6 +76,7 @@ app.use('/api/faqs', faqRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/payments', paymentRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

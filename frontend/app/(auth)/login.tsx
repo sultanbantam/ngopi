@@ -178,6 +178,13 @@ export default function LoginScreen() {
             <Text style={styles.linkText}> Sign Up</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Temporary button for Pi Developer Portal Step 10 */}
+        <TouchableOpacity style={{ marginTop: 20, alignItems: 'center' }} onPress={() => router.push('/test-payment')}>
+          <Text style={{ color: '#F59E0B', textDecorationLine: 'underline' }}>
+            [Developer] Go to Test Payment (Step 10)
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );

@@ -21,8 +21,6 @@ export const getMessagesByRoom = async (req: Request, res: Response): Promise<vo
   try {
     const { room_id } = req.params;
     const userId = (req as any).user?.id as string | undefined;
-    const cursor = req.query.cursor as string | undefined;
-    const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
     
     if (!room_id) {
       res.status(400).json({ error: 'Room ID is required' });
@@ -33,16 +31,9 @@ export const getMessagesByRoom = async (req: Request, res: Response): Promise<vo
       return;
     }
 
-    // Fetch one extra to determine if there are more messages
-    const fetchCount = limit + 1;
-
     const messages = await prisma.message.findMany({
-      where: {
-        room_id: room_id as string,
-        ...(cursor ? { timestamp: { lt: (await prisma.message.findUnique({ where: { id: cursor } }))?.timestamp ?? new Date() } } : {}),
-      },
-      orderBy: { timestamp: 'desc' },
-      take: fetchCount,
+      where: { room_id: room_id as string },
+      orderBy: { timestamp: 'asc' },
       include: {
         sender: {
           select: {
@@ -55,20 +46,50 @@ export const getMessagesByRoom = async (req: Request, res: Response): Promise<vo
       },
     });
 
-    const hasMore = messages.length > limit;
-    const resultMessages = hasMore ? messages.slice(0, limit) : messages;
-    // Reverse to return in ascending chronological order
-    resultMessages.reverse();
-
-    const nextCursor = hasMore ? resultMessages[0]?.id : undefined;
-
-    res.status(200).json({
-      messages: resultMessages.map(decryptMessageRecord),
-      hasMore,
-      nextCursor,
-    });
+    res.status(200).json(messages.map(decryptMessageRecord));
   } catch (err) {
     console.error('Get messages error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const getUnreadCounts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id as string | undefined;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const userGroups = await prisma.groupMember.findMany({
+      where: { user_id: userId, status: 'active' },
+      select: { group_id: true }
+    });
+    const groupIds = userGroups.map(g => g.group_id);
+
+    const unreadMessages = await prisma.message.groupBy({
+      by: ['room_id'],
+      where: {
+        is_read: false,
+        sender_id: { not: userId },
+        OR: [
+          { room_id: { contains: userId } }, // 1-on-1 chats
+          { room_id: { in: groupIds } } // group chats
+        ]
+      },
+      _count: {
+        id: true
+      }
+    });
+
+    const unreadCounts: Record<string, number> = {};
+    for (const group of unreadMessages) {
+      unreadCounts[group.room_id] = group._count.id;
+    }
+
+    res.status(200).json(unreadCounts);
+  } catch (err) {
+    console.error('Get unread counts error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 };

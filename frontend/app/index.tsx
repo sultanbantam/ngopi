@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet, Image } from 'react-native';
+import { View, StyleSheet, Image, TouchableOpacity, Text } from 'react-native';
 import { router } from 'expo-router';
 import { getLastRefreshFailureReason, getValidAccessToken, hasStoredSession } from '../src/utils/session';
 
@@ -8,28 +8,28 @@ const logoImage = require('../assets/logo.png');
 
 export default function IndexScreen() {
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const hadSession = await hasStoredSession();
-        const token = await getValidAccessToken();
-        const canOpenOffline = hadSession && getLastRefreshFailureReason() === 'unavailable';
-
-        if (token || canOpenOffline) {
-          router.replace('/(main)/bambupedia');
-        } else {
-          router.replace('/(auth)/login');
-        }
-      } catch (error) {
-        router.replace('/(auth)/login');
-      }
-    };
-    checkAuth();
+    // Disable automatic redirect temporarily for Pi Browser debugging
+    // The automatic redirect (router.replace) is causing Pi Browser to drop the pi:// scheme
+    // and fallback to https:// with a yellow triangle.
   }, []);
 
   return (
     <View style={styles.container}>
       <Image source={logoImage} style={styles.logo} resizeMode="contain" />
-      <ActivityIndicator size="large" color="#10B981" />
+      
+      <TouchableOpacity 
+        style={styles.button}
+        onPress={() => router.push('/test-payment')}
+      >
+        <Text style={styles.buttonText}>Langsung ke Test Payment</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity 
+        style={[styles.button, { backgroundColor: '#3B82F6', marginTop: 15 }]}
+        onPress={() => router.push('/(auth)/login')}
+      >
+        <Text style={styles.buttonText}>Masuk ke Aplikasi</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -45,5 +45,16 @@ const styles = StyleSheet.create({
     width: 160,
     height: 160,
     marginBottom: 30,
+  },
+  button: {
+    backgroundColor: '#10B981',
+    paddingVertical: 15,
+    paddingHorizontal: 30,
+    borderRadius: 30,
+  },
+  buttonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   }
 });
