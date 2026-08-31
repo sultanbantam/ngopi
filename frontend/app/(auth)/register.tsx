@@ -65,15 +65,15 @@ export default function RegisterScreen() {
       }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
       const { token, refresh_token: refreshToken, user } = response.data;
       
+      await setStoredToken(token);
+      await setStoredRefreshToken(refreshToken);
+
       if (Platform.OS === 'web') {
-        localStorage.setItem('token', token);
         localStorage.setItem('temp_key', password);
         localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
         localStorage.setItem('private_key', deviceKeys.privateKey);
       } else {
-        await SecureStore.setItemAsync('token', token);
-        await setStoredRefreshToken(refreshToken);
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);

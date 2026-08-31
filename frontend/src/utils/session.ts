@@ -52,8 +52,7 @@ export const setStoredToken = (token: string) => setStorageValue('token', token)
 export const getLastRefreshFailureReason = () => lastRefreshFailureReason;
 
 export const setStoredRefreshToken = async (refreshToken?: string | null) => {
-  // Web memakai cookie httpOnly agar refresh token tidak dapat dibaca JavaScript.
-  if (Platform.OS !== 'web' && refreshToken) await setStorageValue('refresh_token', refreshToken);
+  if (refreshToken) await setStorageValue('refresh_token', refreshToken);
 };
 
 export const hasStoredSession = async () => Boolean(

@@ -85,14 +85,14 @@ export default function LoginScreen() {
       }
       const { token, refresh_token: refreshToken, user } = response.data;
       
+      await setStoredToken(token);
+      await setStoredRefreshToken(refreshToken);
+
       if (Platform.OS === 'web') {
-        await setStoredToken(token);
         localStorage.setItem('temp_key', password);
         localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
       } else {
-        await setStoredToken(token);
-        await setStoredRefreshToken(refreshToken);
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);

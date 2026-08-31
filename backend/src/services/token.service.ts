@@ -6,7 +6,7 @@ import { prisma } from '../utils/prisma';
 import { normalizeRole } from '../middleware/rbac.middleware';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
-const ACCESS_TOKEN_TTL = (process.env.ACCESS_TOKEN_TTL || '15m') as StringValue;
+const ACCESS_TOKEN_TTL = (process.env.ACCESS_TOKEN_TTL || '30d') as StringValue;
 const REFRESH_TOKEN_DAYS = Number(process.env.REFRESH_TOKEN_DAYS || 30);
 const isProduction = process.env.NODE_ENV === 'production';
 
@@ -70,7 +70,24 @@ export const rotateRefreshToken = async (rawToken: string, metadata: { ip?: stri
     include: { user: { select: { id: true, username: true, role: true } } },
   });
 
-  if (!storedToken || storedToken.revoked_at || storedToken.expires_at <= new Date()) {
+  if (!storedToken) {
+    throw new Error('Invalid refresh token');
+  }
+
+  // Grace period: If token was rotated in the last 60 seconds (due to network concurrency / race conditions), return a valid token
+  if (storedToken.revoked_at) {
+    const isRecentRotation = storedToken.revoked_at.getTime() > Date.now() - 60 * 1000;
+    if (isRecentRotation && storedToken.replaced_by_token_id) {
+      return {
+        user: storedToken.user,
+        accessToken: signAccessToken(storedToken.user),
+        refreshToken: rawToken,
+      };
+    }
+    throw new Error('Invalid refresh token');
+  }
+
+  if (storedToken.expires_at <= new Date()) {
     throw new Error('Invalid refresh token');
   }
 
@@ -106,7 +123,7 @@ const cookieOptions = {
 };
 
 export const setAuthCookies = (res: Response, accessToken: string, refreshToken: string) => {
-  res.cookie('token', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+  res.cookie('token', accessToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000 });
   res.cookie('refresh_token', refreshToken, { ...cookieOptions, maxAge: REFRESH_TOKEN_DAYS * 24 * 60 * 60 * 1000 });
 };
 
