@@ -55,6 +55,57 @@ export const encodeJsonResponse = (_req: Request, res: Response, next: NextFunct
   next();
 };
 
+export const isOriginAllowed = (origin?: string): boolean => {
+  if (!origin) return true;
+
+  const normalized = origin.trim().replace(/\/+$/, '').toLowerCase();
+
+  const staticOrigins = new Set([
+    'https://www.bamboochat.click',
+    'https://bamboochat.click',
+    'http://www.bamboochat.click',
+    'http://bamboochat.click',
+    'https://api.bamboochat.click',
+    'http://api.bamboochat.click',
+    'https://bamboochain.id',
+    'https://www.bamboochain.id',
+    'http://localhost',
+    'capacitor://localhost',
+    'ionic://localhost',
+    'null',
+  ]);
+
+  if (staticOrigins.has(normalized)) return true;
+
+  // Localhost on any port
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(normalized)) {
+    return true;
+  }
+
+  // Any bamboochat.click subdomain or domain
+  if (/^https?:\/\/(?:[a-z0-9-]+\.)*bamboochat\.click$/.test(normalized)) {
+    return true;
+  }
+
+  // Any bamboochain.id subdomain or domain
+  if (/^https?:\/\/(?:[a-z0-9-]+\.)*bamboochain\.id$/.test(normalized)) {
+    return true;
+  }
+
+  // Any vercel.app deployment
+  if (/^https?:\/\/(?:[a-z0-9-]+\.)*vercel\.app$/.test(normalized)) {
+    return true;
+  }
+
+  // Configured origins
+  const configured = (process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim().replace(/\/+$/, '').toLowerCase())
+    .filter(Boolean);
+
+  return configured.includes(normalized);
+};
+
 export const getAllowedOrigins = () => {
   const configured = (process.env.CORS_ORIGINS || process.env.ALLOWED_ORIGINS || '')
     .split(',')
@@ -74,15 +125,10 @@ export const getAllowedOrigins = () => {
 };
 
 export const corsOrigin = (origin: string | undefined, callback: (error: Error | null, allow?: boolean) => void) => {
-  if (!origin) {
+  if (isOriginAllowed(origin)) {
     callback(null, true);
-    return;
+  } else {
+    console.warn('CORS blocked origin:', origin);
+    callback(null, false);
   }
-
-  if (getAllowedOrigins().has(origin)) {
-    callback(null, true);
-    return;
-  }
-
-  callback(new Error('Not allowed by CORS'));
 };

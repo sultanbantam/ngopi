@@ -5,7 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
+  Modal,
   Platform,
   Alert,
   Share,
@@ -25,22 +25,25 @@ interface TranscriptItem {
 }
 
 const LANGUAGES = [
-  { code: 'id', label: '🇮🇩 Indonesia', name: 'Indonesian', bcp: 'id-ID' },
+  { code: 'id', label: '🇮🇩 Bahasa Indonesia', name: 'Indonesian', bcp: 'id-ID' },
   { code: 'en', label: '🇬🇧 English', name: 'English', bcp: 'en-US' },
   { code: 'pt', label: '🇵🇹 Português', name: 'Portuguese', bcp: 'pt-PT' },
-  { code: 'ja', label: '🇯🇵 日本語', name: 'Japanese', bcp: 'ja-JP' },
-  { code: 'zh', label: '🇨🇳 中文', name: 'Chinese', bcp: 'zh-CN' },
-  { code: 'ar', label: '🇸🇦 العربية', name: 'Arabic', bcp: 'ar-SA' },
-  { code: 'ko', label: '🇰🇷 한국어', name: 'Korean', bcp: 'ko-KR' },
-  { code: 'de', label: '🇩🇪 Deutsch', name: 'German', bcp: 'de-DE' },
-  { code: 'fr', label: '🇫🇷 Français', name: 'French', bcp: 'fr-FR' },
-  { code: 'es', label: '🇪🇸 Español', name: 'Spanish', bcp: 'es-ES' },
+  { code: 'ja', label: '🇯🇵 日本語 (Japanese)', name: 'Japanese', bcp: 'ja-JP' },
+  { code: 'zh', label: '🇨🇳 中文 (Chinese)', name: 'Chinese', bcp: 'zh-CN' },
+  { code: 'ar', label: '🇸🇦 العربية (Arabic)', name: 'Arabic', bcp: 'ar-SA' },
+  { code: 'ko', label: '🇰🇷 한국어 (Korean)', name: 'Korean', bcp: 'ko-KR' },
+  { code: 'de', label: '🇩🇪 Deutsch (German)', name: 'German', bcp: 'de-DE' },
+  { code: 'fr', label: '🇫🇷 Français (French)', name: 'French', bcp: 'fr-FR' },
+  { code: 'es', label: '🇪🇸 Español (Spanish)', name: 'Spanish', bcp: 'es-ES' },
 ];
 
 export default function AlihBahasaScreen() {
   // Two-way Language Selection
   const [sourceLangCode, setSourceLangCode] = useState('id');
   const [targetLangCode, setTargetLangCode] = useState('en');
+
+  // Modal Picker for Mobile
+  const [langPickerVisible, setLangPickerVisible] = useState<'source' | 'target' | null>(null);
 
   // Voice Gender Selection (Female / Male)
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
@@ -50,12 +53,12 @@ export default function AlihBahasaScreen() {
   const [durationSec, setDurationSec] = useState(0);
   const [micStatus, setMicStatus] = useState<string>('Siap');
 
-  // Headset Simultaneous Live Audio Interpreter Mode
+  // Headset Mode
   const [isHeadsetMode, setIsHeadsetMode] = useState(true);
 
   const [messages, setMessages] = useState<TranscriptItem[]>([]);
   const [currentSpokenText, setCurrentSpokenText] = useState('');
-  const [waveform, setWaveform] = useState<number[]>(new Array(16).fill(10));
+  const [waveform, setWaveform] = useState<number[]>(new Array(16).fill(12));
   const [activeView, setActiveView] = useState<'conversation' | 'notulen'>('conversation');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [browserWarning, setBrowserWarning] = useState<string | null>(null);
@@ -87,11 +90,12 @@ export default function AlihBahasaScreen() {
     isHeadsetModeRef.current = isHeadsetMode;
   }, [isRecording, isPaused, sourceLangCode, targetLangCode, voiceGender, isHeadsetMode]);
 
-  // Robust Chunked Translation Engine
+  // Pure Neural Machine Translation (No crowdsourced memory / No weird application letters)
   const translateText = async (text: string, srcLang: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim() || srcLang === tgtLang) return text;
     const clean = text.trim();
 
+    // Split long text by punctuation or into ~150-char chunks
     const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const translatedChunks: string[] = [];
 
@@ -101,7 +105,7 @@ export default function AlihBahasaScreen() {
 
       let translated = '';
 
-      // 1. Google NMT Engine
+      // High-accuracy Google Neural Machine Translation
       try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${srcLang}&tl=${tgtLang}&dt=t&q=${encodeURIComponent(trimmed)}`;
         const res = await fetch(url);
@@ -115,29 +119,13 @@ export default function AlihBahasaScreen() {
         console.warn('Google NMT chunk error:', err);
       }
 
-      // 2. MyMemory Fallback Engine
-      if (!translated || translated === trimmed) {
-        try {
-          const fbUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed.slice(0, 250))}&langpair=${srcLang}|${tgtLang}`;
-          const fbRes = await fetch(fbUrl);
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData?.responseData?.translatedText && !fbData.responseData.translatedText.includes('LIMIT')) {
-              translated = fbData.responseData.translatedText;
-            }
-          }
-        } catch (fbErr) {
-          console.warn('MyMemory chunk error:', fbErr);
-        }
-      }
-
       translatedChunks.push(translated || trimmed);
     }
 
     return translatedChunks.join(' ').trim();
   };
 
-  // Text-To-Speech Playback with Voice Gender Matching (Male / Female)
+  // Text-To-Speech Playback with Voice Gender Matching
   const speakTranslation = useCallback((text: string, langCode: string, genderOverride?: 'female' | 'male') => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -149,7 +137,6 @@ export default function AlihBahasaScreen() {
 
         const activeGender = genderOverride || voiceGenderRef.current;
 
-        // Find best matching voice for gender & language
         const voices = window.speechSynthesis.getVoices();
         const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langCode) || v.lang.replace('_', '-').startsWith(bcp.slice(0, 2)));
 
@@ -167,7 +154,6 @@ export default function AlihBahasaScreen() {
           }
         }
 
-        // Acoustic pitch & rate modulation for realistic male/female vocal tone
         if (activeGender === 'female') {
           u.pitch = 1.18;
           u.rate = 1.02;
@@ -253,7 +239,6 @@ export default function AlihBahasaScreen() {
     setCurrentSpokenText('');
     pendingSpeechRef.current = '';
 
-    // If Headset mode is active, play audio immediately with chosen gender voice
     if (isHeadsetModeRef.current && translated) {
       speakTranslation(translated, currentTgt);
     }
@@ -271,7 +256,6 @@ export default function AlihBahasaScreen() {
       setBrowserWarning(null);
 
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.mediaDevices) {
-        // 1. Audio MediaStream
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
 
@@ -287,7 +271,6 @@ export default function AlihBahasaScreen() {
           updateWaveformLoop();
         }
 
-        // 2. SpeechRecognition
         const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRec) {
           const recognition = new SpeechRec();
@@ -408,7 +391,7 @@ export default function AlihBahasaScreen() {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    setWaveform(new Array(16).fill(10));
+    setWaveform(new Array(16).fill(12));
     setCurrentSpokenText('');
   };
 
@@ -456,9 +439,12 @@ export default function AlihBahasaScreen() {
     return messages.map((m) => m.sourceText).join('. ') + '.';
   };
 
+  const srcLangObj = LANGUAGES.find((l) => l.code === sourceLangCode) || LANGUAGES[0]!;
+  const tgtLangObj = LANGUAGES.find((l) => l.code === targetLangCode) || LANGUAGES[1]!;
+
   return (
     <View style={styles.container}>
-      {/* 1. Header */}
+      {/* 1. Sleek Mobile Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -470,12 +456,12 @@ export default function AlihBahasaScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={18} color="#94A3B8" />
+          <Ionicons name="arrow-back" size={20} color="#94A3B8" />
           <Text style={styles.backBtnText}>Chat</Text>
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerTitle} numberOfLines={1}>🎙️ Alih Bahasa Real-Time</Text>
+          <Text style={styles.headerTitle} numberOfLines={1}>🎙️ Alih Bahasa Live</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, isRecording && !isPaused ? styles.statusDotActive : null]} />
             <Text style={styles.statusLabel}>{isRecording ? (isPaused ? 'Dijeda' : '🔴 Merekam') : micStatus}</Text>
@@ -509,85 +495,81 @@ export default function AlihBahasaScreen() {
         </View>
       )}
 
-      {/* 2. Two-Way Language Bar with Voice Gender Controls */}
-      <View style={styles.twoWayLangBar}>
-        {/* Source Language Picker */}
-        <View style={styles.langSide}>
-          <Text style={styles.langSideLabel}>Bicara:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langPillScroll}>
-            {LANGUAGES.map((l) => (
-              <TouchableOpacity
-                key={'src_' + l.code}
-                style={[styles.langChip, sourceLangCode === l.code && styles.langChipSrcActive]}
-                onPress={() => setSourceLangCode(l.code)}
-              >
-                <Text style={[styles.langChipText, sourceLangCode === l.code && styles.langChipSrcTextActive]}>
-                  {l.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+      {/* 2. Modern Compact Dual-Language Bar (Benchmarked against Google/Apple Translate) */}
+      <View style={styles.compactLangBar}>
+        {/* Source Dropdown Button */}
+        <TouchableOpacity
+          style={styles.langPickerButton}
+          onPress={() => setLangPickerVisible('source')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.pickerSubLabel}>Bicara</Text>
+          <View style={styles.pickerMainRow}>
+            <Text style={styles.pickerMainText} numberOfLines={1}>{srcLangObj.label}</Text>
+            <Ionicons name="chevron-down" size={14} color="#38BDF8" style={{ marginLeft: 4 }} />
+          </View>
+        </TouchableOpacity>
 
         {/* Swap Button */}
-        <TouchableOpacity style={styles.swapBtn} onPress={swapLanguages} activeOpacity={0.75}>
+        <TouchableOpacity style={styles.swapRoundButton} onPress={swapLanguages} activeOpacity={0.75}>
           <Ionicons name="swap-horizontal" size={18} color="#06B6D4" />
         </TouchableOpacity>
 
-        {/* Target Language Picker */}
-        <View style={styles.langSide}>
-          <Text style={styles.langSideLabel}>Terjemah:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langPillScroll}>
-            {LANGUAGES.map((l) => (
-              <TouchableOpacity
-                key={'tgt_' + l.code}
-                style={[styles.langChip, targetLangCode === l.code && styles.langChipTgtActive]}
-                onPress={() => setTargetLangCode(l.code)}
-              >
-                <Text style={[styles.langChipText, targetLangCode === l.code && styles.langChipTgtTextActive]}>
-                  {l.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+        {/* Target Dropdown Button */}
+        <TouchableOpacity
+          style={styles.langPickerButton}
+          onPress={() => setLangPickerVisible('target')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.pickerSubLabel}>Terjemah</Text>
+          <View style={styles.pickerMainRow}>
+            <Text style={[styles.pickerMainText, { color: '#34D399' }]} numberOfLines={1}>{tgtLangObj.label}</Text>
+            <Ionicons name="chevron-down" size={14} color="#34D399" style={{ marginLeft: 4 }} />
+          </View>
+        </TouchableOpacity>
       </View>
 
-      {/* Voice Gender Bar (Wanita 👩 / Pria 👨) */}
-      <View style={styles.voiceGenderBar}>
-        <View style={styles.genderLabelGroup}>
-          <Ionicons name="volume-medium" size={14} color="#94A3B8" />
-          <Text style={styles.genderTitle}>Suara Audio:</Text>
-        </View>
-
-        <View style={styles.genderToggleGroup}>
+      {/* 3. Quick Audio Settings Strip */}
+      <View style={styles.quickSettingsStrip}>
+        {/* Voice Gender Toggle */}
+        <View style={styles.genderSegment}>
           <TouchableOpacity
-            style={[styles.genderBtn, voiceGender === 'female' && styles.genderBtnActive]}
+            style={[styles.genderSegmentBtn, voiceGender === 'female' && styles.genderSegmentBtnActive]}
             onPress={() => {
               setVoiceGender('female');
               speakTranslation('Suara perempuan aktif', targetLangCode, 'female');
             }}
           >
-            <Text style={[styles.genderBtnText, voiceGender === 'female' && styles.genderBtnTextActive]}>
-              👩 Perempuan (Female)
+            <Text style={[styles.genderSegmentText, voiceGender === 'female' && styles.genderSegmentTextActive]}>
+              👩 Wanita
             </Text>
           </TouchableOpacity>
-
           <TouchableOpacity
-            style={[styles.genderBtn, voiceGender === 'male' && styles.genderBtnActive]}
+            style={[styles.genderSegmentBtn, voiceGender === 'male' && styles.genderSegmentBtnActive]}
             onPress={() => {
               setVoiceGender('male');
               speakTranslation('Suara laki-laki aktif', targetLangCode, 'male');
             }}
           >
-            <Text style={[styles.genderBtnText, voiceGender === 'male' && styles.genderBtnTextActive]}>
-              👨 Laki-laki (Male)
+            <Text style={[styles.genderSegmentText, voiceGender === 'male' && styles.genderSegmentTextActive]}>
+              👨 Pria
             </Text>
           </TouchableOpacity>
         </View>
+
+        {/* Headset Mode Toggle */}
+        <TouchableOpacity
+          style={[styles.headsetToggleChip, isHeadsetMode && styles.headsetToggleChipActive]}
+          onPress={() => setIsHeadsetMode(!isHeadsetMode)}
+        >
+          <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={14} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
+          <Text style={[styles.headsetToggleChipText, isHeadsetMode && styles.headsetToggleChipTextActive]}>
+            {isHeadsetMode ? 'Headset: ON' : 'Headset: OFF'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* 3. Main Single Conversation Window */}
+      {/* 4. Main Single Conversation Window */}
       {activeView === 'conversation' ? (
         <ScrollView
           ref={scrollViewRef}
@@ -598,35 +580,37 @@ export default function AlihBahasaScreen() {
           {messages.length === 0 && !currentSpokenText ? (
             <View style={styles.emptyPrompt}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="language" size={48} color="#06B6D4" />
+                <Ionicons name="mic-circle-outline" size={54} color="#06B6D4" />
               </View>
-              <Text style={styles.emptyTitle}>Penerjemah Suara Dua Arah</Text>
+              <Text style={styles.emptyTitle}>Penerjemah Suara Real-Time</Text>
               <Text style={styles.emptySub}>
-                Pilih bahasa bicara dan bahasa terjemahan di atas, pilih suara <Text style={{ color: '#F472B6', fontWeight: 'bold' }}>Perempuan</Text> atau <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>Laki-laki</Text>, lalu tekan <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>.
+                Bicara dalam bahasa <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>{srcLangObj.name}</Text> dan sistem akan menerjemahkan secara otomatis ke <Text style={{ color: '#34D399', fontWeight: 'bold' }}>{tgtLangObj.name}</Text>. Tekan tombol merah di bawah untuk mulai.
               </Text>
             </View>
           ) : (
-            messages.map((msg, idx) => (
+            messages.map((msg) => (
               <View key={msg.id} style={styles.chatCard}>
                 <View style={styles.chatCardHeader}>
                   <View style={styles.speakerPill}>
-                    <Ionicons name="mic-outline" size={12} color="#06B6D4" />
+                    <Ionicons name="mic-outline" size={13} color="#06B6D4" />
                     <Text style={styles.speakerPillText}>{msg.speaker}</Text>
                     <Text style={styles.timestampPill}>{msg.timestamp}</Text>
                   </View>
 
                   <View style={styles.cardActions}>
                     <TouchableOpacity style={styles.actionIconBtn} onPress={() => speakTranslation(msg.translatedText, msg.targetLang)}>
-                      <Ionicons name="volume-high" size={15} color="#38BDF8" />
+                      <Ionicons name="volume-high" size={16} color="#38BDF8" />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionIconBtn} onPress={() => handleCopy(`${msg.sourceText}\n↳ ${msg.translatedText}`, msg.id)}>
-                      <Ionicons name={copiedId === msg.id ? 'checkmark' : 'copy-outline'} size={15} color={copiedId === msg.id ? '#34D399' : '#94A3B8'} />
+                      <Ionicons name={copiedId === msg.id ? 'checkmark' : 'copy-outline'} size={16} color={copiedId === msg.id ? '#34D399' : '#94A3B8'} />
                     </TouchableOpacity>
                   </View>
                 </View>
 
+                {/* Spoken Original Text */}
                 <Text style={styles.cardSourceText}>{msg.sourceText}</Text>
 
+                {/* Clean Neural Translation Box */}
                 <View style={styles.cardTranslatedBlock}>
                   <View style={styles.langBadge}>
                     <Text style={styles.langBadgeText}>↳ {msg.targetLang.toUpperCase()}</Text>
@@ -637,6 +621,7 @@ export default function AlihBahasaScreen() {
             ))
           )}
 
+          {/* Live Speaking Indicator */}
           {currentSpokenText ? (
             <View style={[styles.chatCard, styles.liveSpeakingCard]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -683,20 +668,9 @@ export default function AlihBahasaScreen() {
         </ScrollView>
       )}
 
-      {/* 4. Docked Bottom Control Bar */}
+      {/* 5. Docked Bottom Control Bar */}
       <View style={styles.bottomDock}>
         <View style={styles.dockRow}>
-          {/* Headset Mode Toggle */}
-          <TouchableOpacity
-            style={[styles.headsetBtn, isHeadsetMode && styles.headsetBtnActive]}
-            onPress={() => setIsHeadsetMode(!isHeadsetMode)}
-          >
-            <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={15} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
-            <Text style={[styles.headsetText, isHeadsetMode && styles.headsetTextActive]}>
-              {isHeadsetMode ? 'Headset: ON' : 'Headset: OFF'}
-            </Text>
-          </TouchableOpacity>
-
           {/* Audio Waveform Spectrum */}
           <View style={styles.dockWaveform}>
             {waveform.map((val, idx) => (
@@ -722,7 +696,7 @@ export default function AlihBahasaScreen() {
           <View style={styles.dockBtnGroup}>
             {!isRecording ? (
               <TouchableOpacity style={styles.recordMainBtn} onPress={startRecording} activeOpacity={0.85}>
-                <Ionicons name="mic" size={18} color="#FFF" />
+                <Ionicons name="mic" size={20} color="#FFF" />
                 <Text style={styles.recordMainBtnText}>Rekam</Text>
               </TouchableOpacity>
             ) : (
@@ -744,6 +718,58 @@ export default function AlihBahasaScreen() {
           </View>
         </View>
       </View>
+
+      {/* Modal Language Selection Sheet for Mobile */}
+      <Modal
+        visible={langPickerVisible !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLangPickerVisible(null)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                Pilih Bahasa {langPickerVisible === 'source' ? 'Bicara (Input)' : 'Terjemahan (Output)'}
+              </Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setLangPickerVisible(null)}>
+                <Ionicons name="close" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              {LANGUAGES.map((lang) => {
+                const isSelected = (langPickerVisible === 'source' ? sourceLangCode : targetLangCode) === lang.code;
+                return (
+                  <TouchableOpacity
+                    key={lang.code}
+                    style={[styles.modalItem, isSelected && styles.modalItemActive]}
+                    onPress={() => {
+                      if (langPickerVisible === 'source') {
+                        setSourceLangCode(lang.code);
+                        if (isRecording && recognitionRef.current) {
+                          try {
+                            recognitionRef.current.stop();
+                            recognitionRef.current.lang = lang.bcp;
+                          } catch (_) {}
+                        }
+                      } else {
+                        setTargetLangCode(lang.code);
+                      }
+                      setLangPickerVisible(null);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
+                      {lang.label}
+                    </Text>
+                    {isSelected && <Ionicons name="checkmark-circle" size={18} color="#06B6D4" />}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -757,9 +783,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: Platform.OS === 'web' ? 12 : 46,
-    paddingBottom: 10,
+    paddingHorizontal: 14,
+    paddingTop: Platform.OS === 'web' ? 14 : 46,
+    paddingBottom: 12,
     backgroundColor: '#111827',
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
@@ -773,7 +799,7 @@ const styles = StyleSheet.create({
   },
   backBtnText: {
     color: '#94A3B8',
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   headerCenter: {
@@ -781,19 +807,19 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#F8FAFC',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '900',
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
     marginTop: 2,
   },
   statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#64748B',
   },
   statusDotActive: {
@@ -807,7 +833,7 @@ const styles = StyleSheet.create({
   headerRightActions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   viewSwitchBtn: {
     flexDirection: 'row',
@@ -816,9 +842,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#1F2937',
     borderWidth: 1,
     borderColor: '#374151',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
   },
   viewSwitchBtnActive: {
     backgroundColor: 'rgba(6, 182, 212, 0.2)',
@@ -826,7 +852,7 @@ const styles = StyleSheet.create({
   },
   viewSwitchBtnText: {
     color: '#94A3B8',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   viewSwitchBtnTextActive: {
@@ -834,15 +860,15 @@ const styles = StyleSheet.create({
   },
   resetBtn: {
     paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 6,
+    paddingVertical: 6,
+    borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(245, 158, 11, 0.3)',
@@ -853,155 +879,153 @@ const styles = StyleSheet.create({
     flex: 1,
     lineHeight: 16,
   },
-  twoWayLangBar: {
+  compactLangBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#111827',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#1F2937',
+    gap: 8,
   },
-  langSide: {
+  langPickerButton: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  langSideLabel: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: 'bold',
-    marginRight: 4,
-  },
-  langPillScroll: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  langChip: {
-    backgroundColor: '#1F2937',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#374151',
-  },
-  langChipSrcActive: {
-    backgroundColor: 'rgba(56, 189, 248, 0.2)',
-    borderColor: '#38BDF8',
-  },
-  langChipTgtActive: {
-    backgroundColor: 'rgba(52, 211, 153, 0.2)',
-    borderColor: '#34D399',
-  },
-  langChipText: {
-    color: '#94A3B8',
-    fontSize: 10,
-  },
-  langChipSrcTextActive: {
-    color: '#38BDF8',
-    fontWeight: 'bold',
-  },
-  langChipTgtTextActive: {
-    color: '#34D399',
-    fontWeight: 'bold',
-  },
-  swapBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
     backgroundColor: '#1E293B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: 6,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  voiceGenderBar: {
+  pickerSubLabel: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  pickerMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
+  pickerMainText: {
+    color: '#38BDF8',
+    fontSize: 13,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  swapRoundButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  quickSettingsStrip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#0F172A',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#1E293B',
   },
-  genderLabelGroup: {
+  genderSegment: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  genderTitle: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontWeight: 'bold',
-  },
-  genderToggleGroup: {
-    flexDirection: 'row',
-    gap: 6,
-  },
-  genderBtn: {
     backgroundColor: '#1E293B',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 8,
+    padding: 2,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  genderBtnActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.2)',
-    borderColor: '#06B6D4',
+  genderSegmentBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  genderBtnText: {
+  genderSegmentBtnActive: {
+    backgroundColor: '#06B6D4',
+  },
+  genderSegmentText: {
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: '600',
   },
-  genderBtnTextActive: {
-    color: '#22D3EE',
+  genderSegmentTextActive: {
+    color: '#FFF',
     fontWeight: 'bold',
+  },
+  headsetToggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  headsetToggleChipActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.2)',
+    borderColor: '#06B6D4',
+  },
+  headsetToggleChipText: {
+    color: '#64748B',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  headsetToggleChipTextActive: {
+    color: '#22D3EE',
   },
   chatStreamContainer: {
     flex: 1,
   },
   chatStreamContent: {
-    padding: 12,
+    padding: 14,
     paddingBottom: 30,
   },
   emptyPrompt: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 64,
+    paddingVertical: 60,
     paddingHorizontal: 20,
   },
   emptyIconCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: 'rgba(6, 182, 212, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   emptyTitle: {
     color: '#F8FAFC',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
     textAlign: 'center',
   },
   emptySub: {
     color: '#94A3B8',
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'center',
     marginTop: 6,
-    lineHeight: 18,
+    lineHeight: 20,
     maxWidth: 320,
   },
   chatCard: {
     backgroundColor: '#161F30',
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 10,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
     borderWidth: 1,
     borderColor: '#243044',
   },
@@ -1009,7 +1033,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   speakerPill: {
     flexDirection: 'row',
@@ -1023,37 +1047,37 @@ const styles = StyleSheet.create({
   },
   timestampPill: {
     color: '#64748B',
-    fontSize: 10,
+    fontSize: 11,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   cardActions: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
   actionIconBtn: {
-    padding: 4,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    padding: 5,
+    borderRadius: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   cardSourceText: {
     color: '#F8FAFC',
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '500',
   },
   cardTranslatedBlock: {
-    marginTop: 8,
-    paddingTop: 8,
+    marginTop: 10,
+    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#243044',
   },
   langBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(52, 211, 153, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
     borderRadius: 4,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   langBadgeText: {
     color: '#34D399',
@@ -1062,8 +1086,8 @@ const styles = StyleSheet.create({
   },
   cardTranslatedText: {
     color: '#34D399',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 15,
+    lineHeight: 22,
     fontWeight: '600',
   },
   liveSpeakingCard: {
@@ -1073,23 +1097,23 @@ const styles = StyleSheet.create({
   },
   liveSpeakingTag: {
     color: '#EF4444',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   liveSpeakingText: {
     color: '#E2E8F0',
-    fontSize: 13,
+    fontSize: 14,
     fontStyle: 'italic',
     marginTop: 4,
   },
   notulenScrollContent: {
-    padding: 12,
+    padding: 14,
     paddingBottom: 30,
   },
   notulenBox: {
     backgroundColor: '#161F30',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 14,
+    padding: 16,
     borderWidth: 1,
     borderColor: '#243044',
   },
@@ -1097,102 +1121,79 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 10,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#243044',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   notulenMainTitle: {
     color: '#F8FAFC',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
   },
   notulenCopyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#0284C7',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
   },
   notulenCopyBtnText: {
     color: '#FFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: 'bold',
   },
   notulenSection: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   notulenSecHeader: {
     color: '#38BDF8',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   notulenSecBody: {
     color: '#E2E8F0',
-    fontSize: 13,
-    lineHeight: 19,
+    fontSize: 14,
+    lineHeight: 21,
   },
   notulenListRow: {
-    marginBottom: 8,
-    paddingBottom: 6,
+    marginBottom: 10,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#243044',
   },
   notulenListSrc: {
     color: '#F8FAFC',
-    fontSize: 12,
+    fontSize: 13,
   },
   notulenListTgt: {
     color: '#34D399',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 3,
   },
   bottomDock: {
     backgroundColor: '#111827',
     borderTopWidth: 1,
     borderTopColor: '#1F2937',
-    paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'web' ? 12 : 28,
+    paddingHorizontal: 14,
+    paddingTop: 10,
+    paddingBottom: Platform.OS === 'web' ? 14 : 30,
   },
   dockRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headsetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#1F2937',
-    borderWidth: 1,
-    borderColor: '#374151',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  headsetBtnActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.2)',
-    borderColor: '#06B6D4',
-  },
-  headsetText: {
-    color: '#64748B',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  headsetTextActive: {
-    color: '#22D3EE',
-  },
   dockWaveform: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    height: 24,
+    height: 28,
     gap: 3,
-    marginHorizontal: 10,
+    marginRight: 12,
   },
   waveformStick: {
     flex: 1,
@@ -1200,10 +1201,10 @@ const styles = StyleSheet.create({
   },
   dockTimer: {
     color: '#F8FAFC',
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: 'bold',
-    marginRight: 10,
+    marginRight: 12,
   },
   dockBtnGroup: {
     flexDirection: 'row',
@@ -1214,9 +1215,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: '#EF4444',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 20,
     shadowColor: '#EF4444',
     shadowOpacity: 0.5,
     shadowRadius: 8,
@@ -1225,30 +1226,88 @@ const styles = StyleSheet.create({
   recordMainBtnText: {
     color: '#FFF',
     fontWeight: 'bold',
-    fontSize: 13,
+    fontSize: 14,
   },
   pauseCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
   },
   resumeCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#10B981',
     alignItems: 'center',
     justifyContent: 'center',
   },
   stopCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: '#111827',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '75%',
+    borderWidth: 1,
+    borderColor: '#1F2937',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1F2937',
+    marginBottom: 10,
+  },
+  modalTitle: {
+    color: '#F8FAFC',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalList: {
+    marginVertical: 6,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: '#161F30',
+  },
+  modalItemActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderWidth: 1,
+    borderColor: '#06B6D4',
+  },
+  modalItemText: {
+    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  modalItemTextActive: {
+    color: '#22D3EE',
+    fontWeight: 'bold',
   },
 });
