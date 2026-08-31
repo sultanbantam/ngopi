@@ -757,6 +757,16 @@ export default function BambupediaRoom() {
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Menu Tambahan</Text>
             <View style={styles.menuGrid}>
+              <TouchableOpacity style={[styles.menuTile, { backgroundColor: 'rgba(6, 182, 212, 0.15)', borderColor: '#0891B2' }]} onPress={() => {
+                if (Platform.OS === 'web') {
+                  window.location.assign('/alihbahasa');
+                } else {
+                  router.push('/(main)/alihbahasa' as any);
+                }
+              }}>
+                <Ionicons name="mic" size={18} color="#22D3EE" />
+                <Text style={[styles.menuTileText, { color: '#22D3EE', fontWeight: 'bold' }]}>Alih Bahasa</Text>
+              </TouchableOpacity>
               <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/(main)/help-center')}>
                 <Ionicons name="headset-outline" size={18} color="#CFFAFE" />
                 <Text style={styles.menuTileText}>Pusat Bantuan</Text>
@@ -803,6 +813,19 @@ export default function BambupediaRoom() {
           <Text style={styles.headerSubtitle} numberOfLines={1}>{roomSummaryLabel} - {socketConnected ? 'Live' : 'Menghubungkan'}</Text>
         </TouchableOpacity>
 
+        <TouchableOpacity
+          style={[styles.headerIconButton, { backgroundColor: 'rgba(6, 182, 212, 0.2)' }]}
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              window.location.assign('/alihbahasa');
+            } else {
+              router.push('/(main)/alihbahasa' as any);
+            }
+          }}
+          accessibilityLabel="Alih Bahasa Live Meeting"
+        >
+          <Ionicons name="mic" size={20} color="#22D3EE" />
+        </TouchableOpacity>
         <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Cari pesan">
           <Ionicons name="search" size={22} color="#E2E8F0" />
         </TouchableOpacity>
