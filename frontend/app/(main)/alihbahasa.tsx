@@ -38,9 +38,12 @@ const LANGUAGES = [
 ];
 
 export default function AlihBahasaScreen() {
-  // Two-way Language Selection (Google Translate / DeepL Benchmark)
+  // Two-way Language Selection
   const [sourceLangCode, setSourceLangCode] = useState('id');
   const [targetLangCode, setTargetLangCode] = useState('en');
+
+  // Voice Gender Selection (Female / Male)
+  const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
 
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -61,6 +64,7 @@ export default function AlihBahasaScreen() {
   const isPausedRef = useRef(false);
   const sourceLangRef = useRef('id');
   const targetLangRef = useRef('en');
+  const voiceGenderRef = useRef<'female' | 'male'>('female');
   const isHeadsetModeRef = useRef(true);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -79,15 +83,15 @@ export default function AlihBahasaScreen() {
     isPausedRef.current = isPaused;
     sourceLangRef.current = sourceLangCode;
     targetLangRef.current = targetLangCode;
+    voiceGenderRef.current = voiceGender;
     isHeadsetModeRef.current = isHeadsetMode;
-  }, [isRecording, isPaused, sourceLangCode, targetLangCode, isHeadsetMode]);
+  }, [isRecording, isPaused, sourceLangCode, targetLangCode, voiceGender, isHeadsetMode]);
 
-  // Robust Chunked Translation Engine (Zero query length limit error)
+  // Robust Chunked Translation Engine
   const translateText = async (text: string, srcLang: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim() || srcLang === tgtLang) return text;
     const clean = text.trim();
 
-    // Split long text by punctuation into max 180-char chunks
     const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const translatedChunks: string[] = [];
 
@@ -133,15 +137,45 @@ export default function AlihBahasaScreen() {
     return translatedChunks.join(' ').trim();
   };
 
-  // Text-To-Speech Playback with Mobile Browser Autoplay Unlock
-  const speakTranslation = useCallback((text: string, langCode: string) => {
+  // Text-To-Speech Playback with Voice Gender Matching (Male / Female)
+  const speakTranslation = useCallback((text: string, langCode: string, genderOverride?: 'female' | 'male') => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
         const u = new SpeechSynthesisUtterance(text);
         const targetObj = LANGUAGES.find((l) => l.code === langCode);
-        u.lang = targetObj?.bcp || 'en-US';
-        u.rate = 1.0;
+        const bcp = targetObj?.bcp || 'en-US';
+        u.lang = bcp;
+
+        const activeGender = genderOverride || voiceGenderRef.current;
+
+        // Find best matching voice for gender & language
+        const voices = window.speechSynthesis.getVoices();
+        const langVoices = voices.filter((v) => v.lang.toLowerCase().startsWith(langCode) || v.lang.replace('_', '-').startsWith(bcp.slice(0, 2)));
+
+        if (langVoices.length > 0) {
+          const femaleKeywords = ['female', 'woman', 'girl', 'zira', 'jenny', 'samantha', 'victoria', 'aria', 'hazel', 'katja', 'kyoko', 'yuna'];
+          const maleKeywords = ['male', 'man', 'guy', 'david', 'george', 'mark', 'richard', 'brian', 'stefan', 'otoya', 'minsu'];
+
+          const targetKeywords = activeGender === 'female' ? femaleKeywords : maleKeywords;
+          const foundVoice = langVoices.find((v) => targetKeywords.some((kw) => v.name.toLowerCase().includes(kw)));
+
+          if (foundVoice) {
+            u.voice = foundVoice;
+          } else {
+            u.voice = langVoices[0];
+          }
+        }
+
+        // Acoustic pitch & rate modulation for realistic male/female vocal tone
+        if (activeGender === 'female') {
+          u.pitch = 1.18;
+          u.rate = 1.02;
+        } else {
+          u.pitch = 0.82;
+          u.rate = 0.95;
+        }
+
         window.speechSynthesis.speak(u);
       } catch (e) {
         console.warn('TTS playback error:', e);
@@ -149,7 +183,7 @@ export default function AlihBahasaScreen() {
     }
   }, []);
 
-  // Unlock mobile browser speech synthesis on direct user interaction
+  // Unlock mobile browser audio context
   const unlockAudioContext = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -190,12 +224,11 @@ export default function AlihBahasaScreen() {
     animationFrameRef.current = requestAnimationFrame(updateWaveformLoop);
   };
 
-  // Commit single finished sentence cleanly (No flicker, No duplicates)
+  // Commit single finished sentence cleanly
   const commitFinishedSentence = useCallback(async (textToCommit: string) => {
     const clean = textToCommit.trim().replace(/^[,.\s]+|[,.\s]+$/g, '');
     if (!clean || clean.length < 2) return;
 
-    // Deduplication check
     if (clean === lastCommittedSentenceRef.current) {
       return;
     }
@@ -220,7 +253,7 @@ export default function AlihBahasaScreen() {
     setCurrentSpokenText('');
     pendingSpeechRef.current = '';
 
-    // If Headset mode is active, play audio immediately
+    // If Headset mode is active, play audio immediately with chosen gender voice
     if (isHeadsetModeRef.current && translated) {
       speakTranslation(translated, currentTgt);
     }
@@ -230,7 +263,7 @@ export default function AlihBahasaScreen() {
     }, 100);
   }, [speakTranslation]);
 
-  // Start Real Recording with Brave/Chrome Auto-Detection
+  // Start Real Recording
   const startRecording = async () => {
     try {
       unlockAudioContext();
@@ -254,7 +287,7 @@ export default function AlihBahasaScreen() {
           updateWaveformLoop();
         }
 
-        // 2. Check SpeechRecognition availability
+        // 2. SpeechRecognition
         const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRec) {
           const recognition = new SpeechRec();
@@ -289,7 +322,6 @@ export default function AlihBahasaScreen() {
               pendingSpeechRef.current = interim.trim();
               setCurrentSpokenText(interim.trim());
 
-              // Silence debouncer: auto-finalize after 1.2s of silence
               if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
               silenceTimerRef.current = setTimeout(() => {
                 if (pendingSpeechRef.current) {
@@ -388,14 +420,12 @@ export default function AlihBahasaScreen() {
     setMicStatus('Siap');
   };
 
-  // Swap Languages: Source <-> Target (Google Translate / DeepL Benchmark)
   const swapLanguages = () => {
     const prevSrc = sourceLangCode;
     const prevTgt = targetLangCode;
     setSourceLangCode(prevTgt);
     setTargetLangCode(prevSrc);
 
-    // If recording, restart recognition with new source language
     if (isRecording && recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -428,7 +458,7 @@ export default function AlihBahasaScreen() {
 
   return (
     <View style={styles.container}>
-      {/* 1. Header Ringkas Mobile & Desktop */}
+      {/* 1. Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -471,7 +501,7 @@ export default function AlihBahasaScreen() {
         </View>
       </View>
 
-      {/* Brave Browser Shield Warning (If applicable) */}
+      {/* Browser Warning */}
       {browserWarning && (
         <View style={styles.warningBanner}>
           <Ionicons name="alert-circle" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
@@ -479,7 +509,7 @@ export default function AlihBahasaScreen() {
         </View>
       )}
 
-      {/* 2. Two-Way Language Bar (Source <-> Target) Benchmark Google Translate */}
+      {/* 2. Two-Way Language Bar with Voice Gender Controls */}
       <View style={styles.twoWayLangBar}>
         {/* Source Language Picker */}
         <View style={styles.langSide}>
@@ -523,6 +553,40 @@ export default function AlihBahasaScreen() {
         </View>
       </View>
 
+      {/* Voice Gender Bar (Wanita 👩 / Pria 👨) */}
+      <View style={styles.voiceGenderBar}>
+        <View style={styles.genderLabelGroup}>
+          <Ionicons name="volume-medium" size={14} color="#94A3B8" />
+          <Text style={styles.genderTitle}>Suara Audio:</Text>
+        </View>
+
+        <View style={styles.genderToggleGroup}>
+          <TouchableOpacity
+            style={[styles.genderBtn, voiceGender === 'female' && styles.genderBtnActive]}
+            onPress={() => {
+              setVoiceGender('female');
+              speakTranslation('Suara perempuan aktif', targetLangCode, 'female');
+            }}
+          >
+            <Text style={[styles.genderBtnText, voiceGender === 'female' && styles.genderBtnTextActive]}>
+              👩 Perempuan (Female)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.genderBtn, voiceGender === 'male' && styles.genderBtnActive]}
+            onPress={() => {
+              setVoiceGender('male');
+              speakTranslation('Suara laki-laki aktif', targetLangCode, 'male');
+            }}
+          >
+            <Text style={[styles.genderBtnText, voiceGender === 'male' && styles.genderBtnTextActive]}>
+              👨 Laki-laki (Male)
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* 3. Main Single Conversation Window */}
       {activeView === 'conversation' ? (
         <ScrollView
@@ -538,7 +602,7 @@ export default function AlihBahasaScreen() {
               </View>
               <Text style={styles.emptyTitle}>Penerjemah Suara Dua Arah</Text>
               <Text style={styles.emptySub}>
-                Pilih bahasa bicara dan bahasa terjemahan di atas, lalu tekan <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>. Setiap kalimat akan langsung ditranskrip & diterjemahkan secara presisi.
+                Pilih bahasa bicara dan bahasa terjemahan di atas, pilih suara <Text style={{ color: '#F472B6', fontWeight: 'bold' }}>Perempuan</Text> atau <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>Laki-laki</Text>, lalu tekan <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>.
               </Text>
             </View>
           ) : (
@@ -561,10 +625,8 @@ export default function AlihBahasaScreen() {
                   </View>
                 </View>
 
-                {/* Spoken Text */}
                 <Text style={styles.cardSourceText}>{msg.sourceText}</Text>
 
-                {/* Translated Text (Vibrant Green) */}
                 <View style={styles.cardTranslatedBlock}>
                   <View style={styles.langBadge}>
                     <Text style={styles.langBadgeText}>↳ {msg.targetLang.toUpperCase()}</Text>
@@ -575,7 +637,6 @@ export default function AlihBahasaScreen() {
             ))
           )}
 
-          {/* Active Speaking Live Bubble (No crazy scrolling) */}
           {currentSpokenText ? (
             <View style={[styles.chatCard, styles.liveSpeakingCard]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -625,7 +686,7 @@ export default function AlihBahasaScreen() {
       {/* 4. Docked Bottom Control Bar */}
       <View style={styles.bottomDock}>
         <View style={styles.dockRow}>
-          {/* Headset Simultaneous Interpreter Toggle */}
+          {/* Headset Mode Toggle */}
           <TouchableOpacity
             style={[styles.headsetBtn, isHeadsetMode && styles.headsetBtnActive]}
             onPress={() => setIsHeadsetMode(!isHeadsetMode)}
@@ -854,6 +915,51 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     borderWidth: 1,
     borderColor: '#334155',
+  },
+  voiceGenderBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1E293B',
+  },
+  genderLabelGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  genderTitle: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  genderToggleGroup: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  genderBtn: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  genderBtnActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.2)',
+    borderColor: '#06B6D4',
+  },
+  genderBtnText: {
+    color: '#94A3B8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  genderBtnTextActive: {
+    color: '#22D3EE',
+    fontWeight: 'bold',
   },
   chatStreamContainer: {
     flex: 1,
