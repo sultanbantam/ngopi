@@ -5,7 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  TextInput,
   Platform,
   Alert,
   Share,
@@ -36,16 +35,17 @@ const SUPPORTED_LANGUAGES = [
 ];
 
 export default function AlihBahasaScreen() {
-  const [meetingTitle, setMeetingTitle] = useState('Rapat Suara BambooChat');
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [durationSec, setDurationSec] = useState(0);
   const [targetLangCode, setTargetLangCode] = useState('en');
   const [micStatus, setMicStatus] = useState<string>('Siap');
 
+  // Headset Live Audio Simultaneous Interpreter Mode
+  const [isHeadsetMode, setIsHeadsetMode] = useState(true);
+
   const [messages, setMessages] = useState<TranscriptBubble[]>([]);
   const [partialText, setPartialText] = useState('');
-  const [partialTranslation, setPartialTranslation] = useState('');
   const [waveform, setWaveform] = useState<number[]>(new Array(16).fill(8));
   const [viewMode, setViewMode] = useState<'stream' | 'notulen'>('stream');
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -53,6 +53,8 @@ export default function AlihBahasaScreen() {
   const isRecordingRef = useRef(false);
   const isPausedRef = useRef(false);
   const targetLangRef = useRef('en');
+  const isHeadsetModeRef = useRef(true);
+
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<any>(null);
   const analyserRef = useRef<any>(null);
@@ -61,52 +63,82 @@ export default function AlihBahasaScreen() {
   const animationFrameRef = useRef<number | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const currentInterimRef = useRef<string>('');
+  const committedTextsSetRef = useRef<Set<string>>(new Set());
+  const interimBufferRef = useRef<string>('');
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
     isPausedRef.current = isPaused;
     targetLangRef.current = targetLangCode;
-  }, [isRecording, isPaused, targetLangCode]);
+    isHeadsetModeRef.current = isHeadsetMode;
+  }, [isRecording, isPaused, targetLangCode, isHeadsetMode]);
 
-  // High-reliability translation engine (multi-source fallback)
+  // Robust Chunked Translation Engine (Max 200 chars per chunk to avoid query length limits)
   const translateText = async (text: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim()) return '';
-    const cleanText = text.trim();
-    
-    // 1. Google NMT API
-    try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=id&tl=${tgtLang}&dt=t&q=${encodeURIComponent(cleanText)}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && Array.isArray(data[0])) {
-          const translated = data[0].map((chunk: any) => chunk[0]).filter(Boolean).join('');
-          if (translated && translated.trim().length > 0) {
-            return translated.trim();
+    const clean = text.trim();
+
+    // Split long text by punctuation or into ~150-char chunks
+    const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
+    const translatedChunks: string[] = [];
+
+    for (const chunk of chunks) {
+      const trimmed = chunk.trim();
+      if (!trimmed) continue;
+
+      let chunkTranslated = '';
+
+      // 1. Google Translate NMT
+      try {
+        const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=id&tl=${tgtLang}&dt=t&q=${encodeURIComponent(trimmed)}`;
+        const res = await fetch(url);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && Array.isArray(data[0])) {
+            chunkTranslated = data[0].map((c: any) => c[0]).filter(Boolean).join('');
           }
         }
+      } catch (err) {
+        console.warn('Google NMT chunk error:', err);
       }
-    } catch (err) {
-      console.warn('Google NMT error:', err);
-    }
 
-    // 2. MyMemory Fallback Engine
-    try {
-      const fbUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=id|${tgtLang}`;
-      const fbRes = await fetch(fbUrl);
-      if (fbRes.ok) {
-        const fbData = await fbRes.json();
-        if (fbData?.responseData?.translatedText) {
-          return fbData.responseData.translatedText.trim();
+      // 2. MyMemory Fallback Engine
+      if (!chunkTranslated) {
+        try {
+          const fbUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed.slice(0, 300))}&langpair=id|${tgtLang}`;
+          const fbRes = await fetch(fbUrl);
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            if (fbData?.responseData?.translatedText && !fbData.responseData.translatedText.includes('LIMIT')) {
+              chunkTranslated = fbData.responseData.translatedText;
+            }
+          }
+        } catch (fbErr) {
+          console.warn('MyMemory chunk error:', fbErr);
         }
       }
-    } catch (fbErr) {
-      console.warn('MyMemory fallback error:', fbErr);
+
+      translatedChunks.push(chunkTranslated || trimmed);
     }
 
-    return cleanText;
+    return translatedChunks.join(' ').trim();
   };
+
+  // Text-To-Speech Playback
+  const speakTranslation = useCallback((text: string, langCode: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        const targetObj = SUPPORTED_LANGUAGES.find((l) => l.code === langCode);
+        u.lang = targetObj?.bcp || 'en-US';
+        u.rate = 1.05;
+        window.speechSynthesis.speak(u);
+      } catch (e) {
+        console.warn('TTS playback error:', e);
+      }
+    }
+  }, []);
 
   // Timer Counter
   useEffect(() => {
@@ -138,21 +170,21 @@ export default function AlihBahasaScreen() {
     animationFrameRef.current = requestAnimationFrame(updateWaveformLoop);
   };
 
-  // Commit clean sentence into the single live window stream
+  // Commit a single finalized sentence cleanly into the chat stream
   const commitSentence = useCallback(async (sentenceText: string) => {
-    const clean = sentenceText.trim();
-    if (!clean || clean.length < 2) return;
+    const clean = sentenceText.trim().replace(/^[,.\s]+|[,.\s]+$/g, '');
+    if (!clean || clean.length < 3) return;
 
-    // Deduplication check with last message to prevent echo loops
-    setMessages((prev) => {
-      if (prev.length > 0) {
-        const last = prev[prev.length - 1]!;
-        if (last.sourceText === clean || clean.startsWith(last.sourceText) && clean.length - last.sourceText.length < 4) {
-          return prev;
-        }
-      }
-      return prev;
-    });
+    // Strict deduplication to prevent duplicate bubbles
+    if (committedTextsSetRef.current.has(clean)) {
+      return;
+    }
+    committedTextsSetRef.current.add(clean);
+
+    // Keep set bounded
+    if (committedTextsSetRef.current.size > 200) {
+      committedTextsSetRef.current.clear();
+    }
 
     const currentTgt = targetLangRef.current;
     const translated = await translateText(clean, currentTgt);
@@ -168,15 +200,19 @@ export default function AlihBahasaScreen() {
 
     setMessages((prev) => [...prev, newBubble]);
     setPartialText('');
-    setPartialTranslation('');
-    currentInterimRef.current = '';
+    interimBufferRef.current = '';
+
+    // If Headset mode is ON, speak the translation immediately into earphone!
+    if (isHeadsetModeRef.current && translated) {
+      speakTranslation(translated, currentTgt);
+    }
 
     setTimeout(() => {
       scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 80);
-  }, []);
+    }, 100);
+  }, [speakTranslation]);
 
-  // Start Continuous Recording Engine
+  // Start Real Microphone + Speech Recognition
   const startRecording = async () => {
     try {
       setMicStatus('Menghubungkan...');
@@ -197,7 +233,7 @@ export default function AlihBahasaScreen() {
           updateWaveformLoop();
         }
 
-        // 2. Continuous Speech Recognition
+        // 2. Speech Recognition Engine
         const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRec) {
           const recognition = new SpeechRec();
@@ -228,18 +264,16 @@ export default function AlihBahasaScreen() {
               if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
               commitSentence(finalChunk.trim());
             } else if (interim.trim()) {
-              currentInterimRef.current = interim.trim();
+              interimBufferRef.current = interim.trim();
               setPartialText(interim.trim());
 
-              // Silence debouncer: If user pauses for 1.4s, auto-commit the interim text
+              // Silence debouncer: When user finishes speaking for 1.2s, auto-commit cleanly
               if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
               silenceTimerRef.current = setTimeout(() => {
-                if (currentInterimRef.current) {
-                  commitSentence(currentInterimRef.current);
+                if (interimBufferRef.current) {
+                  commitSentence(interimBufferRef.current);
                 }
-              }, 1400);
-
-              scrollViewRef.current?.scrollToEnd({ animated: true });
+              }, 1200);
             }
           };
 
@@ -277,8 +311,8 @@ export default function AlihBahasaScreen() {
     setIsPaused(true);
     setMicStatus('Dijeda');
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    if (currentInterimRef.current) {
-      commitSentence(currentInterimRef.current);
+    if (interimBufferRef.current) {
+      commitSentence(interimBufferRef.current);
     }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (_) {}
@@ -300,8 +334,8 @@ export default function AlihBahasaScreen() {
     setMicStatus('Selesai');
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-    if (currentInterimRef.current) {
-      commitSentence(currentInterimRef.current);
+    if (interimBufferRef.current) {
+      commitSentence(interimBufferRef.current);
     }
 
     if (recognitionRef.current) {
@@ -326,6 +360,7 @@ export default function AlihBahasaScreen() {
   const clearAll = () => {
     stopRecording();
     setMessages([]);
+    committedTextsSetRef.current.clear();
     setDurationSec(0);
     setMicStatus('Siap');
   };
@@ -334,18 +369,6 @@ export default function AlihBahasaScreen() {
     const m = Math.floor(secs / 60).toString().padStart(2, '0');
     const s = (secs % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
-  };
-
-  const handleSpeak = (text: string, langCode: string) => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      const targetObj = SUPPORTED_LANGUAGES.find((l) => l.code === langCode);
-      u.lang = targetObj?.bcp || 'en-US';
-      window.speechSynthesis.speak(u);
-    } else {
-      Alert.alert('TTS Voice', `Memutar: "${text}"`);
-    }
   };
 
   const handleCopy = (text: string, id: string) => {
@@ -358,17 +381,16 @@ export default function AlihBahasaScreen() {
     }
   };
 
-  // Generate Clean, Structured Notulen
+  // Generate Clean, Coherent Notulen
   const getCleanSummary = () => {
     if (messages.length === 0) return 'Belum ada data rekaman untuk dirangkum.';
-    // Combine full sentences and remove duplicates
-    const uniqueSentences = Array.from(new Set(messages.map((m) => m.sourceText.trim()))).filter((s) => s.length > 5);
-    return uniqueSentences.join('. ');
+    const sentences = messages.map((m) => m.sourceText.trim()).filter((s) => s.length > 5);
+    return sentences.join('. ') + '.';
   };
 
   return (
     <View style={styles.container}>
-      {/* 1. Header Ringkas Mobile */}
+      {/* 1. Mobile Header */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -380,8 +402,8 @@ export default function AlihBahasaScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={20} color="#94A3B8" />
-          <Text style={styles.backBtnText}>Kembali</Text>
+          <Ionicons name="arrow-back" size={18} color="#94A3B8" />
+          <Text style={styles.backBtnText}>Chat</Text>
         </TouchableOpacity>
 
         <View style={styles.headerCenter}>
@@ -392,13 +414,13 @@ export default function AlihBahasaScreen() {
           </View>
         </View>
 
-        {/* View Switcher: Live Stream vs Clean Notulen */}
+        {/* View Mode & Reset Button */}
         <View style={styles.headerRightActions}>
           <TouchableOpacity
             style={[styles.modeBtn, viewMode === 'notulen' && styles.modeBtnActive]}
             onPress={() => setViewMode(viewMode === 'stream' ? 'notulen' : 'stream')}
           >
-            <Ionicons name={viewMode === 'stream' ? 'document-text-outline' : 'chatbubbles-outline'} size={16} color={viewMode === 'notulen' ? '#22D3EE' : '#94A3B8'} />
+            <Ionicons name={viewMode === 'stream' ? 'document-text-outline' : 'chatbubbles-outline'} size={15} color={viewMode === 'notulen' ? '#22D3EE' : '#94A3B8'} />
             <Text style={[styles.modeBtnText, viewMode === 'notulen' && styles.modeBtnTextActive]}>
               {viewMode === 'stream' ? 'Notulen' : 'Transkrip'}
             </Text>
@@ -425,15 +447,15 @@ export default function AlihBahasaScreen() {
               <View style={styles.emptyIconWrap}>
                 <Ionicons name="mic-circle" size={56} color="#06B6D4" />
               </View>
-              <Text style={styles.emptyHeader}>Ruang Suara & Terjemahan Real-Time</Text>
+              <Text style={styles.emptyHeader}>Penerjemah Suara Real-Time</Text>
               <Text style={styles.emptyDesc}>
-                Pilih bahasa di bawah, lalu tekan tombol <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>. Setiap kalimat yang Anda ucapkan akan langsung ditranskrip dan diterjemahkan otomatis ke bahasa pilihan.
+                Pilih bahasa di bawah, lalu tekan tombol <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>. Setiap kalimat yang Anda ucapkan akan langsung ditranskrip & diterjemahkan otomatis ke bahasa pilihan.
               </Text>
             </View>
           ) : (
             messages.map((item, idx) => (
               <View key={item.id} style={styles.roomBubble}>
-                {/* Speaker Identity & Timestamp Header */}
+                {/* Speaker Identity & Timestamp */}
                 <View style={styles.bubbleTop}>
                   <View style={styles.speakerTagWrap}>
                     <View style={styles.avatarDot} />
@@ -442,7 +464,7 @@ export default function AlihBahasaScreen() {
                   </View>
 
                   <View style={styles.bubbleActionsRow}>
-                    <TouchableOpacity style={styles.bubbleBtn} onPress={() => handleSpeak(item.translatedText, item.targetLang)}>
+                    <TouchableOpacity style={styles.bubbleBtn} onPress={() => speakTranslation(item.translatedText, item.targetLang)}>
                       <Ionicons name="volume-medium" size={15} color="#38BDF8" />
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.bubbleBtn} onPress={() => handleCopy(`${item.sourceText}\n↳ ${item.translatedText}`, item.id)}>
@@ -465,7 +487,7 @@ export default function AlihBahasaScreen() {
             ))
           )}
 
-          {/* Active Speaking Bubble (Interim typing effect) */}
+          {/* Active Speaking Indicator Bubble */}
           {partialText ? (
             <View style={[styles.roomBubble, styles.interimBubbleCard]}>
               <View style={styles.speakerTagWrap}>
@@ -478,7 +500,7 @@ export default function AlihBahasaScreen() {
           ) : null}
         </ScrollView>
       ) : (
-        /* Clean Rangkuman Notulen View (No extra popups/tabs) */
+        /* Clean Rangkuman Notulen View */
         <ScrollView style={styles.singleWindow} contentContainerStyle={styles.notulenContent}>
           <View style={styles.notulenCard}>
             <View style={styles.notulenCardHeader}>
@@ -518,7 +540,7 @@ export default function AlihBahasaScreen() {
 
       {/* 3. Docked Bottom Control Bar */}
       <View style={styles.dockedBottomBar}>
-        {/* Language Selector Pills */}
+        {/* Language Selector Pills & Headset Mode Toggle */}
         <View style={styles.langSelectorContainer}>
           <Text style={styles.langSelectLabel}>Bahasa:</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langListPills}>
@@ -534,6 +556,17 @@ export default function AlihBahasaScreen() {
               </TouchableOpacity>
             ))}
           </ScrollView>
+
+          {/* Headset Simultaneous Interpreter Toggle */}
+          <TouchableOpacity
+            style={[styles.headsetToggleBtn, isHeadsetMode && styles.headsetToggleBtnActive]}
+            onPress={() => setIsHeadsetMode(!isHeadsetMode)}
+          >
+            <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={14} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
+            <Text style={[styles.headsetToggleText, isHeadsetMode && styles.headsetToggleTextActive]}>
+              {isHeadsetMode ? 'Headset: ON' : 'Headset: OFF'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Live Audio Spectrum & Main Action Buttons */}
@@ -559,11 +592,11 @@ export default function AlihBahasaScreen() {
             {formatTime(durationSec)}
           </Text>
 
-          {/* Main Round Control Buttons */}
+          {/* Main Record Buttons */}
           <View style={styles.recordButtonGroup}>
             {!isRecording ? (
               <TouchableOpacity style={styles.mainRecordBtn} onPress={startRecording} activeOpacity={0.85}>
-                <Ionicons name="mic" size={20} color="#FFF" />
+                <Ionicons name="mic" size={18} color="#FFF" />
                 <Text style={styles.mainRecordBtnText}>Rekam</Text>
               </TouchableOpacity>
             ) : (
@@ -885,6 +918,7 @@ const styles = StyleSheet.create({
   langSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
   },
   langSelectLabel: {
@@ -916,6 +950,30 @@ const styles = StyleSheet.create({
   pillBtnTextActive: {
     color: '#22D3EE',
     fontWeight: 'bold',
+  },
+  headsetToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#1F2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  headsetToggleBtnActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: '#06B6D4',
+  },
+  headsetToggleText: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  headsetToggleTextActive: {
+    color: '#22D3EE',
   },
   actionControlsRow: {
     flexDirection: 'row',
