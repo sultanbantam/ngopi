@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   Platform,
   Alert,
   Share,
-  Modal,
   ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,6 +25,7 @@ interface TranscriptBubble {
 
 const SUPPORTED_LANGUAGES = [
   { code: 'en', label: '🇬🇧 English', bcp: 'en-US' },
+  { code: 'pt', label: '🇵🇹 Portuguese', bcp: 'pt-PT' },
   { code: 'ja', label: '🇯🇵 Japanese', bcp: 'ja-JP' },
   { code: 'zh', label: '🇨🇳 Chinese', bcp: 'zh-CN' },
   { code: 'ar', label: '🇸🇦 Arabic', bcp: 'ar-SA' },
@@ -45,10 +45,14 @@ export default function AlihBahasaScreen() {
 
   const [messages, setMessages] = useState<TranscriptBubble[]>([]);
   const [partialText, setPartialText] = useState('');
-  const [waveform, setWaveform] = useState<number[]>(new Array(16).fill(10));
-  const [isNotulenModalOpen, setIsNotulenModalOpen] = useState(false);
+  const [partialTranslation, setPartialTranslation] = useState('');
+  const [waveform, setWaveform] = useState<number[]>(new Array(16).fill(8));
+  const [viewMode, setViewMode] = useState<'stream' | 'notulen'>('stream');
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const isRecordingRef = useRef(false);
+  const isPausedRef = useRef(false);
+  const targetLangRef = useRef('en');
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioContextRef = useRef<any>(null);
   const analyserRef = useRef<any>(null);
@@ -56,43 +60,52 @@ export default function AlihBahasaScreen() {
   const recognitionRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const currentInterimRef = useRef<string>('');
+
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+    isPausedRef.current = isPaused;
+    targetLangRef.current = targetLangCode;
+  }, [isRecording, isPaused, targetLangCode]);
 
   // High-reliability translation engine (multi-source fallback)
   const translateText = async (text: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim()) return '';
+    const cleanText = text.trim();
     
-    // 1. Google NMT Engine
+    // 1. Google NMT API
     try {
-      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=id&tl=${tgtLang}&dt=t&q=${encodeURIComponent(text)}`;
+      const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=id&tl=${tgtLang}&dt=t&q=${encodeURIComponent(cleanText)}`;
       const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data) && Array.isArray(data[0])) {
           const translated = data[0].map((chunk: any) => chunk[0]).filter(Boolean).join('');
           if (translated && translated.trim().length > 0) {
-            return translated;
+            return translated.trim();
           }
         }
       }
     } catch (err) {
-      console.warn('Google NMT fetch error:', err);
+      console.warn('Google NMT error:', err);
     }
 
     // 2. MyMemory Fallback Engine
     try {
-      const fallbackUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=id|${tgtLang}`;
-      const fbRes = await fetch(fallbackUrl);
+      const fbUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanText)}&langpair=id|${tgtLang}`;
+      const fbRes = await fetch(fbUrl);
       if (fbRes.ok) {
         const fbData = await fbRes.json();
         if (fbData?.responseData?.translatedText) {
-          return fbData.responseData.translatedText;
+          return fbData.responseData.translatedText.trim();
         }
       }
     } catch (fbErr) {
       console.warn('MyMemory fallback error:', fbErr);
     }
 
-    return text;
+    return cleanText;
   };
 
   // Timer Counter
@@ -111,7 +124,7 @@ export default function AlihBahasaScreen() {
 
   // Live Audio Analyzer for Waveform
   const updateWaveformLoop = () => {
-    if (!analyserRef.current || !isRecording || isPaused) return;
+    if (!analyserRef.current || !isRecordingRef.current || isPausedRef.current) return;
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
 
@@ -119,18 +132,56 @@ export default function AlihBahasaScreen() {
     const bars: number[] = [];
     for (let i = 0; i < 16; i++) {
       const val = dataArray[i * step] || 0;
-      bars.push(Math.max(10, Math.min(100, Math.floor((val / 255) * 100))));
+      bars.push(Math.max(8, Math.min(100, Math.floor((val / 255) * 100))));
     }
     setWaveform(bars);
     animationFrameRef.current = requestAnimationFrame(updateWaveformLoop);
   };
 
-  // Start Real Microphone + Speech Recognition
+  // Commit clean sentence into the single live window stream
+  const commitSentence = useCallback(async (sentenceText: string) => {
+    const clean = sentenceText.trim();
+    if (!clean || clean.length < 2) return;
+
+    // Deduplication check with last message to prevent echo loops
+    setMessages((prev) => {
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1]!;
+        if (last.sourceText === clean || clean.startsWith(last.sourceText) && clean.length - last.sourceText.length < 4) {
+          return prev;
+        }
+      }
+      return prev;
+    });
+
+    const currentTgt = targetLangRef.current;
+    const translated = await translateText(clean, currentTgt);
+
+    const newBubble: TranscriptBubble = {
+      id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
+      speaker: 'Saya',
+      sourceText: clean,
+      translatedText: translated,
+      timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+      targetLang: currentTgt,
+    };
+
+    setMessages((prev) => [...prev, newBubble]);
+    setPartialText('');
+    setPartialTranslation('');
+    currentInterimRef.current = '';
+
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 80);
+  }, []);
+
+  // Start Continuous Recording Engine
   const startRecording = async () => {
     try {
-      setMicStatus('Menghubungkan Mikrofon...');
+      setMicStatus('Menghubungkan...');
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.mediaDevices) {
-        // 1. Audio MediaStream
+        // 1. Audio Stream & Analyzer
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
 
@@ -146,56 +197,65 @@ export default function AlihBahasaScreen() {
           updateWaveformLoop();
         }
 
-        // 2. Speech Recognition (Indonesian source)
+        // 2. Continuous Speech Recognition
         const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRec) {
           const recognition = new SpeechRec();
           recognition.continuous = true;
           recognition.interimResults = true;
           recognition.lang = 'id-ID';
+          recognition.maxAlternatives = 1;
 
           recognition.onstart = () => {
             setMicStatus('Mendengarkan...');
           };
 
-          recognition.onresult = async (event: any) => {
+          recognition.onresult = (event: any) => {
             let interim = '';
+            let finalChunk = '';
+
             for (let i = event.resultIndex; i < event.results.length; ++i) {
               const res = event.results[i];
               const transcript = res[0].transcript;
               if (res.isFinal) {
-                const cleanText = transcript.trim();
-                if (cleanText) {
-                  const translated = await translateText(cleanText, targetLangCode);
-                  const newBubble: TranscriptBubble = {
-                    id: 'msg_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-                    speaker: 'Saya',
-                    sourceText: cleanText,
-                    translatedText: translated,
-                    timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-                    targetLang: targetLangCode,
-                  };
-                  setMessages((prev) => [...prev, newBubble]);
-                  setPartialText('');
-                  setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
-                }
+                finalChunk += transcript;
               } else {
                 interim += transcript;
               }
             }
-            if (interim) {
-              setPartialText(interim);
+
+            if (finalChunk.trim()) {
+              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+              commitSentence(finalChunk.trim());
+            } else if (interim.trim()) {
+              currentInterimRef.current = interim.trim();
+              setPartialText(interim.trim());
+
+              // Silence debouncer: If user pauses for 1.4s, auto-commit the interim text
+              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = setTimeout(() => {
+                if (currentInterimRef.current) {
+                  commitSentence(currentInterimRef.current);
+                }
+              }, 1400);
+
               scrollViewRef.current?.scrollToEnd({ animated: true });
             }
           };
 
           recognition.onerror = (err: any) => {
-            console.warn('SpeechRecognition error:', err);
+            console.log('Recognition event:', err.error);
+            if (err.error === 'not-allowed') {
+              Alert.alert('Izin Mikrofon Ditolak', 'Izinkan akses mikrofon di browser Anda.');
+            }
           };
 
+          // Continuous auto-restart when recognition ends
           recognition.onend = () => {
-            if (isRecording && !isPaused && recognitionRef.current) {
-              try { recognitionRef.current.start(); } catch (_) {}
+            if (isRecordingRef.current && !isPausedRef.current && recognitionRef.current) {
+              try {
+                recognitionRef.current.start();
+              } catch (_) {}
             }
           };
 
@@ -216,6 +276,10 @@ export default function AlihBahasaScreen() {
   const pauseRecording = () => {
     setIsPaused(true);
     setMicStatus('Dijeda');
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (currentInterimRef.current) {
+      commitSentence(currentInterimRef.current);
+    }
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (_) {}
     }
@@ -235,6 +299,11 @@ export default function AlihBahasaScreen() {
     setIsPaused(false);
     setMicStatus('Selesai');
 
+    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (currentInterimRef.current) {
+      commitSentence(currentInterimRef.current);
+    }
+
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (_) {}
       recognitionRef.current = null;
@@ -250,7 +319,7 @@ export default function AlihBahasaScreen() {
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-    setWaveform(new Array(16).fill(10));
+    setWaveform(new Array(16).fill(8));
     setPartialText('');
   };
 
@@ -289,9 +358,17 @@ export default function AlihBahasaScreen() {
     }
   };
 
+  // Generate Clean, Structured Notulen
+  const getCleanSummary = () => {
+    if (messages.length === 0) return 'Belum ada data rekaman untuk dirangkum.';
+    // Combine full sentences and remove duplicates
+    const uniqueSentences = Array.from(new Set(messages.map((m) => m.sourceText.trim()))).filter((s) => s.length > 5);
+    return uniqueSentences.join('. ');
+  };
+
   return (
     <View style={styles.container}>
-      {/* 1. Mobile-Optimized Compact Header */}
+      {/* 1. Header Ringkas Mobile */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -303,112 +380,155 @@ export default function AlihBahasaScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
-          <Text style={styles.backBtnText}>Chat</Text>
+          <Ionicons name="arrow-back" size={20} color="#94A3B8" />
+          <Text style={styles.backBtnText}>Kembali</Text>
         </TouchableOpacity>
 
-        <View style={styles.headerTitleWrap}>
+        <View style={styles.headerCenter}>
           <Text style={styles.headerTitle} numberOfLines={1}>🎙️ Ruang Transkrip Live</Text>
-          <View style={styles.statusPill}>
+          <View style={styles.statusRow}>
             <View style={[styles.statusDot, isRecording && !isPaused ? styles.statusDotActive : null]} />
-            <Text style={styles.statusText}>{isRecording ? (isPaused ? 'Dijeda' : '🔴 Merekam') : micStatus}</Text>
+            <Text style={styles.statusLabel}>{isRecording ? (isPaused ? 'Dijeda' : '🔴 Merekam') : micStatus}</Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', gap: 6 }}>
-          <TouchableOpacity style={styles.notulenHeaderBtn} onPress={() => setIsNotulenModalOpen(true)}>
-            <Ionicons name="document-text" size={16} color="#38BDF8" />
-            <Text style={styles.notulenHeaderBtnText}>Notulen</Text>
+        {/* View Switcher: Live Stream vs Clean Notulen */}
+        <View style={styles.headerRightActions}>
+          <TouchableOpacity
+            style={[styles.modeBtn, viewMode === 'notulen' && styles.modeBtnActive]}
+            onPress={() => setViewMode(viewMode === 'stream' ? 'notulen' : 'stream')}
+          >
+            <Ionicons name={viewMode === 'stream' ? 'document-text-outline' : 'chatbubbles-outline'} size={16} color={viewMode === 'notulen' ? '#22D3EE' : '#94A3B8'} />
+            <Text style={[styles.modeBtnText, viewMode === 'notulen' && styles.modeBtnTextActive]}>
+              {viewMode === 'stream' ? 'Notulen' : 'Transkrip'}
+            </Text>
           </TouchableOpacity>
+
           {messages.length > 0 && (
-            <TouchableOpacity style={styles.resetHeaderBtn} onPress={clearAll}>
-              <Ionicons name="trash-outline" size={16} color="#94A3B8" />
+            <TouchableOpacity style={styles.resetBtn} onPress={clearAll}>
+              <Ionicons name="trash-outline" size={15} color="#94A3B8" />
             </TouchableOpacity>
           )}
         </View>
       </View>
 
-      {/* 2. Single Window Live Feed (Speaker, Original Indonesian, & Real-Time Translation in One Bubble) */}
-      <ScrollView
-        ref={scrollViewRef}
-        style={styles.feedContainer}
-        contentContainerStyle={styles.feedContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {messages.length === 0 && !partialText ? (
-          <View style={styles.emptyFeed}>
-            <View style={styles.emptyIconCircle}>
-              <Ionicons name="mic-circle" size={64} color="#06B6D4" />
+      {/* 2. Main Single Window Content */}
+      {viewMode === 'stream' ? (
+        <ScrollView
+          ref={scrollViewRef}
+          style={styles.singleWindow}
+          contentContainerStyle={styles.singleWindowContent}
+          showsVerticalScrollIndicator={false}
+        >
+          {messages.length === 0 && !partialText ? (
+            <View style={styles.emptyContainer}>
+              <View style={styles.emptyIconWrap}>
+                <Ionicons name="mic-circle" size={56} color="#06B6D4" />
+              </View>
+              <Text style={styles.emptyHeader}>Ruang Suara & Terjemahan Real-Time</Text>
+              <Text style={styles.emptyDesc}>
+                Pilih bahasa di bawah, lalu tekan tombol <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text>. Setiap kalimat yang Anda ucapkan akan langsung ditranskrip dan diterjemahkan otomatis ke bahasa pilihan.
+              </Text>
             </View>
-            <Text style={styles.emptyTitle}>Ruang Transkrip & Terjemahan Suara</Text>
-            <Text style={styles.emptySub}>
-              Tekan tombol <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>"Rekam"</Text> di bawah untuk mulai berbicara. Teks asli dan terjemahan otomatis ke bahasa <Text style={{ color: '#34D399', fontWeight: 'bold' }}>{targetLangCode.toUpperCase()}</Text> akan langsung muncul di sini.
-            </Text>
-          </View>
-        ) : (
-          messages.map((item, idx) => (
-            <View key={item.id} style={styles.messageBubble}>
-              {/* Speaker Header */}
-              <View style={styles.bubbleHeader}>
-                <View style={styles.speakerRow}>
-                  <View style={styles.speakerAvatar}>
-                    <Ionicons name="person" size={12} color="#06B6D4" />
+          ) : (
+            messages.map((item, idx) => (
+              <View key={item.id} style={styles.roomBubble}>
+                {/* Speaker Identity & Timestamp Header */}
+                <View style={styles.bubbleTop}>
+                  <View style={styles.speakerTagWrap}>
+                    <View style={styles.avatarDot} />
+                    <Text style={styles.speakerTagLabel}>{item.speaker}</Text>
+                    <Text style={styles.timeLabel}>{item.timestamp}</Text>
                   </View>
-                  <Text style={styles.speakerName}>{item.speaker}</Text>
-                  <Text style={styles.bubbleTime}>{item.timestamp}</Text>
+
+                  <View style={styles.bubbleActionsRow}>
+                    <TouchableOpacity style={styles.bubbleBtn} onPress={() => handleSpeak(item.translatedText, item.targetLang)}>
+                      <Ionicons name="volume-medium" size={15} color="#38BDF8" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.bubbleBtn} onPress={() => handleCopy(`${item.sourceText}\n↳ ${item.translatedText}`, item.id)}>
+                      <Ionicons name={copiedId === item.id ? 'checkmark' : 'copy-outline'} size={15} color={copiedId === item.id ? '#34D399' : '#94A3B8'} />
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.bubbleActions}>
-                  <TouchableOpacity style={styles.iconBtn} onPress={() => handleSpeak(item.translatedText, item.targetLang)}>
-                    <Ionicons name="volume-medium" size={15} color="#38BDF8" />
-                  </TouchableOpacity>
-                  <TouchableOpacity style={styles.iconBtn} onPress={() => handleCopy(`${item.sourceText}\n↳ ${item.translatedText}`, item.id)}>
-                    <Ionicons name={copiedId === item.id ? 'checkmark' : 'copy-outline'} size={15} color={copiedId === item.id ? '#34D399' : '#94A3B8'} />
-                  </TouchableOpacity>
+
+                {/* Spoken Indonesian Sentence */}
+                <Text style={styles.sourceText}>{item.sourceText}</Text>
+
+                {/* Live Real Translation in the same window card */}
+                <View style={styles.translatedBlock}>
+                  <View style={styles.targetLangBadge}>
+                    <Text style={styles.targetLangBadgeText}>↳ {item.targetLang.toUpperCase()}</Text>
+                  </View>
+                  <Text style={styles.translatedText}>{item.translatedText}</Text>
                 </View>
               </View>
+            ))
+          )}
 
-              {/* Source Original Text (Indonesian) */}
-              <Text style={styles.sourceText}>{item.sourceText}</Text>
-
-              {/* Translated Text (Target Language in Vibrant Emerald) */}
-              <View style={styles.translationBox}>
-                <View style={styles.langTag}>
-                  <Text style={styles.langTagText}>↳ {item.targetLang.toUpperCase()}</Text>
-                </View>
-                <Text style={styles.translatedText}>{item.translatedText}</Text>
+          {/* Active Speaking Bubble (Interim typing effect) */}
+          {partialText ? (
+            <View style={[styles.roomBubble, styles.interimBubbleCard]}>
+              <View style={styles.speakerTagWrap}>
+                <View style={[styles.avatarDot, { backgroundColor: '#EF4444' }]} />
+                <Text style={[styles.speakerTagLabel, { color: '#EF4444' }]}>Sedang Berbicara...</Text>
+                <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: 4 }} />
               </View>
+              <Text style={styles.interimSourceText}>"{partialText}"</Text>
             </View>
-          ))
-        )}
-
-        {/* Live Interim Speech Bubble (Animated Real-Time Typing) */}
-        {partialText ? (
-          <View style={[styles.messageBubble, styles.interimBubble]}>
-            <View style={styles.speakerRow}>
-              <View style={[styles.speakerAvatar, { backgroundColor: '#EF4444' }]}>
-                <Ionicons name="mic" size={12} color="#FFF" />
+          ) : null}
+        </ScrollView>
+      ) : (
+        /* Clean Rangkuman Notulen View (No extra popups/tabs) */
+        <ScrollView style={styles.singleWindow} contentContainerStyle={styles.notulenContent}>
+          <View style={styles.notulenCard}>
+            <View style={styles.notulenCardHeader}>
+              <View>
+                <Text style={styles.notulenTitle}>📋 Ringkasan Notulen Rapat</Text>
+                <Text style={styles.notulenMeta}>{messages.length} Kalimat • Bahasa: {targetLangCode.toUpperCase()}</Text>
               </View>
-              <Text style={[styles.speakerName, { color: '#EF4444' }]}>Sedang Berbicara...</Text>
-              <ActivityIndicator size="small" color="#EF4444" style={{ marginLeft: 4 }} />
+              <TouchableOpacity
+                style={styles.copySummaryBtn}
+                onPress={() => {
+                  const full = messages.map((m, i) => `${i + 1}. ${m.sourceText}\n   ↳ [${m.targetLang.toUpperCase()}]: ${m.translatedText}`).join('\n\n');
+                  handleCopy(full, 'notulen_copy');
+                }}
+              >
+                <Ionicons name="copy-outline" size={15} color="#FFF" style={{ marginRight: 4 }} />
+                <Text style={styles.copySummaryBtnText}>{copiedId === 'notulen_copy' ? 'Tersalin' : 'Salin Semua'}</Text>
+              </TouchableOpacity>
             </View>
-            <Text style={styles.interimText}>"{partialText}"</Text>
+
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionTitle}>📌 Transkrip Inti:</Text>
+              <Text style={styles.sectionBody}>{getCleanSummary()}</Text>
+            </View>
+
+            <View style={styles.sectionBlock}>
+              <Text style={styles.sectionTitle}>🌐 Terjemahan Lengkap ({targetLangCode.toUpperCase()}):</Text>
+              {messages.map((m, i) => (
+                <View key={m.id} style={styles.notulenRow}>
+                  <Text style={styles.notulenRowSrc}>#{i + 1} {m.sourceText}</Text>
+                  <Text style={styles.notulenRowTgt}>↳ {m.translatedText}</Text>
+                </View>
+              ))}
+            </View>
           </View>
-        ) : null}
-      </ScrollView>
+        </ScrollView>
+      )}
 
-      {/* 3. Mobile Docked Bottom Control Bar */}
-      <View style={styles.bottomControlBar}>
-        {/* Horizontal Target Language Pills */}
-        <View style={styles.langBar}>
-          <Text style={styles.langBarLabel}>Terjemahkan:</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langPills}>
+      {/* 3. Docked Bottom Control Bar */}
+      <View style={styles.dockedBottomBar}>
+        {/* Language Selector Pills */}
+        <View style={styles.langSelectorContainer}>
+          <Text style={styles.langSelectLabel}>Bahasa:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.langListPills}>
             {SUPPORTED_LANGUAGES.map((lang) => (
               <TouchableOpacity
                 key={lang.code}
-                style={[styles.langPill, targetLangCode === lang.code && styles.langPillActive]}
+                style={[styles.pillBtn, targetLangCode === lang.code && styles.pillBtnActive]}
                 onPress={() => setTargetLangCode(lang.code)}
               >
-                <Text style={[styles.langPillText, targetLangCode === lang.code && styles.langPillTextActive]}>
+                <Text style={[styles.pillBtnText, targetLangCode === lang.code && styles.pillBtnTextActive]}>
                   {lang.label}
                 </Text>
               </TouchableOpacity>
@@ -416,10 +536,10 @@ export default function AlihBahasaScreen() {
           </ScrollView>
         </View>
 
-        {/* Action Controls & Waveform */}
-        <View style={styles.controlsRow}>
-          {/* Live Waveform Mini Bars */}
-          <View style={styles.waveformWrap}>
+        {/* Live Audio Spectrum & Main Action Buttons */}
+        <View style={styles.actionControlsRow}>
+          {/* Waveform Bars */}
+          <View style={styles.waveformContainer}>
             {waveform.map((val, idx) => (
               <View
                 key={idx}
@@ -434,30 +554,30 @@ export default function AlihBahasaScreen() {
             ))}
           </View>
 
-          {/* Timer Display */}
-          <Text style={[styles.timerLabel, isRecording && !isPaused && { color: '#EF4444' }]}>
+          {/* Time Counter */}
+          <Text style={[styles.timeCounter, isRecording && !isPaused && { color: '#EF4444' }]}>
             {formatTime(durationSec)}
           </Text>
 
-          {/* Main Record Buttons */}
-          <View style={styles.btnGroup}>
+          {/* Main Round Control Buttons */}
+          <View style={styles.recordButtonGroup}>
             {!isRecording ? (
-              <TouchableOpacity style={styles.recordBtn} onPress={startRecording} activeOpacity={0.85}>
+              <TouchableOpacity style={styles.mainRecordBtn} onPress={startRecording} activeOpacity={0.85}>
                 <Ionicons name="mic" size={20} color="#FFF" />
-                <Text style={styles.recordBtnText}>Rekam</Text>
+                <Text style={styles.mainRecordBtnText}>Rekam</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {isPaused ? (
-                  <TouchableOpacity style={styles.resumeBtn} onPress={resumeRecording}>
+                  <TouchableOpacity style={styles.resumeCircleBtn} onPress={resumeRecording}>
                     <Ionicons name="play" size={18} color="#FFF" />
                   </TouchableOpacity>
                 ) : (
-                  <TouchableOpacity style={styles.pauseBtn} onPress={pauseRecording}>
+                  <TouchableOpacity style={styles.pauseCircleBtn} onPress={pauseRecording}>
                     <Ionicons name="pause" size={18} color="#FFF" />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity style={styles.stopBtn} onPress={stopRecording}>
+                <TouchableOpacity style={styles.stopCircleBtn} onPress={stopRecording}>
                   <Ionicons name="square" size={18} color="#FFF" />
                 </TouchableOpacity>
               </View>
@@ -465,55 +585,6 @@ export default function AlihBahasaScreen() {
           </View>
         </View>
       </View>
-
-      {/* 4. AI Notulen Modal Sheet */}
-      <Modal visible={isNotulenModalOpen} animationType="slide" transparent={true}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.notulenSheet}>
-            <View style={styles.sheetHeader}>
-              <View>
-                <Text style={styles.sheetTitle}>📋 AI Notulen Rapat</Text>
-                <Text style={styles.sheetSub}>Total {messages.length} Segmen Percakapan</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsNotulenModalOpen(false)} style={styles.closeBtn}>
-                <Ionicons name="close" size={22} color="#F8FAFC" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.sheetBody} showsVerticalScrollIndicator={false}>
-              <View style={styles.notulenBlock}>
-                <Text style={styles.blockTitle}>📌 Ringkasan Eksekutif</Text>
-                <Text style={styles.blockText}>
-                  {messages.length > 0
-                    ? messages.map((m) => m.sourceText).join('. ').slice(0, 300) + '...'
-                    : 'Belum ada percakapan yang direkam.'}
-                </Text>
-              </View>
-
-              <View style={styles.notulenBlock}>
-                <Text style={styles.blockTitle}>✅ Transkrip Lengkap & Terjemahan</Text>
-                {messages.map((m, i) => (
-                  <View key={m.id} style={styles.notulenItem}>
-                    <Text style={styles.notulenSource}>#{i + 1} {m.sourceText}</Text>
-                    <Text style={styles.notulenTarget}>↳ [{m.targetLang.toUpperCase()}]: {m.translatedText}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <TouchableOpacity
-                style={styles.copyNotulenBtn}
-                onPress={() => {
-                  const txt = messages.map((m, i) => `${i + 1}. ${m.sourceText}\n   Terjemahan: ${m.translatedText}`).join('\n\n');
-                  handleCopy(txt, 'full_notulen');
-                }}
-              >
-                <Ionicons name="copy-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.copyNotulenBtnText}>{copiedId === 'full_notulen' ? '✓ Notulen Disalin' : 'Salin Seluruh Notulen'}</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -546,7 +617,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: 'bold',
   },
-  headerTitleWrap: {
+  headerCenter: {
     alignItems: 'center',
   },
   headerTitle: {
@@ -554,7 +625,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
   },
-  statusPill: {
+  statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -569,69 +640,82 @@ const styles = StyleSheet.create({
   statusDotActive: {
     backgroundColor: '#EF4444',
   },
-  statusText: {
+  statusLabel: {
     color: '#38BDF8',
     fontSize: 11,
     fontWeight: '600',
   },
-  notulenHeaderBtn: {
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  modeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    backgroundColor: '#1F2937',
     borderWidth: 1,
-    borderColor: '#0284C7',
+    borderColor: '#374151',
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
   },
-  notulenHeaderBtnText: {
-    color: '#38BDF8',
+  modeBtnActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.2)',
+    borderColor: '#06B6D4',
+  },
+  modeBtnText: {
+    color: '#94A3B8',
     fontSize: 11,
     fontWeight: 'bold',
   },
-  resetHeaderBtn: {
+  modeBtnTextActive: {
+    color: '#22D3EE',
+  },
+  resetBtn: {
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 6,
     backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
-  feedContainer: {
+  singleWindow: {
     flex: 1,
   },
-  feedContent: {
+  singleWindowContent: {
     padding: 12,
-    paddingBottom: 24,
+    paddingBottom: 30,
   },
-  emptyFeed: {
+  emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 64,
     paddingHorizontal: 20,
   },
-  emptyIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  emptyIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: 'rgba(6, 182, 212, 0.1)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  emptyTitle: {
+  emptyHeader: {
     color: '#F8FAFC',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  emptySub: {
+  emptyDesc: {
     color: '#94A3B8',
     fontSize: 12,
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 18,
+    maxWidth: 320,
   },
-  messageBubble: {
+  roomBubble: {
     backgroundColor: '#161F30',
     borderRadius: 12,
     padding: 12,
@@ -639,40 +723,38 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#243044',
   },
-  bubbleHeader: {
+  bubbleTop: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 6,
   },
-  speakerRow: {
+  speakerTagWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  speakerAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: 'rgba(6, 182, 212, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
+  avatarDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#22D3EE',
   },
-  speakerName: {
+  speakerTagLabel: {
     color: '#22D3EE',
     fontSize: 12,
     fontWeight: 'bold',
   },
-  bubbleTime: {
+  timeLabel: {
     color: '#64748B',
     fontSize: 10,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  bubbleActions: {
+  bubbleActionsRow: {
     flexDirection: 'row',
     gap: 6,
   },
-  iconBtn: {
+  bubbleBtn: {
     padding: 4,
     borderRadius: 4,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
@@ -683,13 +765,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     fontWeight: '500',
   },
-  translationBox: {
+  translatedBlock: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#243044',
   },
-  langTag: {
+  targetLangBadge: {
     alignSelf: 'flex-start',
     backgroundColor: 'rgba(52, 211, 153, 0.15)',
     paddingHorizontal: 6,
@@ -697,7 +779,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginBottom: 3,
   },
-  langTagText: {
+  targetLangBadgeText: {
     color: '#34D399',
     fontSize: 10,
     fontWeight: '900',
@@ -708,18 +790,91 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     fontWeight: '600',
   },
-  interimBubble: {
+  interimBubbleCard: {
     borderColor: '#EF4444',
     borderStyle: 'dashed',
     backgroundColor: 'rgba(239, 68, 68, 0.06)',
   },
-  interimText: {
+  interimSourceText: {
     color: '#E2E8F0',
     fontSize: 13,
     fontStyle: 'italic',
     marginTop: 4,
   },
-  bottomControlBar: {
+  notulenContent: {
+    padding: 12,
+    paddingBottom: 30,
+  },
+  notulenCard: {
+    backgroundColor: '#161F30',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#243044',
+  },
+  notulenCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#243044',
+    marginBottom: 12,
+  },
+  notulenTitle: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  notulenMeta: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  copySummaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  copySummaryBtnText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  sectionBlock: {
+    marginBottom: 14,
+  },
+  sectionTitle: {
+    color: '#38BDF8',
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  sectionBody: {
+    color: '#E2E8F0',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+  notulenRow: {
+    marginBottom: 8,
+    paddingBottom: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#243044',
+  },
+  notulenRowSrc: {
+    color: '#F8FAFC',
+    fontSize: 12,
+  },
+  notulenRowTgt: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  dockedBottomBar: {
     backgroundColor: '#111827',
     borderTopWidth: 1,
     borderTopColor: '#1F2937',
@@ -727,22 +882,22 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: Platform.OS === 'web' ? 12 : 28,
   },
-  langBar: {
+  langSelectorContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 8,
   },
-  langBarLabel: {
+  langSelectLabel: {
     color: '#94A3B8',
     fontSize: 11,
     fontWeight: 'bold',
     marginRight: 6,
   },
-  langPills: {
+  langListPills: {
     flexDirection: 'row',
     gap: 6,
   },
-  langPill: {
+  pillBtn: {
     backgroundColor: '#1F2937',
     paddingHorizontal: 8,
     paddingVertical: 4,
@@ -750,24 +905,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
-  langPillActive: {
+  pillBtnActive: {
     backgroundColor: 'rgba(6, 182, 212, 0.2)',
     borderColor: '#06B6D4',
   },
-  langPillText: {
+  pillBtnText: {
     color: '#94A3B8',
     fontSize: 11,
   },
-  langPillTextActive: {
+  pillBtnTextActive: {
     color: '#22D3EE',
     fontWeight: 'bold',
   },
-  controlsRow: {
+  actionControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  waveformWrap: {
+  waveformContainer: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
@@ -779,18 +934,18 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 2,
   },
-  timerLabel: {
+  timeCounter: {
     color: '#F8FAFC',
     fontSize: 13,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: 'bold',
     marginRight: 12,
   },
-  btnGroup: {
+  recordButtonGroup: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  recordBtn: {
+  mainRecordBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -803,12 +958,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-  recordBtnText: {
+  mainRecordBtnText: {
     color: '#FFF',
     fontWeight: 'bold',
     fontSize: 13,
   },
-  pauseBtn: {
+  pauseCircleBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -816,7 +971,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  resumeBtn: {
+  resumeCircleBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -824,97 +979,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stopBtn: {
+  stopCircleBtn: {
     width: 36,
     height: 36,
     borderRadius: 18,
     backgroundColor: '#EF4444',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'flex-end',
-  },
-  notulenSheet: {
-    backgroundColor: '#111827',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    maxHeight: '82%',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#374151',
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
-  },
-  sheetTitle: {
-    color: '#F8FAFC',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  sheetSub: {
-    color: '#94A3B8',
-    fontSize: 11,
-  },
-  closeBtn: {
-    padding: 4,
-  },
-  sheetBody: {
-    marginTop: 12,
-  },
-  notulenBlock: {
-    backgroundColor: '#161F30',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 10,
-  },
-  blockTitle: {
-    color: '#38BDF8',
-    fontSize: 13,
-    fontWeight: 'bold',
-    marginBottom: 6,
-  },
-  blockText: {
-    color: '#E2E8F0',
-    fontSize: 12,
-    lineHeight: 18,
-  },
-  notulenItem: {
-    marginBottom: 8,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#243044',
-  },
-  notulenSource: {
-    color: '#F8FAFC',
-    fontSize: 12,
-  },
-  notulenTarget: {
-    color: '#34D399',
-    fontSize: 12,
-    fontWeight: '600',
-    marginTop: 2,
-  },
-  copyNotulenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0284C7',
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  copyNotulenBtnText: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: 'bold',
   },
 });
