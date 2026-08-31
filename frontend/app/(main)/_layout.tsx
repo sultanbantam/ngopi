@@ -478,6 +478,7 @@ export default function MainLayout() {
       }}>
         <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
+        <Stack.Screen name="alihbahasa" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="call/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="help-center" options={{ headerShown: false }} />
