@@ -71,15 +71,13 @@ export default function AlihBahasaScreen() {
   const isHeadsetModeRef = useRef(true);
 
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const audioContextRef = useRef<any>(null);
-  const analyserRef = useRef<any>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
   const recognitionRef = useRef<any>(null);
   const animationFrameRef = useRef<number | null>(null);
   const scrollViewRef = useRef<ScrollView | null>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const pendingSpeechRef = useRef<string>('');
   const lastCommittedSentenceRef = useRef<string>('');
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     isRecordingRef.current = isRecording;
@@ -90,12 +88,11 @@ export default function AlihBahasaScreen() {
     isHeadsetModeRef.current = isHeadsetMode;
   }, [isRecording, isPaused, sourceLangCode, targetLangCode, voiceGender, isHeadsetMode]);
 
-  // Pure Neural Machine Translation (No crowdsourced memory / No weird application letters)
+  // Pure Neural Machine Translation (Google NMT)
   const translateText = async (text: string, srcLang: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim() || srcLang === tgtLang) return text;
     const clean = text.trim();
 
-    // Split long text by punctuation or into ~150-char chunks
     const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
     const translatedChunks: string[] = [];
 
@@ -105,7 +102,6 @@ export default function AlihBahasaScreen() {
 
       let translated = '';
 
-      // High-accuracy Google Neural Machine Translation
       try {
         const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${srcLang}&tl=${tgtLang}&dt=t&q=${encodeURIComponent(trimmed)}`;
         const res = await fetch(url);
@@ -125,7 +121,7 @@ export default function AlihBahasaScreen() {
     return translatedChunks.join(' ').trim();
   };
 
-  // Text-To-Speech Playback with Voice Gender Matching
+  // Text-To-Speech Playback with Voice Gender Matching & Mobile Autoplay Support
   const speakTranslation = useCallback((text: string, langCode: string, genderOverride?: 'female' | 'male') => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -169,11 +165,11 @@ export default function AlihBahasaScreen() {
     }
   }, []);
 
-  // Unlock mobile browser audio context
+  // Unlock mobile browser speech synthesis
   const unlockAudioContext = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
-        const u = new SpeechSynthesisUtterance(' ');
+        const u = new SpeechSynthesisUtterance('');
         u.volume = 0.01;
         window.speechSynthesis.speak(u);
       } catch (_) {}
@@ -194,17 +190,21 @@ export default function AlihBahasaScreen() {
     };
   }, [isRecording, isPaused]);
 
-  // Audio Spectrum Waveform
+  // Dynamic Audio Visualizer
   const updateWaveformLoop = () => {
-    if (!analyserRef.current || !isRecordingRef.current || isPausedRef.current) return;
-    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
-    analyserRef.current.getByteFrequencyData(dataArray);
+    if (!isRecordingRef.current || isPausedRef.current) return;
 
-    const step = Math.floor(dataArray.length / 16);
+    // Generate natural active speech waveform
     const bars: number[] = [];
+    const isSpeaking = !!pendingSpeechRef.current;
     for (let i = 0; i < 16; i++) {
-      const val = dataArray[i * step] || 0;
-      bars.push(Math.max(10, Math.min(100, Math.floor((val / 255) * 100))));
+      if (isSpeaking) {
+        const base = 25 + Math.floor(Math.random() * 70);
+        bars.push(base);
+      } else {
+        const idle = 10 + Math.floor(Math.sin(Date.now() / 200 + i) * 6 + 6);
+        bars.push(idle);
+      }
     }
     setWaveform(bars);
     animationFrameRef.current = requestAnimationFrame(updateWaveformLoop);
@@ -248,6 +248,92 @@ export default function AlihBahasaScreen() {
     }, 100);
   }, [speakTranslation]);
 
+  // Safe Mobile-First Speech Recognition Creator
+  const initSpeechRecognition = useCallback(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
+
+    const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      setBrowserWarning('Browser ini tidak mendukung Web Speech Recognition. Disarankan menggunakan Google Chrome, Microsoft Edge, atau Safari.');
+      return null;
+    }
+
+    try {
+      const recognition = new SpeechRec();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      const currentSrcObj = LANGUAGES.find((l) => l.code === sourceLangRef.current);
+      recognition.lang = currentSrcObj?.bcp || 'id-ID';
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setMicStatus('Mendengarkan...');
+      };
+
+      recognition.onresult = (event: any) => {
+        let interim = '';
+        let finalChunk = '';
+
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          const res = event.results[i];
+          const transcript = res[0].transcript;
+          if (res.isFinal) {
+            finalChunk += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (finalChunk.trim()) {
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          commitFinishedSentence(finalChunk.trim());
+        } else if (interim.trim()) {
+          pendingSpeechRef.current = interim.trim();
+          setCurrentSpokenText(interim.trim());
+
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (pendingSpeechRef.current) {
+              commitFinishedSentence(pendingSpeechRef.current);
+            }
+          }, 1200);
+        }
+      };
+
+      recognition.onerror = (err: any) => {
+        console.log('Mobile Speech Recognition error:', err.error);
+        if (err.error === 'not-allowed') {
+          Alert.alert('Izin Mikrofon Ditolak', 'Izinkan akses mikrofon di browser.');
+        } else if (err.error === 'network' || err.error === 'service-not-allowed') {
+          setBrowserWarning('Jika menggunakan Brave Browser di Laptop, matikan "Brave Shields" pada situs ini agar speech recognition diizinkan.');
+        }
+      };
+
+      // Continuous Auto-Restart for Mobile Android & iOS
+      recognition.onend = () => {
+        if (isRecordingRef.current && !isPausedRef.current) {
+          if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+          restartTimeoutRef.current = setTimeout(() => {
+            if (isRecordingRef.current && !isPausedRef.current) {
+              const freshRec = initSpeechRecognition();
+              if (freshRec) {
+                try {
+                  freshRec.start();
+                  recognitionRef.current = freshRec;
+                } catch (_) {}
+              }
+            }
+          }, 200);
+        }
+      };
+
+      return recognition;
+    } catch (e) {
+      console.error('Failed to init speech recognition:', e);
+      return null;
+    }
+  }, [commitFinishedSentence]);
+
   // Start Real Recording
   const startRecording = async () => {
     try {
@@ -255,89 +341,16 @@ export default function AlihBahasaScreen() {
       setMicStatus('Menghubungkan...');
       setBrowserWarning(null);
 
-      if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.mediaDevices) {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaStreamRef.current = stream;
-
-        const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const audioCtx = new AudioCtx();
-          audioContextRef.current = audioCtx;
-          const source = audioCtx.createMediaStreamSource(stream);
-          const analyser = audioCtx.createAnalyser();
-          analyser.fftSize = 64;
-          source.connect(analyser);
-          analyserRef.current = analyser;
-          updateWaveformLoop();
-        }
-
-        const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-        if (SpeechRec) {
-          const recognition = new SpeechRec();
-          recognition.continuous = true;
-          recognition.interimResults = true;
-          const currentSrcObj = LANGUAGES.find((l) => l.code === sourceLangCode);
-          recognition.lang = currentSrcObj?.bcp || 'id-ID';
-          recognition.maxAlternatives = 1;
-
-          recognition.onstart = () => {
-            setMicStatus('Mendengarkan...');
-          };
-
-          recognition.onresult = (event: any) => {
-            let interim = '';
-            let finalChunk = '';
-
-            for (let i = event.resultIndex; i < event.results.length; ++i) {
-              const res = event.results[i];
-              const transcript = res[0].transcript;
-              if (res.isFinal) {
-                finalChunk += transcript;
-              } else {
-                interim += transcript;
-              }
-            }
-
-            if (finalChunk.trim()) {
-              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-              commitFinishedSentence(finalChunk.trim());
-            } else if (interim.trim()) {
-              pendingSpeechRef.current = interim.trim();
-              setCurrentSpokenText(interim.trim());
-
-              if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-              silenceTimerRef.current = setTimeout(() => {
-                if (pendingSpeechRef.current) {
-                  commitFinishedSentence(pendingSpeechRef.current);
-                }
-              }, 1200);
-            }
-          };
-
-          recognition.onerror = (err: any) => {
-            console.log('Recognition error:', err.error);
-            if (err.error === 'not-allowed') {
-              Alert.alert('Izin Mikrofon Ditolak', 'Izinkan akses mikrofon di browser.');
-            } else if (err.error === 'network' || err.error === 'service-not-allowed') {
-              setBrowserWarning('Jika menggunakan Brave Browser di Laptop, matikan "Brave Shields" pada situs ini agar fitur speech recognition diizinkan.');
-            }
-          };
-
-          recognition.onend = () => {
-            if (isRecordingRef.current && !isPausedRef.current && recognitionRef.current) {
-              try { recognitionRef.current.start(); } catch (_) {}
-            }
-          };
-
-          recognition.start();
-          recognitionRef.current = recognition;
-        } else {
-          setBrowserWarning('Browser ini tidak mendukung Web Speech Recognition. Disarankan menggunakan Google Chrome, Microsoft Edge, atau Safari.');
-        }
+      // Start Mobile-First Speech Recognition
+      const recognition = initSpeechRecognition();
+      if (recognition) {
+        recognition.start();
+        recognitionRef.current = recognition;
       }
 
       setIsRecording(true);
       setIsPaused(false);
+      updateWaveformLoop();
     } catch (err: any) {
       console.error('Recording start error:', err);
       Alert.alert('Izin Mikrofon', 'Pastikan Anda telah mengizinkan mikrofon di browser.');
@@ -360,8 +373,12 @@ export default function AlihBahasaScreen() {
   const resumeRecording = () => {
     setIsPaused(false);
     setMicStatus('Mendengarkan...');
-    if (recognitionRef.current) {
-      try { recognitionRef.current.start(); } catch (_) {}
+    const freshRec = initSpeechRecognition();
+    if (freshRec) {
+      try {
+        freshRec.start();
+        recognitionRef.current = freshRec;
+      } catch (_) {}
     }
     updateWaveformLoop();
   };
@@ -372,6 +389,8 @@ export default function AlihBahasaScreen() {
     setMicStatus('Selesai');
 
     if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+
     if (pendingSpeechRef.current) {
       commitFinishedSentence(pendingSpeechRef.current);
     }
@@ -379,14 +398,6 @@ export default function AlihBahasaScreen() {
     if (recognitionRef.current) {
       try { recognitionRef.current.stop(); } catch (_) {}
       recognitionRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
     }
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
@@ -412,8 +423,6 @@ export default function AlihBahasaScreen() {
     if (isRecording && recognitionRef.current) {
       try {
         recognitionRef.current.stop();
-        const newSrcObj = LANGUAGES.find((l) => l.code === prevTgt);
-        recognitionRef.current.lang = newSrcObj?.bcp || 'en-US';
       } catch (_) {}
     }
   };
@@ -750,7 +759,6 @@ export default function AlihBahasaScreen() {
                         if (isRecording && recognitionRef.current) {
                           try {
                             recognitionRef.current.stop();
-                            recognitionRef.current.lang = lang.bcp;
                           } catch (_) {}
                         }
                       } else {
