@@ -339,6 +339,8 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
   socket.join(BAMBUPEDIA_ROOM);
 
   const existingSession = bambupediaSessions.get(member.id);
+  const isFirstJoin = !existingSession || existingSession.socketIds.size === 0;
+
   if (existingSession) {
     existingSession.member = member;
     existingSession.socketIds.add(socket.id);
@@ -352,9 +354,10 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
     socket.emit('bambupedia_message', lastEcosystemInfoMessage);
   }
 
-  const welcomeMessage = createSystemMessage('sys-welcome', 'system', `${BAMBOO_ICON} Selamat datang, ${member.display_name}! Senang kamu bergabung di ${BAMBUPEDIA_ROOM_NAME}! ${WAVE_ICON}`);
-  io.to(BAMBUPEDIA_ROOM).emit('bambupedia_user_joined', { user: member, message: welcomeMessage, created_at: welcomeMessage.created_at });
-  io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', welcomeMessage);
+  if (isFirstJoin) {
+    const welcomeMessage = createSystemMessage('sys-welcome', 'system', `${BAMBOO_ICON} Selamat datang, ${member.display_name}! Senang kamu bergabung di ${BAMBUPEDIA_ROOM_NAME}! ${WAVE_ICON}`);
+    io.to(BAMBUPEDIA_ROOM).emit('bambupedia_user_joined', { user: member, message: welcomeMessage, created_at: welcomeMessage.created_at });
+  }
 
   const handleIncomingMessage = async (data: { content?: unknown; message_text?: unknown; type?: unknown; message_type?: unknown; attachment_url?: unknown }) => {
     const rawContent = typeof data?.content === 'string' ? data.content : typeof data?.message_text === 'string' ? data.message_text : '';

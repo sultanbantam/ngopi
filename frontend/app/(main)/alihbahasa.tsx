@@ -26,6 +26,7 @@ interface TranscriptItem {
 
 const LANGUAGES = [
   { code: 'id', label: '🇮🇩 Bahasa Indonesia', name: 'Indonesian', bcp: 'id-ID' },
+  { code: 'lg', label: '🇺🇬 Luganda / Ganda (Uganda)', name: 'Luganda', bcp: 'lg-UG' },
   { code: 'en', label: '🇬🇧 English', name: 'English', bcp: 'en-US' },
   { code: 'pt', label: '🇵🇹 Português', name: 'Portuguese', bcp: 'pt-PT' },
   { code: 'ja', label: '🇯🇵 日本語 (Japanese)', name: 'Japanese', bcp: 'ja-JP' },
@@ -40,10 +41,11 @@ const LANGUAGES = [
 export default function AlihBahasaScreen() {
   // Two-way Language Selection
   const [sourceLangCode, setSourceLangCode] = useState('id');
-  const [targetLangCode, setTargetLangCode] = useState('en');
+  const [targetLangCode, setTargetLangCode] = useState('lg');
 
-  // Modal Picker for Mobile
+  // Modal Pickers & Guide Sheets
   const [langPickerVisible, setLangPickerVisible] = useState<'source' | 'target' | null>(null);
+  const [headsetGuideVisible, setHeadsetGuideVisible] = useState(false);
 
   // Voice Gender Selection (Female / Male)
   const [voiceGender, setVoiceGender] = useState<'female' | 'male'>('female');
@@ -66,7 +68,7 @@ export default function AlihBahasaScreen() {
   const isRecordingRef = useRef(false);
   const isPausedRef = useRef(false);
   const sourceLangRef = useRef('id');
-  const targetLangRef = useRef('en');
+  const targetLangRef = useRef('lg');
   const voiceGenderRef = useRef<'female' | 'male'>('female');
   const isHeadsetModeRef = useRef(true);
 
@@ -88,7 +90,7 @@ export default function AlihBahasaScreen() {
     isHeadsetModeRef.current = isHeadsetMode;
   }, [isRecording, isPaused, sourceLangCode, targetLangCode, voiceGender, isHeadsetMode]);
 
-  // Pure Neural Machine Translation (Google NMT)
+  // Pure Neural Machine Translation
   const translateText = async (text: string, srcLang: string, tgtLang: string): Promise<string> => {
     if (!text || !text.trim() || srcLang === tgtLang) return text;
     const clean = text.trim();
@@ -121,7 +123,7 @@ export default function AlihBahasaScreen() {
     return translatedChunks.join(' ').trim();
   };
 
-  // Text-To-Speech Playback with Voice Gender Matching & Mobile Autoplay Support
+  // Text-To-Speech Playback with Voice Gender & Earphone Support
   const speakTranslation = useCallback((text: string, langCode: string, genderOverride?: 'female' | 'male') => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
@@ -190,11 +192,10 @@ export default function AlihBahasaScreen() {
     };
   }, [isRecording, isPaused]);
 
-  // Dynamic Audio Visualizer
+  // Audio Visualizer
   const updateWaveformLoop = () => {
     if (!isRecordingRef.current || isPausedRef.current) return;
 
-    // Generate natural active speech waveform
     const bars: number[] = [];
     const isSpeaking = !!pendingSpeechRef.current;
     for (let i = 0; i < 16; i++) {
@@ -239,6 +240,7 @@ export default function AlihBahasaScreen() {
     setCurrentSpokenText('');
     pendingSpeechRef.current = '';
 
+    // If Headset mode is active, play audio into earphone immediately
     if (isHeadsetModeRef.current && translated) {
       speakTranslation(translated, currentTgt);
     }
@@ -341,7 +343,6 @@ export default function AlihBahasaScreen() {
       setMicStatus('Menghubungkan...');
       setBrowserWarning(null);
 
-      // Start Mobile-First Speech Recognition
       const recognition = initSpeechRecognition();
       if (recognition) {
         recognition.start();
@@ -504,7 +505,7 @@ export default function AlihBahasaScreen() {
         </View>
       )}
 
-      {/* 2. Modern Compact Dual-Language Bar (Benchmarked against Google/Apple Translate) */}
+      {/* 2. Compact Dual-Language Bar (Source <-> Target) */}
       <View style={styles.compactLangBar}>
         {/* Source Dropdown Button */}
         <TouchableOpacity
@@ -538,7 +539,7 @@ export default function AlihBahasaScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 3. Quick Audio Settings Strip */}
+      {/* 3. Quick Audio Settings Strip with Headset Mode & Guide */}
       <View style={styles.quickSettingsStrip}>
         {/* Voice Gender Toggle */}
         <View style={styles.genderSegment}>
@@ -566,16 +567,26 @@ export default function AlihBahasaScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Headset Mode Toggle */}
-        <TouchableOpacity
-          style={[styles.headsetToggleChip, isHeadsetMode && styles.headsetToggleChipActive]}
-          onPress={() => setIsHeadsetMode(!isHeadsetMode)}
-        >
-          <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={14} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
-          <Text style={[styles.headsetToggleChipText, isHeadsetMode && styles.headsetToggleChipTextActive]}>
-            {isHeadsetMode ? 'Headset: ON' : 'Headset: OFF'}
-          </Text>
-        </TouchableOpacity>
+        {/* Headset Controls & Guide Button */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <TouchableOpacity
+            style={[styles.headsetToggleChip, isHeadsetMode && styles.headsetToggleChipActive]}
+            onPress={() => setIsHeadsetMode(!isHeadsetMode)}
+          >
+            <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={14} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
+            <Text style={[styles.headsetToggleChipText, isHeadsetMode && styles.headsetToggleChipTextActive]}>
+              {isHeadsetMode ? 'Earphone: ON' : 'Earphone: OFF'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.infoGuideBtn}
+            onPress={() => setHeadsetGuideVisible(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="help-circle-outline" size={16} color="#38BDF8" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* 4. Main Single Conversation Window */}
@@ -589,11 +600,11 @@ export default function AlihBahasaScreen() {
           {messages.length === 0 && !currentSpokenText ? (
             <View style={styles.emptyPrompt}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="mic-circle-outline" size={54} color="#06B6D4" />
+                <Ionicons name="globe-outline" size={54} color="#06B6D4" />
               </View>
               <Text style={styles.emptyTitle}>Penerjemah Suara Real-Time</Text>
               <Text style={styles.emptySub}>
-                Bicara dalam bahasa <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>{srcLangObj.name}</Text> dan sistem akan menerjemahkan secara otomatis ke <Text style={{ color: '#34D399', fontWeight: 'bold' }}>{tgtLangObj.name}</Text>. Tekan tombol merah di bawah untuk mulai.
+                Bicara dalam <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>{srcLangObj.name}</Text> dan sistem akan menerjemahkan secara instan ke <Text style={{ color: '#34D399', fontWeight: 'bold' }}>{tgtLangObj.name}</Text>.
               </Text>
             </View>
           ) : (
@@ -728,7 +739,7 @@ export default function AlihBahasaScreen() {
         </View>
       </View>
 
-      {/* Modal Language Selection Sheet for Mobile */}
+      {/* Modal Language Picker */}
       <Modal
         visible={langPickerVisible !== null}
         transparent
@@ -774,6 +785,64 @@ export default function AlihBahasaScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal Petunjuk Penggunaan Earphone / Headset */}
+      <Modal
+        visible={headsetGuideVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setHeadsetGuideVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="headset" size={20} color="#06B6D4" />
+                <Text style={styles.modalTitle}>Panduan Earphone / Headset</Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setHeadsetGuideVisible(false)}>
+                <Ionicons name="close" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
+              <View style={styles.guideStepCard}>
+                <Text style={styles.guideStepNum}>1</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideStepTitle}>Sambungkan Headset ke HP / Laptop</Text>
+                  <Text style={styles.guideStepDesc}>
+                    Pasang earphone kabel atau sambungkan headset Bluetooth (TWS) ke perangkat Anda. Sistem operasi akan otomatis menggunakan mic & speaker headset.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.guideStepCard}>
+                <Text style={styles.guideStepNum}>2</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideStepTitle}>Pastikan Tombol "Earphone: ON"</Text>
+                  <Text style={styles.guideStepDesc}>
+                    Ketika tombol <Text style={{ color: '#22D3EE', fontWeight: 'bold' }}>Earphone: ON</Text> menyala, setiap kalimat terjemahan akan langsung otomatis disuarakan ke telinga Anda tanpa perlu menekan tombol speaker manual.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.guideStepCard}>
+                <Text style={styles.guideStepNum}>3</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.guideStepTitle}>Pilih Bahasa Lawan Bicara & Mulai</Text>
+                  <Text style={styles.guideStepDesc}>
+                    Atur bahasa asal dan bahasa target (misal: 🇺🇬 Luganda ke 🇮🇩 Indonesia). Tekan <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>Rekam</Text> — Anda dapat mendengar terjemahan secara simultan langsung di telinga Anda!
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity style={styles.guideUnderstoodBtn} onPress={() => setHeadsetGuideVisible(false)}>
+                <Text style={styles.guideUnderstoodBtnText}>Saya Mengerti</Text>
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -992,6 +1061,16 @@ const styles = StyleSheet.create({
   },
   headsetToggleChipTextActive: {
     color: '#22D3EE',
+  },
+  infoGuideBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1E293B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
   },
   chatStreamContainer: {
     flex: 1,
@@ -1316,6 +1395,52 @@ const styles = StyleSheet.create({
   },
   modalItemTextActive: {
     color: '#22D3EE',
+    fontWeight: 'bold',
+  },
+  guideStepCard: {
+    flexDirection: 'row',
+    backgroundColor: '#161F30',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#243044',
+    gap: 12,
+    alignItems: 'flex-start',
+  },
+  guideStepNum: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#06B6D4',
+    color: '#0B1120',
+    fontSize: 14,
+    fontWeight: '900',
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  guideStepTitle: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginBottom: 4,
+  },
+  guideStepDesc: {
+    color: '#94A3B8',
+    fontSize: 12,
+    lineHeight: 18,
+  },
+  guideUnderstoodBtn: {
+    backgroundColor: '#0284C7',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  guideUnderstoodBtnText: {
+    color: '#FFF',
+    fontSize: 14,
     fontWeight: 'bold',
   },
 });

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stack, Slot, router, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import BambupediaRoom from './bambupedia';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
@@ -23,6 +23,15 @@ type AppNotification = {
   createdAt: string;
   read: boolean;
   target?: { pathname: string; params?: Record<string, string> };
+};
+
+type ActiveIncomingCall = {
+  callId: string;
+  from: string;
+  callerName: string;
+  isVideo: boolean;
+  target: AppNotification['target'];
+  data: any;
 };
 
 type DirectoryUser = { id: string; username: string; display_name?: string; avatar_url?: string | null };
@@ -54,6 +63,7 @@ export default function MainLayout() {
   const [userDirectory, setUserDirectory] = useState<Record<string, DirectoryUser>>({});
   const [toastTarget, setToastTarget] = useState<AppNotification['target']>();
   const [callAlertMode, setCallAlertMode] = useState<CallAlertMode>('ringtone');
+  const [activeIncomingCall, setActiveIncomingCall] = useState<ActiveIncomingCall | null>(null);
 
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -285,6 +295,7 @@ export default function MainLayout() {
       pending.browserNotification?.close();
       if (Platform.OS === 'web') navigator.vibrate?.(0);
       delete pendingCallsRef.current[callId];
+      setActiveIncomingCall((prev) => (prev?.callId === callId ? null : prev));
 
       if (missed) {
         const callerName = pending.data?.name || 'Seseorang';
@@ -321,8 +332,14 @@ export default function MainLayout() {
       const stopAlert = startCallAlert();
       const timeout = setTimeout(() => finishPendingCall(callId, true), CALL_RING_DURATION_MS);
       pendingCallsRef.current[callId] = { data, stopAlert, timeout };
-      setToastTarget(target);
-      setToastMessage(`${data?.isVideo ? 'Video call' : 'Panggilan masuk'} dari ${callerName} - ketuk untuk jawab`);
+      setActiveIncomingCall({
+        callId,
+        from: data.from,
+        callerName,
+        isVideo: Boolean(data?.isVideo),
+        target,
+        data,
+      });
 
       if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
         const browserNotification = new Notification(data?.isVideo ? 'Video Call BambooChat' : 'Panggilan BambooChat', {
@@ -334,8 +351,7 @@ export default function MainLayout() {
         browserNotification.onclick = () => {
           window.focus();
           finishPendingCall(callId, false);
-          setToastMessage(null);
-          setToastTarget(undefined);
+          setActiveIncomingCall(null);
           router.push(target as any);
         };
       }
@@ -344,6 +360,7 @@ export default function MainLayout() {
     const handleCallEnded = (payload: any) => {
       const callId = payload?.call_id ? String(payload.call_id) : Object.keys(pendingCallsRef.current)[0];
       if (callId) finishPendingCall(callId, true);
+      setActiveIncomingCall(null);
     };
 
     const setupListeners = async () => {
@@ -454,6 +471,65 @@ export default function MainLayout() {
     </>
   );
 
+  const renderIncomingCallModal = () => {
+    if (!activeIncomingCall) return null;
+
+    const handleAccept = () => {
+      const call = activeIncomingCall;
+      finishPendingCall(call.callId, false);
+      setActiveIncomingCall(null);
+      if (call.target) router.push(call.target as any);
+    };
+
+    const handleDecline = () => {
+      const call = activeIncomingCall;
+      if (socketService.socket && call.data?.room_id) {
+        socketService.socket.emit('end_call', {
+          to: call.from,
+          room_id: call.data.room_id,
+          call_id: call.callId,
+        });
+      }
+      finishPendingCall(call.callId, false);
+      setActiveIncomingCall(null);
+    };
+
+    return (
+      <Modal transparent visible={Boolean(activeIncomingCall)} animationType="fade" onRequestClose={handleDecline}>
+        <View style={styles.callModalOverlay}>
+          <View style={styles.callModalCard}>
+            <View style={[styles.callModalAvatar, { backgroundColor: activeIncomingCall.isVideo ? '#0284C7' : '#10B981' }]}>
+              <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'person'} size={48} color="#FFFFFF" />
+            </View>
+
+            <Text style={styles.callModalTitle}>{activeIncomingCall.callerName}</Text>
+            <Text style={styles.callModalSubtitle}>
+              {activeIncomingCall.isVideo ? '📹 Panggilan Video Masuk...' : '📞 Panggilan Suara Masuk...'}
+            </Text>
+
+            <View style={styles.callModalActions}>
+              {/* Decline Button (RED) */}
+              <View style={styles.callActionItem}>
+                <TouchableOpacity style={[styles.callActionButton, styles.declineButton]} onPress={handleDecline} activeOpacity={0.8}>
+                  <MaterialIcons name="call-end" size={32} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.callActionText}>Tolak</Text>
+              </View>
+
+              {/* Accept Button (GREEN) */}
+              <View style={styles.callActionItem}>
+                <TouchableOpacity style={[styles.callActionButton, styles.acceptButton]} onPress={handleAccept} activeOpacity={0.8}>
+                  <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'call'} size={32} color="#FFFFFF" />
+                </TouchableOpacity>
+                <Text style={styles.callActionText}>Terima</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   if (isLargeScreen) {
     const showBambupedia =
       pathname === '/' ||
@@ -462,6 +538,7 @@ export default function MainLayout() {
     return (
       <View style={styles.singleContainer}>
         {showBambupedia ? <BambupediaRoom /> : <Slot />}
+        {renderIncomingCallModal()}
         {renderToast()}
         {renderNotificationCenter()}
       </View>
@@ -484,6 +561,7 @@ export default function MainLayout() {
         <Stack.Screen name="help-center" options={{ headerShown: false }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>
+      {renderIncomingCallModal()}
       {renderToast()}
       {renderNotificationCenter()}
     </View>
@@ -491,6 +569,86 @@ export default function MainLayout() {
 }
 
 const styles = StyleSheet.create({
+  callModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    zIndex: 99999,
+  },
+  callModalCard: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#334155',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.4,
+    shadowRadius: 24,
+    elevation: 12,
+  },
+  callModalAvatar: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 18,
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  callModalTitle: {
+    color: '#F8FAFC',
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  callModalSubtitle: {
+    color: '#94A3B8',
+    fontSize: 15,
+    textAlign: 'center',
+    marginBottom: 32,
+  },
+  callModalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  callActionItem: {
+    alignItems: 'center',
+    gap: 8,
+  },
+  callActionButton: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  declineButton: {
+    backgroundColor: '#EF4444',
+  },
+  acceptButton: {
+    backgroundColor: '#10B981',
+  },
+  callActionText: {
+    color: '#E2E8F0',
+    fontSize: 14,
+    fontWeight: '600',
+  },
   singleContainer: {
     flex: 1,
     backgroundColor: '#0F172A',

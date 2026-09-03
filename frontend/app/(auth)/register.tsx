@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 import { generateDeviceKeyPair } from '../../src/utils/e2ee';
-import { setStoredRefreshToken } from '../../src/utils/session';
+import { setStoredRefreshToken, setStoredToken } from '../../src/utils/session';
 import { explainAuthError } from '../../src/utils/auth-errors';
 
 const API_URL = 'https://api.bamboochat.click/api';
