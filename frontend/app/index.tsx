@@ -8,9 +8,15 @@ const logoImage = require('../assets/logo.png');
 
 export default function IndexScreen() {
   useEffect(() => {
-    // Disable automatic redirect temporarily for Pi Browser debugging
-    // The automatic redirect (router.replace) is causing Pi Browser to drop the pi:// scheme
-    // and fallback to https:// with a yellow triangle.
+    const checkSession = async () => {
+      const hasSession = await hasStoredSession();
+      if (hasSession) {
+        router.replace('/(main)/bambupedia');
+      } else {
+        router.replace('/(auth)/register');
+      }
+    };
+    checkSession();
   }, []);
 
   return (

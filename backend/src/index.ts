@@ -17,6 +17,7 @@ import aiRoutes from './routes/ai.routes';
 import ticketRoutes from './routes/ticket.routes';
 import adminRoutes from './routes/admin.routes';
 import paymentRoutes from './routes/payment.routes';
+import ogRoutes from './routes/og.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -77,6 +78,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/tickets', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/og', ogRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

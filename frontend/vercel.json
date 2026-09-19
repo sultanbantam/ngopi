@@ -34,6 +34,17 @@
     },
     {
       "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(whatsapp|telegrambot|facebookexternalhit|twitterbot|slackbot|discordbot|linkedinbot|vkshare).*"
+        }
+      ],
+      "destination": "https://api.bamboochat.click/api/og?path=/$1"
+    },
+    {
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

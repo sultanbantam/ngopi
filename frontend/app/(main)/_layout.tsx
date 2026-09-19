@@ -102,6 +102,12 @@ export default function MainLayout() {
       } else {
         uid = await SecureStore.getItemAsync('userId');
       }
+
+      if (!uid) {
+        router.replace('/(auth)/register');
+        return;
+      }
+      
       setCurrentUserId(uid);
     };
     init();
