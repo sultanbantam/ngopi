@@ -218,9 +218,20 @@ export default function BambupediaRoom() {
       const username = await SecureStore.getItemAsync('username');
       setCurrentUserId(userId);
       setCurrentUsername(username);
+      
+      if (userId && username) {
+        setTimeout(() => {
+          appendMessage(createLocalWelcomeMessage({
+            id: userId,
+            username: username,
+            display_name: username,
+            avatar_url: null
+          }));
+        }, 500);
+      }
     };
     loadCurrentUser();
-  }, []);
+  }, [appendMessage]);
 
   useEffect(() => {
     let active = true;

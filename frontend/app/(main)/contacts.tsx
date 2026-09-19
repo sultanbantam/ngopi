@@ -721,6 +721,28 @@ export default function ContactsScreen() {
             <Text style={styles.inputLabel}>Status</Text>
             <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor="#64748b" value={editStatus} onChangeText={setEditStatus} />
             
+            <Text style={styles.inputLabel}>Profile Link</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+              <TextInput 
+                style={[styles.inputField, { flex: 1, marginBottom: 0, color: '#10B981', backgroundColor: '#1E293B' }]} 
+                value={`https://www.bamboochat.click/chat/${currentUsername}`} 
+                editable={false} 
+              />
+              <TouchableOpacity 
+                style={{ marginLeft: 10, padding: 12, backgroundColor: '#334155', borderRadius: 8, height: 48, justifyContent: 'center', alignItems: 'center' }}
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    navigator.clipboard.writeText(`https://www.bamboochat.click/chat/${currentUsername}`);
+                    alert('Link profil disalin!');
+                  } else {
+                    Alert.alert('Info', 'Fitur copy tersedia di web.');
+                  }
+                }}
+              >
+                <Ionicons name="copy-outline" size={20} color="#94A3B8" />
+              </TouchableOpacity>
+            </View>
+            
             <View style={[styles.modalActions, { marginTop: 16 }]}>
               <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: '#334155', borderRadius: 8, paddingHorizontal: 20 }]}>
                 <Text style={[styles.cancelBtnText, { color: '#fff' }]}>Close</Text>
