@@ -296,7 +296,7 @@ function PrivateChatRoomScreen() {
     const fromPayload = item.sender?.display_name || item.sender?.username;
     if (fromPayload) return fromPayload;
     const fromDirectory = allUsers.find(user => user.id === item.sender_id);
-    return fromDirectory?.display_name || fromDirectory?.username || 'Anggota Rumpun';
+    return fromDirectory?.display_name || fromDirectory?.username || 'Anggota Warkop';
   };
 
   useEffect(() => {
@@ -1211,7 +1211,7 @@ function PrivateChatRoomScreen() {
         <View style={styles.groupInfoOverlay}>
           <View style={styles.groupInfoPanel}>
             <View style={styles.groupInfoHeader}>
-              <Text style={styles.groupInfoTitle}>Info Rumpun</Text>
+              <Text style={styles.groupInfoTitle}>Info Warkop</Text>
               <TouchableOpacity style={styles.closeButton} onPress={() => setIsGroupInfoVisible(false)}>
                 <Ionicons name="close" size={22} color={coffee.text} />
               </TouchableOpacity>
@@ -1264,11 +1264,11 @@ function PrivateChatRoomScreen() {
                         ))}
                       </ScrollView>
                       <TouchableOpacity style={[styles.groupPrimaryButton, !selectedMemberId && styles.groupButtonDisabled]} onPress={addSelectedGroupMember} disabled={!selectedMemberId}>
-                        <Text style={styles.groupButtonText}>Tambah ke Rumpun</Text>
+                        <Text style={styles.groupButtonText}>Tambah ke Warkop</Text>
                       </TouchableOpacity>
                     </>
                   ) : (
-                    <Text style={styles.groupHeroMeta}>Semua user terdaftar sudah ada di rumpun ini.</Text>
+                    <Text style={styles.groupHeroMeta}>Semua user terdaftar sudah ada di Warkop ini.</Text>
                   )}
                 </View>
               )}

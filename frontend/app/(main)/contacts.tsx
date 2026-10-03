@@ -9,6 +9,8 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
 import axios from 'axios';
+import { getAuthHeaders } from '../../src/utils/api';
+import { uploadProfileAvatar, profileSaveError } from '../../src/utils/profileUpload';
 import { profileSlug } from '../../src/utils/profileLink';
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -25,12 +27,10 @@ export default function ContactsScreen() {
   const [groups, setGroups] = useState<any[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
-  const [activeTab, setActiveTab] = useState<'semua' | 'belum_dibaca' | 'favorit' | 'rumpun'>('semua');
+  const [activeTab, setActiveTab] = useState<'semua' | 'belum_dibaca' | 'favorit' | 'warkop'>('semua');
 
   // Modals state
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  const [isWalletModalVisible, setWalletModalVisible] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
 
   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
@@ -44,9 +44,6 @@ export default function ContactsScreen() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
 
-  // Airdrop Modal
-  const [isAirdropModalVisible, setAirdropModalVisible] = useState(false);
-  const [airdropData, setAirdropData] = useState<any>(null);
 
   // Settings Modal
   const [isSettingsModalVisible, setSettingsModalVisible] = useState(false);
@@ -58,6 +55,7 @@ export default function ContactsScreen() {
   const [editBio, setEditBio] = useState('');
   const [editStatus, setEditStatus] = useState('');
   const [editAvatar, setEditAvatar] = useState('');
+  const [pickedAvatar, setPickedAvatar] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
@@ -126,12 +124,12 @@ export default function ContactsScreen() {
         if (inviteCode && token) {
           const joinRes = await axios.post(`${API_URL}/groups/invite/${inviteCode}/join`, {}, { headers });
           if (joinRes.status === 202 || joinRes.data?.pendingApproval) {
-            if (Platform.OS === 'web') alert('Permintaan join rumpun sudah dikirim dan menunggu persetujuan admin.');
-            else Alert.alert('Menunggu Admin', 'Permintaan join rumpun sudah dikirim dan menunggu persetujuan admin.');
+            if (Platform.OS === 'web') alert('Permintaan join warkop sudah dikirim dan menunggu persetujuan admin.');
+            else Alert.alert('Menunggu Admin', 'Permintaan join warkop sudah dikirim dan menunggu persetujuan admin.');
           } else if (Platform.OS === 'web') {
-            alert('Berhasil join rumpun dari link undangan.');
+            alert('Berhasil join warkop dari link undangan.');
           } else {
-            Alert.alert('Berhasil', 'Berhasil join rumpun dari link undangan.');
+            Alert.alert('Berhasil', 'Berhasil join warkop dari link undangan.');
           }
           const refreshedGroups = await axios.get(`${API_URL}/groups`, { headers });
           setGroups(refreshedGroups.data);
@@ -250,64 +248,34 @@ export default function ContactsScreen() {
     router.replace('/(auth)/login');
   };
 
-  const saveWalletAddress = async () => {
-    try {
-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      await axios.post(`${API_URL}/auth/profile`, { wallet_address: walletAddress }, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setWalletModalVisible(false);
-      if (Platform.OS === 'web') alert('Wallet Address Saved!');
-      else Alert.alert('Success', 'Wallet Address Saved!');
-    } catch (e) {
-      console.error(e);
-      if (Platform.OS === 'web') alert('Failed to save wallet address');
-      else Alert.alert('Error', 'Failed to save wallet address');
-    }
-  };
-
   const saveProfile = async () => {
     try {
       setIsSavingProfile(true);
-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-
-      let finalAvatarUrl = editAvatar;
-      if (editAvatar && (editAvatar.startsWith('blob:') || editAvatar.startsWith('file:'))) {
-        const formData = new FormData();
-        if (Platform.OS === 'web') {
-          const res = await fetch(editAvatar);
-          const blob = await res.blob();
-          formData.append('file', blob, 'avatar.jpg');
-        } else {
-          formData.append('file', {
-            uri: editAvatar,
-            name: 'avatar.jpg',
-            type: 'image/jpeg',
-          } as any);
-        }
-        const uploadRes = await axios.post(`${API_URL}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        finalAvatarUrl = uploadRes.data.url;
-      }
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) throw new Error('Sesi berakhir. Silakan login kembali.');
+      if (!editDisplayName.trim()) throw new Error('Display name wajib diisi.');
+      const finalAvatarUrl = await uploadProfileAvatar(editAvatar, pickedAvatar, headers);
+      // Keep a successful upload if saving the text needs to be retried.
+      setEditAvatar(finalAvatarUrl);
+      setPickedAvatar(null);
 
       const res = await axios.post(`${API_URL}/auth/profile`, {
-        display_name: editDisplayName,
+        display_name: editDisplayName.trim(),
         bio: editBio,
         status: editStatus,
         avatar_url: finalAvatarUrl
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers
       });
       setCurrentUser(res.data.user.display_name);
       setCurrentAvatarUrl(res.data.user.avatar_url);
       setProfileModalVisible(false);
-      if (Platform.OS === 'web') alert('Profile Saved!');
-      else Alert.alert('Success', 'Profile Saved!');
+      if (Platform.OS === 'web') alert('Profil berhasil disimpan!');
+      else Alert.alert('Berhasil', 'Profil berhasil disimpan!');
     } catch (e) {
-      console.error(e);
-      if (Platform.OS === 'web') alert('Failed to save profile');
-      else Alert.alert('Error', 'Failed to save profile');
+      const message = profileSaveError(e);
+      if (Platform.OS === 'web') alert(message);
+      else Alert.alert('Profil belum tersimpan', message);
     } finally {
       setIsSavingProfile(false);
     }
@@ -323,6 +291,7 @@ export default function ContactsScreen() {
 
     if (!result.canceled && result.assets && result.assets.length > 0) {
       setEditAvatar(result.assets[0].uri);
+      setPickedAvatar(result.assets[0]);
     }
   };
 
@@ -342,8 +311,8 @@ export default function ContactsScreen() {
   const saveGroup = async () => {
     const trimmedName = groupName.trim();
     if (!trimmedName) {
-      if (Platform.OS === 'web') alert('Nama rumpun wajib diisi');
-      else Alert.alert('Nama rumpun wajib diisi');
+      if (Platform.OS === 'web') alert('Nama warkop wajib diisi');
+      else Alert.alert('Nama warkop wajib diisi');
       return;
     }
 
@@ -390,7 +359,7 @@ export default function ContactsScreen() {
       } else {
         const res = await axios.post(`${API_URL}/groups`, payload, { headers });
         setGroups(prev => [res.data, ...prev]);
-        setActiveTab('rumpun');
+        setActiveTab('warkop');
       }
 
       setGroupModalVisible(false);
@@ -405,7 +374,7 @@ export default function ContactsScreen() {
       setGroupCallEnabled(true);
     } catch (e: any) {
       console.error(e);
-      const errorMsg = e.response?.data?.error || 'Gagal menyimpan rumpun';
+      const errorMsg = e.response?.data?.error || 'Gagal menyimpan warkop';
       if (Platform.OS === 'web') alert(errorMsg);
       else Alert.alert('Error', errorMsg);
     } finally {
@@ -452,36 +421,6 @@ export default function ContactsScreen() {
     }
   };
 
-  const loadAirdropData = async () => {
-    try {
-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const res = await axios.get(`${API_URL}/bmc/airdrop/history`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setAirdropData(res.data);
-      setAirdropModalVisible(true);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const claimAirdrop = async () => {
-    try {
-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const res = await axios.post(`${API_URL}/bmc/airdrop/claim`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      if (Platform.OS === 'web') alert(res.data.message);
-      else Alert.alert('Success', res.data.message);
-      loadAirdropData(); // reload data
-    } catch (e: any) {
-      console.error(e);
-      const errorMsg = e.response?.data?.error || 'Failed to claim airdrop';
-      if (Platform.OS === 'web') alert(errorMsg);
-      else Alert.alert('Error', errorMsg);
-    }
-  };
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -500,7 +439,7 @@ export default function ContactsScreen() {
       if (!settings?.hide_groups) list.push(...groups.filter(g => unreadCounts[g.id] > 0).map(g => ({ ...g, _type: 'group' })));
     } else if (activeTab === 'favorit') {
       // placeholder for favorit
-    } else if (activeTab === 'rumpun') {
+    } else if (activeTab === 'warkop') {
       if (!settings?.hide_groups) list.push(...groups.map(g => ({ ...g, _type: 'group' })));
     }
     if (activeTab === 'semua') {
@@ -655,15 +594,15 @@ export default function ContactsScreen() {
           <TouchableOpacity style={[styles.chip, activeTab === 'favorit' && styles.activeChip]} onPress={() => setActiveTab('favorit')}>
             <Text style={[styles.chipText, activeTab === 'favorit' && styles.activeChipText]}>Favorit</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.chip, activeTab === 'rumpun' && styles.activeChip]} onPress={() => setActiveTab('rumpun')}>
-            <Text style={[styles.chipText, activeTab === 'rumpun' && styles.activeChipText]}>Rumpun {groups.length}</Text>
+          <TouchableOpacity style={[styles.chip, activeTab === 'warkop' && styles.activeChip]} onPress={() => setActiveTab('warkop')}>
+            <Text style={[styles.chipText, activeTab === 'warkop' && styles.activeChipText]}>Warkop {groups.length}</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
 
-      {activeTab === 'rumpun' && (
+      {activeTab === 'warkop' && (
         <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
-          <Text style={styles.createGroupBtnText}>+ Buat Rumpun Baru</Text>
+          <Text style={styles.createGroupBtnText}>+ Buat Warkop Baru</Text>
         </TouchableOpacity>
       )}
 
@@ -718,13 +657,13 @@ export default function ContactsScreen() {
             </View>
 
             <Text style={styles.inputLabel}>Display Name</Text>
-            <TextInput style={styles.inputField} placeholder="Enter your display name" placeholderTextColor={coffee.muted} value={editDisplayName} onChangeText={setEditDisplayName} />
+            <TextInput style={styles.inputField} placeholder="Enter your display name" placeholderTextColor={coffee.muted} maxLength={50} value={editDisplayName} onChangeText={setEditDisplayName} />
 
             <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput style={styles.inputField} placeholder="A short bio about you" placeholderTextColor={coffee.muted} value={editBio} onChangeText={setEditBio} />
+            <TextInput style={styles.inputField} placeholder="A short bio about you" placeholderTextColor={coffee.muted} multiline maxLength={500} value={editBio} onChangeText={setEditBio} />
 
             <Text style={styles.inputLabel}>Status</Text>
-            <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor={coffee.muted} value={editStatus} onChangeText={setEditStatus} />
+            <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor={coffee.muted} maxLength={120} value={editStatus} onChangeText={setEditStatus} />
 
             <Text style={styles.inputLabel}>Profile Link</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
@@ -762,60 +701,6 @@ export default function ContactsScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Wallet Modal */}
-      <Modal visible={isWalletModalVisible} transparent={true} animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Bamboochain Wallet</Text>
-            <Text style={styles.modalDesc}>Enter your BEP20 Wallet Address to access Token-Gated groups.</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0x..."
-              placeholderTextColor={coffee.muted}
-              value={walletAddress}
-              onChangeText={setWalletAddress}
-            />
-            <View style={styles.modalActions}>
-              <TouchableOpacity onPress={() => setWalletModalVisible(false)} style={styles.cancelBtn}>
-                <Text style={styles.cancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={saveWalletAddress} style={styles.saveBtn}>
-                <Text style={styles.saveBtnText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Airdrop Modal */}
-      <Modal visible={isAirdropModalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { alignItems: 'center' }]}>
-            <Text style={{ fontSize: 20, marginBottom: 10, color: coffee.accent, fontWeight: '800' }}>BMC</Text>
-            <Text style={[styles.modalTitle, { color: coffee.accent }]}>Daily BMC Airdrop</Text>
-            {airdropData && (
-              <>
-                <Text style={[styles.modalDesc, { textAlign: 'center' }]}>
-                  You have claimed a total of <Text style={{ fontWeight: 'bold', color: coffee.text }}>{airdropData.total_claimed.toFixed(2)} BMC</Text> over {airdropData.total_claims} days.
-                </Text>
-                {airdropData.can_claim_today ? (
-                  <TouchableOpacity onPress={claimAirdrop} style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16 }]}>
-                    <Text style={[styles.saveBtnText, { fontSize: 18 }]}>Claim {airdropData.daily_amount} BMC Now</Text>
-                  </TouchableOpacity>
-                ) : (
-                  <View style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16, backgroundColor: coffee.border }]}>
-                    <Text style={[styles.saveBtnText, { fontSize: 18, color: coffee.secondary }]}>Already Claimed Today</Text>
-                  </View>
-                )}
-              </>
-            )}
-            <TouchableOpacity onPress={() => setAirdropModalVisible(false)} style={[styles.cancelBtn, { marginTop: 16 }]}>
-              <Text style={styles.cancelBtnText}>Close</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
       {/* Settings Modal */}
       <Modal visible={isSettingsModalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
@@ -843,7 +728,7 @@ export default function ContactsScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <Text style={{ color: coffee.text, fontSize: 16 }}>Hide Rumpun Tab</Text>
+              <Text style={{ color: coffee.text, fontSize: 16 }}>Hide Warkop Tab</Text>
               <TouchableOpacity
                 style={[styles.toggleBtn, settings?.hide_groups && styles.toggleBtnActive]}
                 onPress={() => setSettings({ ...settings, hide_groups: !settings?.hide_groups })}
@@ -869,7 +754,7 @@ export default function ContactsScreen() {
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.groupModalContent]}>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>{editingGroupId ? 'Pengaturan Rumpun' : 'Buat Rumpun Baru'}</Text>
+              <Text style={styles.modalTitle}>{editingGroupId ? 'Pengaturan Warkop' : 'Buat Warkop Baru'}</Text>
               <TouchableOpacity style={styles.groupAvatarPicker} onPress={pickGroupAvatar}>
                 <View style={[styles.avatar, styles.groupAvatarLarge]}>
                   {groupAvatar ? (
@@ -879,14 +764,14 @@ export default function ContactsScreen() {
                   )}
                 </View>
                 <View style={styles.groupAvatarTextWrap}>
-                  <Text style={styles.inputLabel}>Avatar Rumpun</Text>
-                  <Text style={styles.groupHint}>Ketuk untuk upload logo/foto rumpun.</Text>
+                  <Text style={styles.inputLabel}>Avatar Warkop</Text>
+                  <Text style={styles.groupHint}>Ketuk untuk upload logo/foto warkop.</Text>
                 </View>
               </TouchableOpacity>
 
               <TextInput
                 style={styles.input}
-                placeholder="Nama Rumpun"
+                placeholder="Nama Warkop"
                 placeholderTextColor={coffee.muted}
                 value={groupName}
                 onChangeText={setGroupName}
@@ -940,8 +825,8 @@ export default function ContactsScreen() {
 
               <View style={styles.settingRow}>
                 <View style={styles.settingTextWrap}>
-                  <Text style={styles.settingTitle}>Voice/video call rumpun</Text>
-                  <Text style={styles.groupHint}>Menyiapkan izin fitur call untuk rumpun.</Text>
+                  <Text style={styles.settingTitle}>Voice/video call warkop</Text>
+                  <Text style={styles.groupHint}>Menyiapkan izin fitur call untuk warkop.</Text>
                 </View>
                 <TouchableOpacity style={[styles.toggleBtn, groupCallEnabled && styles.toggleBtnActive]} onPress={() => setGroupCallEnabled(!groupCallEnabled)}>
                   <View style={[styles.toggleKnob, groupCallEnabled && styles.toggleKnobActive]} />
@@ -968,12 +853,6 @@ export default function ContactsScreen() {
             <Text style={styles.actionSheetTitle}>Pengaturan Akun</Text>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setProfileModalVisible(true); }}>
               <Text style={styles.actionSheetText}>Profil Saya</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); loadAirdropData(); }}>
-              <Text style={[styles.actionSheetText, { color: coffee.accent }]}>Klaim Airdrop BMC</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
-              <Text style={styles.actionSheetText}>Atur Alamat Dompet</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setSettingsModalVisible(true); }}>
               <Text style={styles.actionSheetText}>Pengaturan Privasi</Text>
