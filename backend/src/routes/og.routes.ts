@@ -1,90 +1,56 @@
 import { Router, Request, Response } from 'express';
-import { PrismaClient } from '@prisma/client';
-
+import { prisma } from '../utils/prisma';
 const router = Router();
-const prisma = new PrismaClient();
-
-const DEFAULT_TITLE = 'BaMbooChat';
-const DEFAULT_DESC = 'Chat aman tanpa nomor HP/email. Bisa voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis.';
-const DEFAULT_IMAGE = 'https://www.bamboochat.click/assets/icon.png';
-const BASE_URL = 'https://www.bamboochat.click';
-
-router.get('/', async (req: Request, res: Response) => {
-  const path = (req.query.path as string) || '/';
-  
-  let title = DEFAULT_TITLE;
-  let description = DEFAULT_DESC;
-  let image = DEFAULT_IMAGE;
-
+const BASE_URL = 'https://ngopi.top';
+const DEFAULT_IMAGE = `${BASE_URL}/ngopi-share-v3.jpg`;
+const reserved = new Set(['login', 'register', 'contacts', 'warkop', 'bambupedia', 'chat', 'admin', 'help-center', 'privacy', 'terms', 'test-payment', 'index', 'api']);
+const slug = (name: string) => {
+  const value = name.normalize('NFKC').trim().toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '') || 'pengguna';
+  return reserved.has(value) ? `${value}-profil` : value;
+};
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char]!));
+const avatarUrl = (value: string | null) => {
+  if (!value) return DEFAULT_IMAGE;
   try {
-    // Profil user
-    if (path.startsWith('/chat/')) {
-      const parts = path.split('/');
-      const targetId = parts[2]; // /chat/:id
-      if (targetId) {
-        // Cek apakah targetId adalah user
-        const user = await prisma.user.findFirst({
-          where: {
-            OR: [
-              { id: targetId },
-              { username: targetId }
-            ]
-          }
-        });
-
-        if (user) {
-          title = `${user.display_name || user.username} - BaMbooChat`;
-          description = `Chat dengan ${user.display_name || user.username} di BaMbooChat.`;
-          if (user.avatar_url) {
-            image = user.avatar_url.startsWith('http') ? user.avatar_url : `https://api.bamboochat.click${user.avatar_url}`;
-          }
-        } else {
-          // Jika tidak ada user, cek apakah itu grup (tapi grup belum tentu punya avatar pubik)
-          const group = await prisma.group.findUnique({
-            where: { id: targetId }
-          });
-          if (group) {
-            title = `${group.name} - BaMbooChat`;
-            description = group.description || `Gabung dengan grup ${group.name} di BaMbooChat.`;
-            if (group.avatar_url) {
-              image = group.avatar_url.startsWith('http') ? group.avatar_url : `https://api.bamboochat.click${group.avatar_url}`;
-            }
-          }
-        }
+    const url = new URL(value, 'https://api.ngopi.top');
+    if (!['https:', 'http:'].includes(url.protocol)) return DEFAULT_IMAGE;
+    if (url.hostname === 'api.ngopi.top') url.protocol = 'https:';
+    return url.href;
+  } catch { return DEFAULT_IMAGE; }
+};
+router.get('/', async (req: Request, res: Response) => {
+  const raw = typeof req.query.path === 'string' ? req.query.path : '/';
+  const path = '/' + raw.replace(/^\/+/, '').split(/[?#]/)[0];
+  let title = 'Ngopi — ngobrol paling intim';
+  let description = 'Daftar tanpa nomor HP/email. Nikmati chat aman, voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis.';
+  let image = DEFAULT_IMAGE;
+  try {
+    const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
+    const target = parts.length === 1 && !reserved.has(parts[0]) ? parts[0] : parts.length === 2 && parts[0] === 'chat' ? parts[1] : '';
+    if (target) {
+      // Only public profile fields are selected. Ambiguous display names use the brand image.
+      const users = await prisma.user.findMany({ select: { id: true, username: true, display_name: true, avatar_url: true } });
+      let matches = users.filter(user => user.id === target || slug(user.username) === slug(target));
+      if (!matches.length) matches = users.filter(user => slug(user.display_name || user.username) === slug(target));
+      if (matches.length === 1) {
+        const user = matches[0];
+        const name = user.display_name || user.username;
+        title = `${name} — Ngopi`;
+        description = `Ngobrol dengan ${name} (@${user.username}) di Ngopi.`;
+        image = avatarUrl(user.avatar_url);
       }
     }
   } catch (error) {
-    console.error('Error generating OG tags:', error);
+    console.error('Ngopi social preview lookup failed:', error);
   }
-
-  const html = `<!DOCTYPE html>
-<html lang="id">
-<head>
-  <meta charset="utf-8">
-  <title>${title}</title>
-  <meta name="description" content="${description}">
-  
-  <meta property="og:type" content="website">
-  <meta property="og:url" content="${BASE_URL}${path}">
-  <meta property="og:title" content="${title}">
-  <meta property="og:description" content="${description}">
-  <meta property="og:image" content="${image}">
-
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:url" content="${BASE_URL}${path}">
-  <meta name="twitter:title" content="${title}">
-  <meta name="twitter:description" content="${description}">
-  <meta name="twitter:image" content="${image}">
-</head>
-<body>
-  <script>
-    // Redirect bot ke halaman asli jika kebetulan termuat di browser
-    window.location.replace("${BASE_URL}${path}");
-  </script>
-</body>
-</html>`;
-
-  res.send(html);
+  const url = BASE_URL + path;
+  const meta = (attribute: string, key: string, value: string) => `<meta ${attribute}="${key}" content="${escapeHtml(value)}">`;
+  const tags = [meta('name', 'description', description), meta('property', 'og:type', 'website'), meta('property', 'og:site_name', 'Ngopi'), meta('property', 'og:url', url), meta('property', 'og:title', title), meta('property', 'og:description', description), meta('property', 'og:image', image), meta('property', 'og:image:alt', title), meta('name', 'twitter:card', 'summary_large_image'), meta('name', 'twitter:title', title), meta('name', 'twitter:description', description), meta('name', 'twitter:image', image)];
+  if (image.startsWith('https:')) tags.push(meta('property', 'og:image:secure_url', image));
+  if (image === DEFAULT_IMAGE) tags.push(meta('property', 'og:image:type', 'image/jpeg'), meta('property', 'og:image:width', '1000'), meta('property', 'og:image:height', '1000'));
+  // Do not let a bot-specific response replace the app shell in a shared CDN cache.
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Vary', 'User-Agent');
+  res.type('html').send(`<!doctype html><html lang="id"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>${tags.join('\n')}</head><body><a href="${escapeHtml(url)}">Buka ${escapeHtml(title)}</a></body></html>`);
 });
-
 export default router;

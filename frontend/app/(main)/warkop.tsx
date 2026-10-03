@@ -608,7 +608,7 @@ export default function BambupediaRoom() {
     );
   };
   const renderSystemContent = (message: ChatMessage) => {
-    const content = (message.content || '').replace(/Rumpun Bambupedia/gi, ROOM_NAME).replace(/🎋/g, '☕').replace(/BambooCS/g, 'NgopiCS').replace(/BambooBot/g, 'WarkopBot');
+    const content = (message.content || '').replace(/Rumpun Bambupedia/gi, ROOM_NAME).replace(/🎋/g, '☕').replace(/BambooCS/g, 'NgopiCS').replace(/BambooBot/g, 'WarkopBot').replace(/BambooChat/g, 'Ngopi di Warkop');
     if (['WarkopBot', 'BambooBot'].includes(message.sender_name)) {
       const [headline = '', ...bodyLines] = content.split('\n');
       return (

@@ -33,6 +33,39 @@
       "destination": "/validation-key.txt"
     },
     {
+      "source": "/",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(?:facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Pinterestbot|meta-externalagent|facebookcatalog).*"
+        }
+      ],
+      "destination": "https://api.ngopi.top/api/og?path=/"
+    },
+    {
+      "source": "/:profile([^/.]+)",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(?:facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Pinterestbot|meta-externalagent|facebookcatalog).*"
+        }
+      ],
+      "destination": "https://api.ngopi.top/api/og?path=/:profile"
+    },
+    {
+      "source": "/chat/:profile",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(?:facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|TelegramBot|Slackbot|Discordbot|Pinterestbot|meta-externalagent|facebookcatalog).*"
+        }
+      ],
+      "destination": "https://api.ngopi.top/api/og?path=/chat/:profile"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

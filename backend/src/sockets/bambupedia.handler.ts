@@ -82,7 +82,7 @@ const ECOSYSTEM_INFO_PLATFORMS: EcosystemInfoPlatform[] = [
 ];
 
 const FEATURE_TIPS = [
-  `${LOCK_ICON} Keamanan: BambooChat mendukung percakapan terenkripsi untuk pesan pribadi. Tetap gunakan akun sendiri dan jangan bagikan kode login kepada orang lain.`,
+  `${LOCK_ICON} Keamanan: Ngopi di Warkop mendukung percakapan terenkripsi untuk pesan pribadi. Tetap gunakan akun sendiri dan jangan bagikan kode login kepada orang lain.`,
   `${BAMBOO_ICON} Cara mulai: setelah login, buka Kontak untuk private message atau masuk ke Rumpun Bambupedia untuk ngobrol bersama komunitas.`,
   `${PEOPLE_ICON} Cara buat rumpun/grup: buka Kontak, pilih tab Rumpun, lalu tekan Buat Rumpun. Biaya minimum bisa dibuat 0 BMC untuk grup terbuka.`,
   `${GEM_ICON} Pengaturan rumpun: admin bisa mengatur nama, avatar, deskripsi, biaya join BMC, approval anggota, undangan, dan daftar anggota.`,

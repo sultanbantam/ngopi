@@ -27,7 +27,8 @@ export default function ProfileLinkScreen() {
         }
         const response = await axios.get<Profile[]>(`${API_URL}/auth/users`, { headers });
         if (!active) return;
-        const found = response.data.filter(user => profileSlug(user.display_name || user.username) === slug);
+        const usernameMatches = response.data.filter(user => profileSlug(user.username) === slug);
+        const found = usernameMatches.length ? usernameMatches : response.data.filter(user => profileSlug(user.display_name || user.username) === slug);
         if (found.length === 1) { openChat(found[0]!); return; }
         setMatches(found);
         setMessage(found.length ? 'Ada beberapa akun dengan nama ini. Pilih berdasarkan username:' : 'Profil tidak ditemukan. Nama pemilik mungkin sudah berubah.');

@@ -1,7 +1,7 @@
 import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stack, Slot, router, usePathname } from 'expo-router';
-import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView, Image } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
@@ -255,6 +255,29 @@ export default function MainLayout() {
     return date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
   };
 
+
+    const finishPendingCall = (callId: string, missed: boolean) => {
+      const pending = pendingCallsRef.current[callId];
+      if (!pending) return;
+      pending.stopAlert();
+      clearTimeout(pending.timeout);
+      pending.browserNotification?.close();
+      if (Platform.OS === 'web') navigator.vibrate?.(0);
+      delete pendingCallsRef.current[callId];
+      setActiveIncomingCall((prev) => (prev?.callId === callId ? null : prev));
+
+      if (missed) {
+        const callerName = pending.data?.name || 'Seseorang';
+        showNotification(
+          pending.data?.isVideo ? 'Video call tak terjawab' : 'Panggilan tak terjawab',
+          `${callerName} mencoba menghubungi kamu.`,
+          { pathname: '/(main)/chat/[id]', params: { id: pending.data.from, name: callerName } },
+          `missed-call-${callId}`,
+        );
+      }
+    };
+
+
   useEffect(() => {
     let subscribedSocket: any = null;
     let active = true;
@@ -293,26 +316,6 @@ export default function MainLayout() {
       }
     };
 
-    const finishPendingCall = (callId: string, missed: boolean) => {
-      const pending = pendingCallsRef.current[callId];
-      if (!pending) return;
-      pending.stopAlert();
-      clearTimeout(pending.timeout);
-      pending.browserNotification?.close();
-      if (Platform.OS === 'web') navigator.vibrate?.(0);
-      delete pendingCallsRef.current[callId];
-      setActiveIncomingCall((prev) => (prev?.callId === callId ? null : prev));
-
-      if (missed) {
-        const callerName = pending.data?.name || 'Seseorang';
-        showNotification(
-          pending.data?.isVideo ? 'Video call tak terjawab' : 'Panggilan tak terjawab',
-          `${callerName} mencoba menghubungi kamu.`,
-          { pathname: '/(main)/chat/[id]', params: { id: pending.data.from, name: callerName } },
-          `missed-call-${callId}`,
-        );
-      }
-    };
 
     const handleCallIncoming = (data: any) => {
       if (currentUserId && data?.from === currentUserId) return;
@@ -505,7 +508,7 @@ export default function MainLayout() {
         <View style={styles.callModalOverlay}>
           <View style={styles.callModalCard}>
             <View style={[styles.callModalAvatar, { backgroundColor: coffee.button }]}>
-              <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'person'} size={48} color={coffee.text} />
+              {userDirectory[activeIncomingCall.from]?.avatar_url ? <Image source={{ uri: userDirectory[activeIncomingCall.from].avatar_url!.replace(/^\/uploads\//, 'https://api.ngopi.top/uploads/') }} style={{ width: '100%', height: '100%', borderRadius: 100 }} /> : <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'person'} size={48} color={coffee.text} />}
             </View>
 
             <Text style={styles.callModalTitle}>{activeIncomingCall.callerName}</Text>

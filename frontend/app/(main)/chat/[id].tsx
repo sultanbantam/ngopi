@@ -181,7 +181,8 @@ function PrivateChatRoomScreen() {
   const flatListRef = useRef<FlatList>(null);
   const router = useRouter();
   const currentRoomId = Array.isArray(roomId) ? roomId[0] : (roomId as string);
-  const chatTitle = Array.isArray(name) ? name[0] : (name as string) || 'Chat Room';
+  const partnerProfile = allUsers.find(user => user.id === currentRoomId);
+  const chatTitle = partnerProfile?.display_name || partnerProfile?.username || (Array.isArray(name) ? name[0] : (name as string) || 'Chat Room');
   const groupMembers = groupDetails?.members || [];
   const activeGroupMembers = groupMembers.filter((member: any) => member.status === 'active');
   const onlineGroupMembers = activeGroupMembers.filter((member: any) => member.is_online);
@@ -1057,8 +1058,8 @@ function PrivateChatRoomScreen() {
               <Ionicons name="arrow-back" size={22} color={coffee.text} />
             </TouchableOpacity>
             <View style={styles.headerAvatar}>
-              {isGroupChat && groupDetails?.avatar_url ? (
-                <Image source={{ uri: groupDetails.avatar_url }} style={styles.avatarImage} />
+              {(isGroupChat ? groupDetails?.avatar_url : partnerProfile?.avatar_url) ? (
+                <Image source={{ uri: normalizeAttachmentUrl(isGroupChat ? groupDetails.avatar_url : partnerProfile?.avatar_url) }} style={styles.avatarImage} />
               ) : (
                 <Text style={styles.headerAvatarText}>{(groupDetails?.group_name || chatTitle)?.charAt(0) || 'U'}</Text>
               )}
