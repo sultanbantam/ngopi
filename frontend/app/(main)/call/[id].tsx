@@ -83,6 +83,7 @@ export default function CallScreen() {
   const restartInProgressRef = useRef(false);
   const lastInboundBytesRef = useRef(0);
   const stalledMediaChecksRef = useRef(0);
+  const [connectionHint, setConnectionHint] = useState('');
 
   const playRemoteAudio = async () => {
     if (Platform.OS !== 'web') return;
@@ -150,6 +151,18 @@ export default function CallScreen() {
 
     let isCallActive = true;
     let activeSocket: any = null;
+    let signalingReady = false;
+    let localCandidates: RTCIceCandidateInit[] = [];
+    let restartAttempts = 0;
+    let hasTurn = false;
+    const flushLocalCandidates = () => {
+      if (!signalingReady || !activeSocket || !isCallActive) return;
+      const queued = localCandidates;
+      localCandidates = [];
+      queued.forEach(candidate => activeSocket.emit('ice_candidate', {
+        candidate, to: partnerId, room_id: actualRoomIdRef.current, call_id: callIdRef.current,
+      }));
+    };
 
     const clearReconnectTimer = () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
@@ -166,11 +179,17 @@ export default function CallScreen() {
 
     const requestIceRestart = () => {
       if (!caller || !isCallActive || restartInProgressRef.current || reconnectTimerRef.current) return;
+      if (restartAttempts >= 2) {
+        setStatus('Sambungan media belum berhasil');
+        setConnectionHint(hasTurn ? 'Periksa layanan TURN, kredensial, dan firewall server.' : 'Server belum menyediakan TURN. Koneksi langsung antarjaringan dapat terhalang.');
+        return;
+      }
       reconnectTimerRef.current = setTimeout(async () => {
         reconnectTimerRef.current = null;
         const peer = peerRef.current;
         if (!peer || peer.signalingState === 'closed' || peer.signalingState !== 'stable' || !activeSocket) return;
         restartInProgressRef.current = true;
+        restartAttempts += 1;
         setStatus('Memulihkan koneksi...');
         try {
           const restartOffer = await peer.createOffer({ iceRestart: true });
@@ -230,6 +249,9 @@ export default function CallScreen() {
       actualRoomIdRef.current = sharedKey;
       const socket = await socketService.connect();
       const iceServers = await getIceServers(socket);
+      if (!isCallActive) return;
+      hasTurn = iceServers.some(server => (Array.isArray(server.urls) ? server.urls : [server.urls]).some(url => /^turns?:/i.test(url)));
+      if (!hasTurn) setConnectionHint('TURN belum tersedia dari server; sedang mencoba koneksi langsung.');
 
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -286,7 +308,9 @@ export default function CallScreen() {
             stopOutgoingRingback();
             clearReconnectTimer();
             restartInProgressRef.current = false;
-            setStatus('Connected');
+            setStatus('Terhubung');
+            setConnectionHint('');
+            restartAttempts = 0;
             startDurationCounter();
             startMediaWatchdog();
             if (!remoteStreamRef.current?.getTracks().some((track) => track.readyState === 'live')) {
@@ -306,16 +330,17 @@ export default function CallScreen() {
           }
         };
 
-        // Handle ICE candidates
-        peer.onicecandidate = (event: any) => {
-          if (event.candidate && socket) {
-            socket.emit('ice_candidate', {
-              candidate: event.candidate,
-              to: partnerId,
-              room_id: sharedKey,
-              call_id: callIdRef.current,
-            });
+        // Retain candidates until the receiving call screen has answered.
+        // Sending them while its incoming-call modal is open loses late TURN candidates.
+        peer.onicecandidate = (event: RTCPeerConnectionIceEvent) => {
+          if (event.candidate) {
+            localCandidates.push(event.candidate.toJSON());
+            flushLocalCandidates();
           }
+        };
+        peer.onicecandidateerror = (event: any) => {
+          if (!isCallActive || !/^turns?:/i.test(event.url || '')) return;
+          setConnectionHint(`Relay TURN tidak terjangkau atau ditolak (kode ${event.errorCode || '?'}).`);
         };
 
         if (caller) {
@@ -361,12 +386,20 @@ export default function CallScreen() {
                 room_id: sharedKey,
                 call_id: callIdRef.current
               });
+              signalingReady = true;
+              flushLocalCandidates();
             }
+          } else {
+            throw new Error('Sinyal panggilan masuk tidak tersedia. Minta penelepon mencoba lagi.');
           }
         }
       } catch (err) {
         console.error('Error starting call:', err);
-        setStatus('Failed to access camera/mic');
+        const error = err as Error;
+        setStatus(error.name === 'NotAllowedError' ? 'Izinkan mikrofon/kamera pada browser' : error.name === 'NotFoundError' ? 'Mikrofon/kamera tidak ditemukan' : 'Panggilan gagal dimulai');
+        setConnectionHint(error.name === 'NotReadableError' ? 'Mikrofon/kamera sedang dipakai aplikasi lain.' : error.message);
+        stopOutgoingRingback();
+        streamRef.current?.getTracks().forEach((track: MediaStreamTrack) => track.stop());
       }
     };
 
@@ -379,7 +412,15 @@ export default function CallScreen() {
       const signal = payload?.signal || payload;
       setStatus('Connecting...');
       if (peerRef.current && caller) {
-        await peerRef.current.setRemoteDescription(new (window as any).RTCSessionDescription(signal));
+        try {
+          await peerRef.current.setRemoteDescription(new (window as any).RTCSessionDescription(signal));
+        } catch (error) {
+          setStatus('Jawaban panggilan gagal diproses');
+          setConnectionHint('Tutup panggilan lalu coba kembali.');
+          return;
+        }
+        signalingReady = true;
+        flushLocalCandidates();
         pendingCandidates.current.forEach(c => {
            peerRef.current.addIceCandidate(new (window as any).RTCIceCandidate(c)).catch((e:any) => console.error(e));
         });
@@ -596,6 +637,7 @@ export default function CallScreen() {
             <Text style={styles.encryptionText}> Terenkripsi secara end-to-end</Text>
           </View>
           <Text style={styles.statusText}>{status}{connectedAtRef.current ? ` - ${formatCallDuration(elapsedSeconds)}` : ''}</Text>
+          {!!connectionHint && <Text style={[styles.statusText, { textAlign: 'center', marginTop: 8 }]}>{connectionHint}</Text>}
         </View>
 
         <TouchableOpacity style={styles.headerIconBtn}>
