@@ -13,18 +13,18 @@ export default function PrivacyPolicyScreen() {
         <Text style={styles.headerTitle}>Privacy Policy</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>BambooChat Privacy Policy</Text>
+        <Text style={styles.title}>Ngopi Privacy Policy</Text>
         <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
         
         <Text style={styles.sectionTitle}>1. Introduction</Text>
         <Text style={styles.paragraph}>
-          Welcome to BambooChat. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
+          Welcome to Ngopi. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
         </Text>
 
         <Text style={styles.sectionTitle}>2. Information We Collect</Text>
         <Text style={styles.paragraph}>
           - <Text style={styles.bold}>Pi Network Information:</Text> We collect your Pi Network username and authentication token when you log in using the Pi Browser.{"\n"}
-          - <Text style={styles.bold}>Communications:</Text> We store the messages, images, and files you send and receive through BambooChat to provide the messaging service.{"\n"}
+          - <Text style={styles.bold}>Communications:</Text> We store the messages, images, and files you send and receive through Ngopi to provide the messaging service.{"\n"}
           - <Text style={styles.bold}>Usage Data:</Text> We may collect diagnostic information and usage data to help us improve the app.
         </Text>
 

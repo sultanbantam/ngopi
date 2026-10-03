@@ -13,22 +13,22 @@ export default function TermsOfServiceScreen() {
         <Text style={styles.headerTitle}>Terms of Service</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>BambooChat Terms of Service</Text>
+        <Text style={styles.title}>Ngopi Terms of Service</Text>
         <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
         
         <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
         <Text style={styles.paragraph}>
-          By accessing or using BambooChat, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use our application. Since BambooChat operates within the Pi Network ecosystem, you must also comply with the Pi Network Terms of Service.
+          By accessing or using Ngopi, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use our application. Since Ngopi operates within the Pi Network ecosystem, you must also comply with the Pi Network Terms of Service.
         </Text>
 
         <Text style={styles.sectionTitle}>2. Description of Service</Text>
         <Text style={styles.paragraph}>
-          BambooChat is a messaging platform designed for the Pi Network community, allowing users to communicate, share media, and interact with other Pioneers.
+          Ngopi is a messaging platform designed for the Pi Network community, allowing users to communicate, share media, and interact with other Pioneers.
         </Text>
 
         <Text style={styles.sectionTitle}>3. User Conduct</Text>
         <Text style={styles.paragraph}>
-          You agree not to use BambooChat to:{"\n"}
+          You agree not to use Ngopi to:{"\n"}
           - Transmit any content that is unlawful, harmful, threatening, abusive, harassing, defamatory, or otherwise objectionable.{"\n"}
           - Spam, phish, or defraud other users.{"\n"}
           - Distribute viruses or any other technologies that may harm the app or its users.
@@ -36,17 +36,17 @@ export default function TermsOfServiceScreen() {
 
         <Text style={styles.sectionTitle}>4. User Content</Text>
         <Text style={styles.paragraph}>
-          You retain all rights to the content you send through BambooChat. However, you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce, and process your content solely for the purpose of providing the service. We reserve the right to remove any content that violates these terms.
+          You retain all rights to the content you send through Ngopi. However, you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce, and process your content solely for the purpose of providing the service. We reserve the right to remove any content that violates these terms.
         </Text>
 
         <Text style={styles.sectionTitle}>5. Termination</Text>
         <Text style={styles.paragraph}>
-          We may suspend or terminate your access to BambooChat at any time, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
+          We may suspend or terminate your access to Ngopi at any time, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
         </Text>
 
         <Text style={styles.sectionTitle}>6. Changes to Terms</Text>
         <Text style={styles.paragraph}>
-          We reserve the right to modify these Terms at any time. We will notify users of any significant changes. Your continued use of BambooChat after such modifications constitutes your acceptance of the new Terms.
+          We reserve the right to modify these Terms at any time. We will notify users of any significant changes. Your continued use of Ngopi after such modifications constitutes your acceptance of the new Terms.
         </Text>
       </ScrollView>
     </View>

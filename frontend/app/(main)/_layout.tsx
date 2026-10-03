@@ -286,7 +286,7 @@ export default function MainLayout() {
     const handleNewMessage = (data: any) => {
       if (currentUserId && data.sender_id !== currentUserId) {
         const senderName = getSenderName(data);
-        showNotification('BambooChat', `${senderName} ${describeMessage(data)}`, {
+        showNotification('Ngopi', `${senderName} ${describeMessage(data)}`, {
           pathname: '/(main)/chat/[id]',
           params: { id: data.sender_id, name: senderName },
         }, `message-${data.id}`);
@@ -348,7 +348,7 @@ export default function MainLayout() {
       });
 
       if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
-        const browserNotification = new Notification(data?.isVideo ? 'Video Call BambooChat' : 'Panggilan BambooChat', {
+        const browserNotification = new Notification(data?.isVideo ? 'Video Call Ngopi' : 'Panggilan Ngopi', {
           body: `${callerName} memanggil kamu. Ketuk untuk jawab.`,
           tag: callId,
           requireInteraction: true,
@@ -559,7 +559,7 @@ export default function MainLayout() {
         headerTitleStyle: { fontWeight: 'bold' },
         contentStyle: { backgroundColor: '#0F172A' }
       }}>
-        <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
+        <Stack.Screen name="contacts" options={{ title: 'Ngopi' }} />
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
         <Stack.Screen name="alihbahasa" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />

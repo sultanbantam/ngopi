@@ -159,7 +159,7 @@ export default function ContactsScreen() {
 
           // Trigger Web Notification jika tab sedang disembunyikan
           if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
-             new Notification('BambooChat: Pesan Baru', {
+             new Notification('Ngopi: Pesan Baru', {
                body: 'Anda menerima pesan baru dari kontak Anda.',
                icon: '/favicon.ico'
              });

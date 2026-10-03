@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "frontend",
-    "slug": "frontend",
+    "name": "Ngopi",
+    "slug": "ngopi",
     "version": "1.0.0",
-    "scheme": "bamboochat",
+    "scheme": "ngopi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
