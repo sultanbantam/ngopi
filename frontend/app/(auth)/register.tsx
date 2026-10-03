@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
@@ -9,8 +9,7 @@ import { explainAuthError } from '../../src/utils/auth-errors';
 
 const API_URL = 'https://api.bamboochat.click/api';
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const logoImage = require('../../assets/logo.png');
+import NgopiBrand from '../../src/components/NgopiBrand';
 
 
 export default function RegisterScreen() {
@@ -90,19 +89,17 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
-        <View style={styles.logoContainer}>
-          <Image source={logoImage} style={styles.logo} resizeMode="contain" />
-        </View>
-        <Text style={styles.subtitle}>Join Bamboochain today</Text>
+        <NgopiBrand />
+        <Text style={styles.subtitle}>Mulai obrolan dengan akun Ngopi.</Text>
         
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
         <TextInput
           style={styles.input}
           placeholder="Display Name"
-          placeholderTextColor="#64748b"
+          placeholderTextColor="#A99B8C"
           value={displayName}
           onChangeText={setDisplayName}
         />
@@ -110,7 +107,7 @@ export default function RegisterScreen() {
         <TextInput
           style={styles.input}
           placeholder="Username"
-          placeholderTextColor="#64748b"
+          placeholderTextColor="#A99B8C"
           value={username}
           onChangeText={setUsername}
           autoCorrect={false}
@@ -121,17 +118,17 @@ export default function RegisterScreen() {
           <TextInput
             style={styles.passwordInput}
             placeholder="Password"
-            placeholderTextColor="#64748b"
+            placeholderTextColor="#A99B8C"
             value={password}
             onChangeText={setPassword}
             textContentType="newPassword"
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Text style={{ color: '#94A3B8' }}>{showPassword ? 'Hide' : 'Show'}</Text>
+            <Text style={{ color: '#C3B5A5' }}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
-        <Text style={{ color: '#94A3B8', fontSize: 12, marginTop: -8, marginBottom: 12 }}>Minimal 8 karakter</Text>
+        <Text style={{ color: '#C3B5A5', fontSize: 12, marginTop: -8, marginBottom: 12 }}>Minimal 8 karakter</Text>
 
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
           {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
@@ -144,23 +141,23 @@ export default function RegisterScreen() {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#171411',
   },
   card: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#1E293B',
-    padding: 30,
+    backgroundColor: '#26201B',
+    padding: 24,
     borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
@@ -168,42 +165,34 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 10,
   },
-  logoContainer: {
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  logo: {
-    width: 140,
-    height: 140,
-  },
   subtitle: {
     fontSize: 16,
-    color: '#94A3B8',
+    color: '#C3B5A5',
     textAlign: 'center',
     marginBottom: 30,
   },
   input: {
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
+    backgroundColor: '#171411',
+    color: '#F6E6D2',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#554536',
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: '#171411',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#554536',
     marginBottom: 16,
   },
   passwordInput: {
     flex: 1,
-    color: '#F8FAFC',
+    color: '#F6E6D2',
     padding: 16,
     fontSize: 16,
   },
@@ -211,7 +200,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   button: {
-    backgroundColor: '#10B981', // Emerald green
+    backgroundColor: '#916038', // Emerald green
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -233,10 +222,10 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   footerText: {
-    color: '#94A3B8',
+    color: '#C3B5A5',
   },
   linkText: {
-    color: '#10B981',
+    color: '#916038',
     fontWeight: 'bold',
   }
 });
