@@ -1,3 +1,4 @@
+import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -22,14 +23,14 @@ export default function ContactsScreen() {
   const [contacts, setContacts] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
-  
+
   const [activeTab, setActiveTab] = useState<'semua' | 'belum_dibaca' | 'favorit' | 'rumpun'>('semua');
 
   // Modals state
   const [dropdownVisible, setDropdownVisible] = useState(false);
   const [isWalletModalVisible, setWalletModalVisible] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
-  
+
   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
@@ -69,7 +70,7 @@ export default function ContactsScreen() {
   useEffect(() => {
     const init = async () => {
       await socketService.connect();
-      
+
       let user = '';
       let userId = '';
       let token = '';
@@ -80,7 +81,7 @@ export default function ContactsScreen() {
         const ssoToken = urlParams.get('sso_token');
         const ssoUsername = urlParams.get('sso_username');
         const ssoUserId = urlParams.get('sso_userid');
-        
+
         if (ssoToken && ssoUsername && ssoUserId) {
           localStorage.setItem('token', ssoToken);
           localStorage.setItem('username', ssoUsername);
@@ -112,7 +113,7 @@ export default function ContactsScreen() {
           axios.get(`${API_URL}/settings`, { headers }).catch(() => ({ data: {} })),
           axios.get(`${API_URL}/messages/unread/counts`, { headers }).catch(() => ({ data: {} }))
         ]);
-        
+
         const allUsers = usersRes.data;
         setContacts(allUsers.filter((u: any) => u.id !== userId));
         setGroups(groupsRes.data);
@@ -169,7 +170,7 @@ export default function ContactsScreen() {
         socketService.socket.on('online_list', (data: any[]) => {
           setOnlineUsers(data.filter(u => u.id !== userId));
         });
-        
+
         socketService.socket.emit('request_online_list');
       }
 
@@ -266,7 +267,7 @@ export default function ContactsScreen() {
     try {
       setIsSavingProfile(true);
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      
+
       let finalAvatarUrl = editAvatar;
       if (editAvatar && (editAvatar.startsWith('blob:') || editAvatar.startsWith('file:'))) {
         const formData = new FormData();
@@ -287,11 +288,11 @@ export default function ContactsScreen() {
         finalAvatarUrl = uploadRes.data.url;
       }
 
-      const res = await axios.post(`${API_URL}/auth/profile`, { 
-        display_name: editDisplayName, 
-        bio: editBio, 
-        status: editStatus, 
-        avatar_url: finalAvatarUrl 
+      const res = await axios.post(`${API_URL}/auth/profile`, {
+        display_name: editDisplayName,
+        bio: editBio,
+        status: editStatus,
+        avatar_url: finalAvatarUrl
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -481,7 +482,7 @@ export default function ContactsScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#10B981" />
+        <ActivityIndicator size="large" color={coffee.accent} />
       </View>
     );
   }
@@ -516,7 +517,7 @@ export default function ContactsScreen() {
       return (
         <TouchableOpacity style={[styles.contactItem, styles.csContactItem]} onPress={openHelpCenter}>
           <View style={[styles.avatar, styles.csAvatar]}>
-            <Ionicons name="headset-outline" size={24} color="#FFFFFF" />
+            <Ionicons name="headset-outline" size={24} color={coffee.text} />
           </View>
           <View style={styles.contactInfo}>
             <Text style={styles.contactName}>BambooCS</Text>
@@ -531,7 +532,7 @@ export default function ContactsScreen() {
     if (item._type === 'group') {
       return (
         <TouchableOpacity style={styles.contactItem} onPress={() => joinGroup(item)}>
-          <View style={[styles.avatar, { backgroundColor: '#3B82F6' }]}>
+          <View style={[styles.avatar, { backgroundColor: coffee.button }]}>
             {item.avatar_url ? (
               <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
             ) : (
@@ -551,7 +552,7 @@ export default function ContactsScreen() {
             )}
             {item.created_by === currentUserId && (
               <TouchableOpacity style={styles.groupEditButton} onPress={() => openEditGroupModal(item)}>
-                <Ionicons name="settings-outline" size={18} color="#A7F3D0" />
+                <Ionicons name="settings-outline" size={18} color={coffee.accent} />
               </TouchableOpacity>
             )}
           </View>
@@ -594,7 +595,7 @@ export default function ContactsScreen() {
           router.replace('/(main)/bambupedia' as any);
         }
       }}>
-        <Ionicons name="arrow-back" size={20} color="#F8FAFC" />
+        <Ionicons name="arrow-back" size={20} color={coffee.text} />
         <Text style={styles.backToBambupediaText}>Kembali</Text>
       </TouchableOpacity>
 
@@ -624,17 +625,17 @@ export default function ContactsScreen() {
       </View>
 
       <View style={styles.searchContainer}>
-        <TextInput style={styles.searchInput} placeholder="Cari atau mulai obrolan baru" placeholderTextColor="#94A3B8" />
+        <TextInput style={styles.searchInput} placeholder="Cari atau mulai obrolan baru" placeholderTextColor={coffee.secondary} />
       </View>
 
       <View style={styles.quickActions}>
         <TouchableOpacity style={styles.helpCenterButton} onPress={openHelpCenter}>
-          <Ionicons name="help-circle-outline" size={18} color="#FFFFFF" />
+          <Ionicons name="help-circle-outline" size={18} color={coffee.text} />
           <Text style={styles.helpCenterButtonText}>Pusat Bantuan</Text>
         </TouchableOpacity>
         {(currentRole === 'admin' || currentRole === 'agent') && (
           <TouchableOpacity style={styles.adminButton} onPress={openAdminDashboard}>
-            <Ionicons name="shield-checkmark-outline" size={18} color="#34D399" />
+            <Ionicons name="shield-checkmark-outline" size={18} color={coffee.accent} />
             <Text style={styles.adminButtonText}>CS Dashboard</Text>
           </TouchableOpacity>
         )}
@@ -656,7 +657,7 @@ export default function ContactsScreen() {
           </TouchableOpacity>
         </ScrollView>
       </View>
-      
+
       {activeTab === 'rumpun' && (
         <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
           <Text style={styles.createGroupBtnText}>+ Buat Rumpun Baru</Text>
@@ -672,7 +673,7 @@ export default function ContactsScreen() {
       {/* Online Users Horizontal Bar */}
       {onlineUsers.length > 0 && !settings?.hide_contacts && (
         <View style={styles.onlineBar}>
-          <Text style={{ color: '#10B981', fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Now</Text>
+          <Text style={{ color: coffee.accent, fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Now</Text>
           <FlatList
             horizontal
             data={onlineUsers}
@@ -680,7 +681,7 @@ export default function ContactsScreen() {
             showsHorizontalScrollIndicator={false}
             renderItem={({ item }) => (
               <TouchableOpacity style={styles.onlineUserItem} onPress={() => openChat(item.id, item.display_name)}>
-                <View style={[styles.avatar, { width: 40, height: 40, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: '#10B981' }]}>
+                <View style={[styles.avatar, { width: 40, height: 40, borderRadius: 20, marginRight: 8, borderWidth: 2, borderColor: coffee.accent }]}>
                   {item.avatar_url ? (
                     <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
                   ) : (
@@ -696,40 +697,40 @@ export default function ContactsScreen() {
       {/* Profile Modal */}
       <Modal visible={isProfileModalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { padding: 32, backgroundColor: '#0F172A', borderWidth: 1, borderColor: '#334155' }]}>
-            <Text style={[styles.modalTitle, { fontSize: 24, textAlign: 'center', marginBottom: 24, color: '#10B981' }]}>My Profile</Text>
-            
+          <View style={[styles.modalContent, { padding: 32, backgroundColor: coffee.background, borderWidth: 1, borderColor: coffee.border }]}>
+            <Text style={[styles.modalTitle, { fontSize: 24, textAlign: 'center', marginBottom: 24, color: coffee.accent }]}>My Profile</Text>
+
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <TouchableOpacity onPress={pickImage} style={{ alignItems: 'center' }}>
-                <View style={[styles.avatar, { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#10B981' }]}>
+                <View style={[styles.avatar, { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: coffee.accent }]}>
                   {editAvatar ? (
                     <Image source={{ uri: editAvatar }} style={{ width: 100, height: 100, borderRadius: 50 }} />
                   ) : (
                     <Text style={[styles.avatarText, { fontSize: 40 }]}>{editDisplayName.charAt(0) || 'U'}</Text>
                   )}
                 </View>
-                <Text style={{ color: '#94A3B8', marginTop: 12, fontWeight: 'bold', fontSize: 14 }}>Tap to Change Photo</Text>
+                <Text style={{ color: coffee.secondary, marginTop: 12, fontWeight: 'bold', fontSize: 14 }}>Tap to Change Photo</Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.inputLabel}>Display Name</Text>
-            <TextInput style={styles.inputField} placeholder="Enter your display name" placeholderTextColor="#64748b" value={editDisplayName} onChangeText={setEditDisplayName} />
-            
+            <TextInput style={styles.inputField} placeholder="Enter your display name" placeholderTextColor={coffee.muted} value={editDisplayName} onChangeText={setEditDisplayName} />
+
             <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput style={styles.inputField} placeholder="A short bio about you" placeholderTextColor="#64748b" value={editBio} onChangeText={setEditBio} />
-            
+            <TextInput style={styles.inputField} placeholder="A short bio about you" placeholderTextColor={coffee.muted} value={editBio} onChangeText={setEditBio} />
+
             <Text style={styles.inputLabel}>Status</Text>
-            <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor="#64748b" value={editStatus} onChangeText={setEditStatus} />
-            
+            <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor={coffee.muted} value={editStatus} onChangeText={setEditStatus} />
+
             <Text style={styles.inputLabel}>Profile Link</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <TextInput 
-                style={[styles.inputField, { flex: 1, marginBottom: 0, color: '#10B981', backgroundColor: '#1E293B' }]} 
-                value={`https://www.bamboochat.click/chat/${currentUsername}`} 
-                editable={false} 
+              <TextInput
+                style={[styles.inputField, { flex: 1, marginBottom: 0, color: coffee.accent, backgroundColor: coffee.surface }]}
+                value={`https://www.bamboochat.click/chat/${currentUsername}`}
+                editable={false}
               />
-              <TouchableOpacity 
-                style={{ marginLeft: 10, padding: 12, backgroundColor: '#334155', borderRadius: 8, height: 48, justifyContent: 'center', alignItems: 'center' }}
+              <TouchableOpacity
+                style={{ marginLeft: 10, padding: 12, backgroundColor: coffee.border, borderRadius: 8, height: 48, justifyContent: 'center', alignItems: 'center' }}
                 onPress={() => {
                   if (Platform.OS === 'web') {
                     navigator.clipboard.writeText(`https://www.bamboochat.click/chat/${currentUsername}`);
@@ -739,16 +740,16 @@ export default function ContactsScreen() {
                   }
                 }}
               >
-                <Ionicons name="copy-outline" size={20} color="#94A3B8" />
+                <Ionicons name="copy-outline" size={20} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
-            
+
             <View style={[styles.modalActions, { marginTop: 16 }]}>
-              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: '#334155', borderRadius: 8, paddingHorizontal: 20 }]}>
-                <Text style={[styles.cancelBtnText, { color: '#fff' }]}>Close</Text>
+              <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: coffee.border, borderRadius: 8, paddingHorizontal: 20 }]}>
+                <Text style={[styles.cancelBtnText, { color: coffee.text }]}>Close</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={saveProfile} disabled={isSavingProfile}>
-                {isSavingProfile ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Simpan Perubahan</Text>}
+                {isSavingProfile ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.saveBtnText}>Simpan Perubahan</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -764,7 +765,7 @@ export default function ContactsScreen() {
             <TextInput
               style={styles.input}
               placeholder="0x..."
-              placeholderTextColor="#64748b"
+              placeholderTextColor={coffee.muted}
               value={walletAddress}
               onChangeText={setWalletAddress}
             />
@@ -784,20 +785,20 @@ export default function ContactsScreen() {
       <Modal visible={isAirdropModalVisible} transparent={true} animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { alignItems: 'center' }]}>
-            <Text style={{ fontSize: 20, marginBottom: 10, color: '#10B981', fontWeight: '800' }}>BMC</Text>
-            <Text style={[styles.modalTitle, { color: '#10B981' }]}>Daily BMC Airdrop</Text>
+            <Text style={{ fontSize: 20, marginBottom: 10, color: coffee.accent, fontWeight: '800' }}>BMC</Text>
+            <Text style={[styles.modalTitle, { color: coffee.accent }]}>Daily BMC Airdrop</Text>
             {airdropData && (
               <>
                 <Text style={[styles.modalDesc, { textAlign: 'center' }]}>
-                  You have claimed a total of <Text style={{ fontWeight: 'bold', color: '#fff' }}>{airdropData.total_claimed.toFixed(2)} BMC</Text> over {airdropData.total_claims} days.
+                  You have claimed a total of <Text style={{ fontWeight: 'bold', color: coffee.text }}>{airdropData.total_claimed.toFixed(2)} BMC</Text> over {airdropData.total_claims} days.
                 </Text>
                 {airdropData.can_claim_today ? (
                   <TouchableOpacity onPress={claimAirdrop} style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16 }]}>
                     <Text style={[styles.saveBtnText, { fontSize: 18 }]}>Claim {airdropData.daily_amount} BMC Now</Text>
                   </TouchableOpacity>
                 ) : (
-                  <View style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16, backgroundColor: '#334155' }]}>
-                    <Text style={[styles.saveBtnText, { fontSize: 18, color: '#94A3B8' }]}>Already Claimed Today</Text>
+                  <View style={[styles.saveBtn, { width: '100%', alignItems: 'center', marginTop: 10, paddingVertical: 16, backgroundColor: coffee.border }]}>
+                    <Text style={[styles.saveBtnText, { fontSize: 18, color: coffee.secondary }]}>Already Claimed Today</Text>
                   </View>
                 )}
               </>
@@ -814,11 +815,11 @@ export default function ContactsScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Privacy Settings</Text>
-            
+
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, marginTop: 16 }}>
-              <Text style={{ color: '#fff', fontSize: 16 }}>Hide My Name</Text>
-              <TouchableOpacity 
-                style={[styles.toggleBtn, settings?.hide_name && styles.toggleBtnActive]} 
+              <Text style={{ color: coffee.text, fontSize: 16 }}>Hide My Name</Text>
+              <TouchableOpacity
+                style={[styles.toggleBtn, settings?.hide_name && styles.toggleBtnActive]}
                 onPress={() => setSettings({ ...settings, hide_name: !settings?.hide_name })}
               >
                 <View style={[styles.toggleKnob, settings?.hide_name && styles.toggleKnobActive]} />
@@ -826,9 +827,9 @@ export default function ContactsScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ color: '#fff', fontSize: 16 }}>Hide Contacts Tab</Text>
-              <TouchableOpacity 
-                style={[styles.toggleBtn, settings?.hide_contacts && styles.toggleBtnActive]} 
+              <Text style={{ color: coffee.text, fontSize: 16 }}>Hide Contacts Tab</Text>
+              <TouchableOpacity
+                style={[styles.toggleBtn, settings?.hide_contacts && styles.toggleBtnActive]}
                 onPress={() => setSettings({ ...settings, hide_contacts: !settings?.hide_contacts })}
               >
                 <View style={[styles.toggleKnob, settings?.hide_contacts && styles.toggleKnobActive]} />
@@ -836,9 +837,9 @@ export default function ContactsScreen() {
             </View>
 
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <Text style={{ color: '#fff', fontSize: 16 }}>Hide Rumpun Tab</Text>
-              <TouchableOpacity 
-                style={[styles.toggleBtn, settings?.hide_groups && styles.toggleBtnActive]} 
+              <Text style={{ color: coffee.text, fontSize: 16 }}>Hide Rumpun Tab</Text>
+              <TouchableOpacity
+                style={[styles.toggleBtn, settings?.hide_groups && styles.toggleBtnActive]}
                 onPress={() => setSettings({ ...settings, hide_groups: !settings?.hide_groups })}
               >
                 <View style={[styles.toggleKnob, settings?.hide_groups && styles.toggleKnobActive]} />
@@ -868,7 +869,7 @@ export default function ContactsScreen() {
                   {groupAvatar ? (
                     <Image source={{ uri: groupAvatar }} style={styles.avatarImage} />
                   ) : (
-                    <Ionicons name="people-outline" size={28} color="#F8FAFC" />
+                    <Ionicons name="people-outline" size={28} color={coffee.text} />
                   )}
                 </View>
                 <View style={styles.groupAvatarTextWrap}>
@@ -880,14 +881,14 @@ export default function ContactsScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Nama Rumpun"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={coffee.muted}
                 value={groupName}
                 onChangeText={setGroupName}
               />
               <TextInput
                 style={[styles.input, styles.textAreaInput]}
                 placeholder="Deskripsi Singkat (Opsional)"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={coffee.muted}
                 value={groupDescription}
                 onChangeText={setGroupDescription}
                 multiline
@@ -895,7 +896,7 @@ export default function ContactsScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Minimum BMC Balance (0 untuk terbuka)"
-                placeholderTextColor="#64748b"
+                placeholderTextColor={coffee.muted}
                 keyboardType="numeric"
                 value={groupMinBmc}
                 onChangeText={setGroupMinBmc}
@@ -946,7 +947,7 @@ export default function ContactsScreen() {
                   <Text style={styles.cancelBtnText}>Batal</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={saveGroup} style={styles.saveBtn} disabled={isSavingGroup}>
-                  {isSavingGroup ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>{editingGroupId ? 'Simpan' : 'Buat'}</Text>}
+                  {isSavingGroup ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.saveBtnText}>{editingGroupId ? 'Simpan' : 'Buat'}</Text>}
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -963,7 +964,7 @@ export default function ContactsScreen() {
               <Text style={styles.actionSheetText}>Profil Saya</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); loadAirdropData(); }}>
-              <Text style={[styles.actionSheetText, { color: '#10B981' }]}>Klaim Airdrop BMC</Text>
+              <Text style={[styles.actionSheetText, { color: coffee.accent }]}>Klaim Airdrop BMC</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setWalletModalVisible(true); }}>
               <Text style={styles.actionSheetText}>Atur Alamat Dompet</Text>
@@ -972,7 +973,7 @@ export default function ContactsScreen() {
               <Text style={styles.actionSheetText}>Pengaturan Privasi</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionSheetItem, { borderBottomWidth: 0 }]} onPress={() => { setDropdownVisible(false); handleLogout(); }}>
-              <Text style={[styles.actionSheetText, { color: '#EF4444' }]}>Keluar</Text>
+              <Text style={[styles.actionSheetText, { color: coffee.danger }]}>Keluar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -985,13 +986,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     padding: 16,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   backToBambupediaButton: {
     alignSelf: 'flex-start',
@@ -1003,7 +1004,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   backToBambupediaText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: '700',
   },
@@ -1014,15 +1015,15 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: coffee.border,
   },
   greeting: {
     fontSize: 18,
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: 'bold',
   },
   actionSheet: {
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     padding: 24,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
@@ -1030,7 +1031,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'absolute',
     bottom: 0,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.25,
     shadowRadius: 5,
@@ -1039,12 +1040,12 @@ const styles = StyleSheet.create({
   actionSheetHandle: {
     width: 40,
     height: 4,
-    backgroundColor: '#475569',
+    backgroundColor: coffee.border,
     borderRadius: 2,
     marginBottom: 16,
   },
   actionSheetTitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 16,
@@ -1054,21 +1055,21 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: coffee.border,
     alignItems: 'center',
   },
   actionSheetText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: '500',
   },
   walletText: {
-    color: '#10B981',
+    color: coffee.accent,
     fontSize: 14,
     marginTop: 4,
   },
   logoutText: {
-    color: '#EF4444',
+    color: coffee.danger,
     fontWeight: 'bold',
   },
   searchContainer: {
@@ -1076,8 +1077,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   searchInput: {
-    backgroundColor: '#1E293B',
-    color: '#fff',
+    backgroundColor: coffee.surface,
+    color: coffee.text,
     padding: 12,
     paddingHorizontal: 16,
     borderRadius: 24,
@@ -1094,13 +1095,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
   },
   helpCenterButtonText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontWeight: '800',
   },
   adminButton: {
@@ -1108,13 +1109,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
   },
   adminButtonText: {
-    color: '#34D399',
+    color: coffee.accent,
     fontWeight: '800',
   },
   chipsContainer: {
@@ -1123,50 +1124,50 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   chip: {
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
   },
   activeChip: {
-    backgroundColor: '#064E3B', // dark green
+    backgroundColor: coffee.highlight, // dark green
   },
   chipText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 14,
     fontWeight: '500',
   },
   activeChipText: {
-    color: '#10B981', // bright green
+    color: coffee.accent, // bright green
   },
   contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     padding: 16,
     borderRadius: 16,
     marginBottom: 12,
   },
   csContactItem: {
     borderWidth: 1,
-    borderColor: '#10B981',
-    backgroundColor: '#0B2A22',
+    borderColor: coffee.accent,
+    backgroundColor: coffee.highlight,
   },
   csAvatar: {
-    backgroundColor: '#059669',
+    backgroundColor: coffee.button,
   },
   onlineDotSmall: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#22C55E',
+    backgroundColor: coffee.successButton,
     marginLeft: 8,
   },
   avatar: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 16,
@@ -1178,7 +1179,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   avatarText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 20,
     fontWeight: 'bold',
   },
@@ -1187,26 +1188,26 @@ const styles = StyleSheet.create({
   },
   contactName: {
     fontSize: 16,
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: '600',
     marginBottom: 4,
   },
   usernameTag: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: coffee.secondary,
     marginBottom: 4,
   },
   contactStatus: {
     fontSize: 12,
-    color: '#10B981',
+    color: coffee.accent,
   },
   contactUsername: {
     fontSize: 14,
-    color: '#64748b',
+    color: coffee.muted,
   },
   contactBio: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: coffee.secondary,
     marginTop: 2,
     fontStyle: 'italic',
   },
@@ -1219,14 +1220,14 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#0F3A2F',
+    backgroundColor: coffee.highlight,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   unreadBadge: {
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
     borderRadius: 12,
     minWidth: 24,
     height: 24,
@@ -1235,12 +1236,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   unreadBadgeText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: 'bold',
   },
   lockBadge: {
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     borderRadius: 12,
     width: 32,
     height: 32,
@@ -1251,29 +1252,29 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   createGroupBtn: {
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
     borderStyle: 'dashed',
   },
   createGroupBtnText: {
-    color: '#10B981',
+    color: coffee.accent,
     fontWeight: 'bold',
     fontSize: 16,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   modalContent: {
     width: '85%',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderRadius: 16,
     padding: 24,
   },
@@ -1283,11 +1284,11 @@ const styles = StyleSheet.create({
   groupAvatarPicker: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     marginBottom: 16,
   },
   groupAvatarLarge: {
@@ -1295,13 +1296,13 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     marginRight: 12,
-    backgroundColor: '#0EA5E9',
+    backgroundColor: coffee.button,
   },
   groupAvatarTextWrap: {
     flex: 1,
   },
   groupHint: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     lineHeight: 18,
   },
@@ -1320,21 +1321,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0F172A',
+    borderColor: coffee.border,
+    backgroundColor: coffee.background,
     alignItems: 'center',
   },
   segmentButtonActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#064E3B',
+    borderColor: coffee.accent,
+    backgroundColor: coffee.highlight,
   },
   segmentText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 13,
     fontWeight: '700',
   },
   segmentTextActive: {
-    color: '#A7F3D0',
+    color: coffee.accent,
   },
   settingRow: {
     flexDirection: 'row',
@@ -1343,39 +1344,39 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: coffee.border,
   },
   settingTextWrap: {
     flex: 1,
   },
   settingTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '700',
     marginBottom: 2,
   },  modalTitle: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 8,
   },
   modalDesc: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 14,
     marginBottom: 16,
   },
   inputField: {
-    backgroundColor: '#1E293B',
-    color: '#fff',
+    backgroundColor: coffee.surface,
+    color: coffee.text,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     fontSize: 16,
   },
   inputLabel: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 6,
@@ -1383,13 +1384,13 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: '#0F172A',
-    color: '#fff',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     padding: 16,
     borderRadius: 12,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
   },
   modalActions: {
     flexDirection: 'row',
@@ -1400,34 +1401,34 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   cancelBtnText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontWeight: 'bold',
   },
   saveBtn: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     padding: 12,
     paddingHorizontal: 24,
     borderRadius: 8,
   },
   saveBtnText: {
-    color: '#fff',
+    color: coffee.text,
     fontWeight: 'bold',
   },
   toggleBtn: {
     width: 50,
     height: 28,
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     borderRadius: 14,
     padding: 2,
     justifyContent: 'center',
   },
   toggleBtnActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
   },
   toggleKnob: {
     width: 24,
     height: 24,
-    backgroundColor: '#fff',
+    backgroundColor: coffee.surface,
     borderRadius: 12,
     transform: [{ translateX: 0 }],
   },
@@ -1438,7 +1439,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: coffee.surface,
     marginTop: 8,
   },
   onlineUserItem: {

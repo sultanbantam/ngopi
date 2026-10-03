@@ -1,8 +1,9 @@
+import { coffee } from '../src/theme/coffee';
 import { Stack } from 'expo-router';
 import '../src/interceptors/axios.interceptor';
 export default function RootLayout() {
   return (
-    <Stack screenOptions={{ headerShown: false }}>
+    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: coffee.background } }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="(auth)" options={{ headerShown: false }} />
       <Stack.Screen name="(main)" options={{ headerShown: false }} />

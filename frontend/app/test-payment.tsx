@@ -1,3 +1,4 @@
+import { coffee } from '../src/theme/coffee';
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
@@ -107,7 +108,7 @@ export default function TestPaymentScreen() {
     } catch (error: any) {
       console.error(error);
       const isAuthFailed = error.message === 'Authentication failed.' || error === 'Authentication failed.';
-      
+
       if (isAuthFailed) {
         setMessage('GAGAL (Auth Failed). Kemungkinan penyebab:\\n1. Segitiga Kuning ⚠️: Anda harus ketik pi://bamboochat.click di kotak atas.\\n2. Salah Mode: Coba ganti ke Mode Production (tombol biru) jika Sandbox gagal.\\n3. Belum Testnet: Pastikan HP ini login dengan akun Developer aplikasi.');
       } else {
@@ -121,32 +122,32 @@ export default function TestPaymentScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
+          <Ionicons name="arrow-back" size={24} color={coffee.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Test Payment</Text>
       </View>
 
       <View style={styles.content}>
-        <Ionicons name="wallet-outline" size={80} color="#10B981" style={styles.icon} />
+        <Ionicons name="wallet-outline" size={80} color={coffee.accent} style={styles.icon} />
         <Text style={styles.title}>Developer Test Payment</Text>
         <Text style={styles.description}>
           Klik tombol di bawah ini untuk mensimulasikan transaksi 1 Pi (Testnet) agar langkah ke-10 di Pi Developer Portal tercapai.
         </Text>
 
         {!sdkLoaded ? (
-          <ActivityIndicator size="large" color="#10B981" />
+          <ActivityIndicator size="large" color={coffee.accent} />
         ) : (
           <>
-            <TouchableOpacity 
-              style={[styles.button, loading && styles.buttonDisabled, { marginBottom: 15 }]} 
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled, { marginBottom: 15 }]}
               onPress={handlePayment}
               disabled={loading}
             >
               <Text style={styles.buttonText}>{loading ? 'Memproses...' : `Bayar 1 Pi (${isSandbox ? 'Testnet/Sandbox' : 'Mainnet/Production'})`}</Text>
             </TouchableOpacity>
-            
-            <TouchableOpacity 
-              style={[styles.button, { backgroundColor: '#3B82F6' }]} 
+
+            <TouchableOpacity
+              style={[styles.button, { backgroundColor: coffee.button }]}
               onPress={() => {
                 const newSandbox = !isSandbox;
                 window.location.href = `/test-payment?sandbox=${newSandbox}`;
@@ -169,7 +170,7 @@ export default function TestPaymentScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   header: {
     flexDirection: 'row',
@@ -177,7 +178,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   backButton: {
     marginRight: 15,
@@ -185,7 +186,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: coffee.text,
   },
   content: {
     flex: 1,
@@ -199,37 +200,37 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#F8FAFC',
+    color: coffee.text,
     marginBottom: 10,
     textAlign: 'center',
   },
   description: {
     fontSize: 16,
-    color: '#94A3B8',
+    color: coffee.secondary,
     textAlign: 'center',
     marginBottom: 40,
     lineHeight: 24,
   },
   button: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     paddingVertical: 15,
     paddingHorizontal: 40,
     borderRadius: 30,
     elevation: 3,
   },
   buttonDisabled: {
-    backgroundColor: '#059669',
+    backgroundColor: coffee.button,
     opacity: 0.7,
   },
   buttonText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
   message: {
     marginTop: 20,
     fontSize: 16,
-    color: '#FCD34D',
+    color: coffee.accent,
     textAlign: 'center',
     paddingHorizontal: 20,
   }

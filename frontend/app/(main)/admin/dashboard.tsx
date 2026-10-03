@@ -1,3 +1,4 @@
+import { coffee } from '../../../src/theme/coffee';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Platform, ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,10 +35,10 @@ type TicketStats = {
 };
 
 const columns: Array<{ status: TicketStatus; label: string; color: string }> = [
-  { status: 'open', label: 'Open', color: '#38BDF8' },
-  { status: 'in_progress', label: 'In Progress', color: '#F59E0B' },
-  { status: 'resolved', label: 'Resolved', color: '#10B981' },
-  { status: 'closed', label: 'Closed', color: '#94A3B8' },
+  { status: 'open', label: 'Open', color: coffee.accent },
+  { status: 'in_progress', label: 'In Progress', color: coffee.warning },
+  { status: 'resolved', label: 'Resolved', color: coffee.accent },
+  { status: 'closed', label: 'Closed', color: coffee.secondary },
 ];
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
@@ -140,7 +141,7 @@ export default function AdminDashboardScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#10B981" />
+        <ActivityIndicator size="large" color={coffee.accent} />
       </View>
     );
   }
@@ -148,7 +149,7 @@ export default function AdminDashboardScreen() {
   if (error) {
     return (
       <View style={styles.center}>
-        <Ionicons name="lock-closed-outline" size={38} color="#F59E0B" />
+        <Ionicons name="lock-closed-outline" size={38} color={coffee.warning} />
         <Text style={styles.errorText}>{error}</Text>
       </View>
     );
@@ -162,7 +163,7 @@ export default function AdminDashboardScreen() {
           <Text style={styles.subtitle}>Tiket, routing agent, dan statistik BambooCS</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={() => loadDashboard().catch(console.error)}>
-          <Ionicons name="refresh" size={18} color="#F8FAFC" />
+          <Ionicons name="refresh" size={18} color={coffee.text} />
         </TouchableOpacity>
       </View>
 
@@ -215,7 +216,7 @@ export default function AdminDashboardScreen() {
                     <TouchableOpacity key={ticket.id} style={[styles.ticketCard, selectedTicketId === ticket.id && styles.ticketCardActive]} onPress={() => setSelectedTicketId(ticket.id)} {...webDragProps}>
                       <View style={styles.ticketTopRow}>
                         <Text style={styles.ticketPlatform}>{ticket.platform.display_name}</Text>
-                        {ticket.is_escalated && <Ionicons name="sparkles-outline" size={15} color="#F59E0B" />}
+                        {ticket.is_escalated && <Ionicons name="sparkles-outline" size={15} color={coffee.warning} />}
                       </View>
                       <Text style={styles.ticketTitle} numberOfLines={2}>{ticket.title}</Text>
                       <Text style={styles.ticketUser}>@{ticket.user.username}</Text>
@@ -238,7 +239,7 @@ export default function AdminDashboardScreen() {
                   <Text style={styles.detailMeta}>User @{selectedTicket.user.username} - {formatDate(selectedTicket.created_at)}</Text>
                 </View>
                 <TouchableOpacity style={styles.assignButton} onPress={assignToMe}>
-                  <Ionicons name="person-add-outline" size={16} color="#FFFFFF" />
+                  <Ionicons name="person-add-outline" size={16} color={coffee.text} />
                   <Text style={styles.assignButtonText}>Ambil</Text>
                 </TouchableOpacity>
               </View>
@@ -268,7 +269,7 @@ export default function AdminDashboardScreen() {
               <View style={styles.replyPanel}>
                 <View style={styles.internalRow}>
                   <Text style={styles.internalLabel}>Catatan internal</Text>
-                  <Switch value={internalNote} onValueChange={setInternalNote} thumbColor={internalNote ? '#10B981' : '#CBD5E1'} />
+                  <Switch value={internalNote} onValueChange={setInternalNote} thumbColor={internalNote ? coffee.accent : coffee.secondary} />
                 </View>
                 <View style={styles.replyRow}>
                   <TextInput
@@ -276,18 +277,18 @@ export default function AdminDashboardScreen() {
                     value={reply}
                     onChangeText={setReply}
                     placeholder={internalNote ? 'Tulis catatan internal' : 'Tulis balasan ke user'}
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={coffee.muted}
                     multiline
                   />
                   <TouchableOpacity style={styles.sendButton} onPress={sendReply} disabled={!reply.trim()}>
-                    <Ionicons name="send" size={18} color="#FFFFFF" />
+                    <Ionicons name="send" size={18} color={coffee.text} />
                   </TouchableOpacity>
                 </View>
               </View>
             </>
           ) : (
             <View style={styles.emptyDetail}>
-              <Ionicons name="file-tray-outline" size={34} color="#64748B" />
+              <Ionicons name="file-tray-outline" size={34} color={coffee.muted} />
               <Text style={styles.emptyDetailText}>Pilih tiket untuk melihat detail.</Text>
             </View>
           )}
@@ -300,17 +301,17 @@ export default function AdminDashboardScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   center: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   errorText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     marginTop: 12,
     fontSize: 16,
     textAlign: 'center',
@@ -320,18 +321,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 22,
     fontWeight: '900',
   },
   subtitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 13,
     marginTop: 3,
   },
@@ -339,7 +340,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -348,32 +349,32 @@ const styles = StyleSheet.create({
     gap: 10,
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
     flexWrap: 'wrap',
   },
   statCard: {
     minWidth: 110,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
     padding: 12,
   },
   statCardWide: {
     minWidth: 170,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
     padding: 12,
   },
   statValue: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 20,
     fontWeight: '900',
   },
   statLabel: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     marginTop: 4,
   },
@@ -391,10 +392,10 @@ const styles = StyleSheet.create({
   },
   column: {
     width: 260,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
     padding: 10,
   },
   columnHeader: {
@@ -409,24 +410,24 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   columnTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: '900',
     flex: 1,
   },
   columnCount: {
-    color: '#64748B',
+    color: coffee.muted,
     fontWeight: '800',
   },
   ticketCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     padding: 11,
     marginBottom: 9,
   },
   ticketCardActive: {
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
   },
   ticketTopRow: {
     flexDirection: 'row',
@@ -434,24 +435,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   ticketPlatform: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '900',
   },
   ticketTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '800',
     marginTop: 7,
     minHeight: 38,
   },
   ticketUser: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     marginTop: 6,
   },
   ticketTime: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 11,
     marginTop: 4,
   },
@@ -459,14 +460,14 @@ const styles = StyleSheet.create({
     width: Platform.OS === 'web' ? 430 : '100%',
     borderLeftWidth: Platform.OS === 'web' ? 1 : 0,
     borderTopWidth: Platform.OS === 'web' ? 0 : 1,
-    borderColor: '#1E293B',
-    backgroundColor: '#0B1120',
+    borderColor: coffee.surface,
+    backgroundColor: coffee.background,
     minHeight: 0,
   },
   detailHeader: {
     padding: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
     flexDirection: 'row',
     gap: 10,
     alignItems: 'flex-start',
@@ -476,18 +477,18 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   detailPlatform: {
-    color: '#34D399',
+    color: coffee.accent,
     fontWeight: '900',
     fontSize: 12,
     marginBottom: 5,
   },
   detailTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: '900',
   },
   detailMeta: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 12,
     marginTop: 5,
   },
@@ -495,13 +496,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   assignButtonText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: '900',
   },
@@ -511,17 +512,17 @@ const styles = StyleSheet.create({
     gap: 7,
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
   },
   statusButton: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     borderRadius: 8,
     paddingHorizontal: 9,
     paddingVertical: 7,
   },
   statusButtonText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 11,
     fontWeight: '900',
   },
@@ -539,35 +540,35 @@ const styles = StyleSheet.create({
   },
   staffBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#065F46',
+    backgroundColor: coffee.highlight,
   },
   internalBubble: {
-    backgroundColor: '#3B2F12',
+    backgroundColor: coffee.highlight,
     borderWidth: 1,
-    borderColor: '#92400E',
+    borderColor: coffee.highlight,
   },
   messageSender: {
-    color: '#D1FAE5',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '900',
     marginBottom: 4,
   },
   messageText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     lineHeight: 20,
   },
   messageTime: {
-    color: 'rgba(255,255,255,0.55)',
+    color: coffee.secondary,
     fontSize: 10,
     marginTop: 6,
   },
   replyPanel: {
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: coffee.surface,
     padding: 12,
   },
   internalRow: {
@@ -577,7 +578,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   internalLabel: {
-    color: '#CBD5E1',
+    color: coffee.secondary,
     fontWeight: '800',
   },
   replyRow: {
@@ -589,11 +590,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     padding: 10,
     outlineStyle: 'none',
   } as any,
@@ -601,7 +602,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -612,7 +613,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   emptyDetailText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     marginTop: 10,
     textAlign: 'center',
   },

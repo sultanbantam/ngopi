@@ -1,3 +1,4 @@
+import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stack, Slot, router, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView } from 'react-native';
@@ -55,7 +56,7 @@ export default function MainLayout() {
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 768;
   const pathname = usePathname();
-  
+
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -107,7 +108,7 @@ export default function MainLayout() {
         router.replace('/(auth)/register');
         return;
       }
-      
+
       setCurrentUserId(uid);
     };
     init();
@@ -149,7 +150,7 @@ export default function MainLayout() {
       const gainNode = audioCtx.createGain();
 
       oscillator.type = 'sine';
-      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); 
+      oscillator.frequency.setValueAtTime(880, audioCtx.currentTime);
       oscillator.frequency.exponentialRampToValueAtTime(440, audioCtx.currentTime + 0.1);
 
       gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
@@ -421,7 +422,7 @@ export default function MainLayout() {
     <>
       {unreadCount > 0 && (
         <TouchableOpacity style={styles.notificationButton} onPress={() => setNotificationCenterVisible(true)} activeOpacity={0.9}>
-          <Ionicons name="notifications" size={22} color="#E2E8F0" />
+          <Ionicons name="notifications" size={22} color={coffee.text} />
           <View style={styles.notificationBadge}>
             <Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
           </View>
@@ -439,10 +440,10 @@ export default function MainLayout() {
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <TouchableOpacity style={styles.notificationCloseButton} onPress={cycleCallAlertMode}>
-                  <Ionicons name={callAlertMode === 'ringtone' ? 'musical-notes' : callAlertMode === 'vibrate' ? 'phone-portrait' : 'volume-mute'} size={20} color="#E2E8F0" />
+                  <Ionicons name={callAlertMode === 'ringtone' ? 'musical-notes' : callAlertMode === 'vibrate' ? 'phone-portrait' : 'volume-mute'} size={20} color={coffee.text} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.notificationCloseButton} onPress={() => setNotificationCenterVisible(false)}>
-                  <Ionicons name="close" size={22} color="#E2E8F0" />
+                  <Ionicons name="close" size={22} color={coffee.text} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -504,8 +505,8 @@ export default function MainLayout() {
       <Modal transparent visible={Boolean(activeIncomingCall)} animationType="fade" onRequestClose={handleDecline}>
         <View style={styles.callModalOverlay}>
           <View style={styles.callModalCard}>
-            <View style={[styles.callModalAvatar, { backgroundColor: activeIncomingCall.isVideo ? '#0284C7' : '#10B981' }]}>
-              <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'person'} size={48} color="#FFFFFF" />
+            <View style={[styles.callModalAvatar, { backgroundColor: coffee.button }]}>
+              <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'person'} size={48} color={coffee.text} />
             </View>
 
             <Text style={styles.callModalTitle}>{activeIncomingCall.callerName}</Text>
@@ -517,7 +518,7 @@ export default function MainLayout() {
               {/* Decline Button (RED) */}
               <View style={styles.callActionItem}>
                 <TouchableOpacity style={[styles.callActionButton, styles.declineButton]} onPress={handleDecline} activeOpacity={0.8}>
-                  <MaterialIcons name="call-end" size={32} color="#FFFFFF" />
+                  <MaterialIcons name="call-end" size={32} color={coffee.text} />
                 </TouchableOpacity>
                 <Text style={styles.callActionText}>Tolak</Text>
               </View>
@@ -525,7 +526,7 @@ export default function MainLayout() {
               {/* Accept Button (GREEN) */}
               <View style={styles.callActionItem}>
                 <TouchableOpacity style={[styles.callActionButton, styles.acceptButton]} onPress={handleAccept} activeOpacity={0.8}>
-                  <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'call'} size={32} color="#FFFFFF" />
+                  <Ionicons name={activeIncomingCall.isVideo ? 'videocam' : 'call'} size={32} color={coffee.text} />
                 </TouchableOpacity>
                 <Text style={styles.callActionText}>Terima</Text>
               </View>
@@ -553,11 +554,11 @@ export default function MainLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <Stack screenOptions={{ 
-        headerStyle: { backgroundColor: '#1E293B' },
-        headerTintColor: '#F8FAFC',
+      <Stack screenOptions={{
+        headerStyle: { backgroundColor: coffee.surface },
+        headerTintColor: coffee.text,
         headerTitleStyle: { fontWeight: 'bold' },
-        contentStyle: { backgroundColor: '#0F172A' }
+        contentStyle: { backgroundColor: coffee.background }
       }}>
         <Stack.Screen name="contacts" options={{ title: 'Ngopi' }} />
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
@@ -577,7 +578,7 @@ export default function MainLayout() {
 const styles = StyleSheet.create({
   callModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.85)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -586,13 +587,13 @@ const styles = StyleSheet.create({
   callModalCard: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderRadius: 24,
     padding: 32,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#334155',
-    shadowColor: '#000',
+    borderColor: coffee.border,
+    shadowColor: coffee.shadow,
     shadowOffset: { width: 0, height: 16 },
     shadowOpacity: 0.4,
     shadowRadius: 24,
@@ -605,20 +606,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 18,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
   callModalTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 6,
   },
   callModalSubtitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 15,
     textAlign: 'center',
     marginBottom: 32,
@@ -639,36 +640,36 @@ const styles = StyleSheet.create({
     borderRadius: 33,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
   },
   declineButton: {
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
   },
   acceptButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
   },
   callActionText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '600',
   },
   singleContainer: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   splitContainer: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   sidebar: {
     width: '30%',
     minWidth: 300,
     borderRightWidth: 1,
-    borderRightColor: '#334155',
+    borderRightColor: coffee.border,
   },
   main: {
     flex: 1,
@@ -677,7 +678,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   emptyStateLogo: {
     width: 200,
@@ -686,12 +687,12 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   emptyStateText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 24,
     fontWeight: 'bold',
   },
   emptyStateSubtext: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 16,
     marginTop: 8,
   },
@@ -701,18 +702,18 @@ const styles = StyleSheet.create({
     left: '50%',
     transform: [{ translateX: Platform.OS === 'web' ? '-50%' : 0 }],
     alignSelf: Platform.OS === 'web' ? 'auto' : 'center',
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 8,
     zIndex: 9999,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 5,
   },
   toastText: {
-    color: '#fff',
+    color: coffee.text,
     fontWeight: 'bold',
   },
   notificationButton: {
@@ -722,13 +723,13 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 9998,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOpacity: 0.25,
     shadowRadius: 6,
     elevation: 6,
@@ -740,13 +741,13 @@ const styles = StyleSheet.create({
     minWidth: 19,
     height: 19,
     borderRadius: 10,
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 4,
   },
   notificationBadgeText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontSize: 10,
     fontWeight: '900',
   },
@@ -761,7 +762,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     left: 0,
-    backgroundColor: 'rgba(2, 6, 23, 0.55)',
+    backgroundColor: coffee.overlay,
   },
   notificationPanel: {
     width: 420,
@@ -770,9 +771,9 @@ const styles = StyleSheet.create({
     marginTop: 86,
     marginRight: 14,
     borderRadius: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     overflow: 'hidden',
   },
   notificationHeader: {
@@ -780,18 +781,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   notificationTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: '900',
   },
   notificationSubtitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     marginTop: 2,
   },
@@ -799,7 +800,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -812,38 +813,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
   },
   notificationItemUnread: {
-    backgroundColor: '#122138',
+    backgroundColor: coffee.raised,
   },
   notificationDot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: '#22C55E',
+    backgroundColor: coffee.successButton,
     marginTop: 5,
   },
   notificationDotRead: {
-    backgroundColor: '#475569',
+    backgroundColor: coffee.border,
   },
   notificationTextWrap: {
     flex: 1,
     minWidth: 0,
   },
   notificationItemTitle: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '900',
   },
   notificationItemBody: {
-    color: '#CBD5E1',
+    color: coffee.secondary,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 3,
   },
   notificationItemTime: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 11,
     marginTop: 5,
   },
@@ -853,17 +854,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   notificationEmptyText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 14,
   },
   markReadButton: {
     minHeight: 46,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#102A2A',
+    backgroundColor: coffee.highlight,
   },
   markReadButtonText: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 13,
     fontWeight: '900',
   }

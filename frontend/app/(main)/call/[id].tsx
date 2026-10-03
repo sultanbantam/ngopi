@@ -1,3 +1,4 @@
+import { coffee } from '../../../src/theme/coffee';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -47,25 +48,25 @@ const waitForIceGatheringComplete = (peer: RTCPeerConnection) => new Promise<voi
 export default function CallScreen() {
   const { id: partnerId, name, isVideo, isCaller = 'true', incomingSignal, callId } = useLocalSearchParams();
   const router = useRouter();
-  
+
   const isVideoCall = isVideo === 'true';
   const caller = isCaller === 'true';
 
   const [status, setStatus] = useState(caller ? 'Calling...' : 'Connecting...');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  
+
   // Call controls state
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
   const [isSpeaker, setIsSpeaker] = useState(false);
   const [needsAudioTap, setNeedsAudioTap] = useState(false);
-  
+
   // Refs for video elements (Web only)
   const myVideoRef = useRef<HTMLVideoElement>(null);
   const userVideoRef = useRef<HTMLVideoElement>(null);
   const remoteAudioRef = useRef<HTMLAudioElement>(null);
   const remoteStreamRef = useRef<MediaStream | null>(null);
-  
+
   const peerRef = useRef<any>(null);
   const streamRef = useRef<any>(null);
   const actualRoomIdRef = useRef<string>('');
@@ -224,7 +225,7 @@ export default function CallScreen() {
     const initCall = async () => {
       let myId = localStorage.getItem('userId') || '';
       if (!myId) myId = (await SecureStore.getItemAsync('userId')) || '';
-      
+
       const sharedKey = [myId, partnerId].sort().join('-');
       actualRoomIdRef.current = sharedKey;
       const socket = await socketService.connect();
@@ -235,7 +236,7 @@ export default function CallScreen() {
           video: isVideoCall,
           audio: true
         });
-        
+
         if (!isCallActive) {
           stream.getTracks().forEach(t => t.stop());
           return;
@@ -346,7 +347,7 @@ export default function CallScreen() {
             const answer = await peer.createAnswer();
             await peer.setLocalDescription(answer);
             await waitForIceGatheringComplete(peer);
-            
+
             // Process pending candidates if any
             pendingCandidates.current.forEach(c => {
                peer.addIceCandidate(new (window as any).RTCIceCandidate(c)).catch((e:any) => console.error(e));
@@ -510,7 +511,7 @@ export default function CallScreen() {
     if (peerRef.current) {
       peerRef.current.close();
     }
-    
+
     if (!isUnmounting && !hasNavigatedBack.current) {
       hasNavigatedBack.current = true;
       if (router.canGoBack()) router.back();
@@ -541,7 +542,7 @@ export default function CallScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
-      
+
       {/* Background for Video Call */}
       {Platform.OS === 'web' && isVideoCall && (
         <View style={styles.absoluteFill}>
@@ -560,11 +561,11 @@ export default function CallScreen() {
         <View style={styles.voiceBackground}>
           {/* Avatar center */}
           <View style={styles.largeAvatarContainer}>
-            <Ionicons name="person" size={80} color="#fff" />
+            <Ionicons name="person" size={80} color={coffee.text} />
           </View>
           {needsAudioTap && (
             <TouchableOpacity style={styles.enableAudioButton} onPress={playRemoteAudio}>
-              <Ionicons name="volume-high" size={20} color="#0F172A" />
+              <Ionicons name="volume-high" size={20} color={coffee.buttonText} />
               <Text style={styles.enableAudioText}>Nyalakan suara</Text>
             </TouchableOpacity>
           )}
@@ -577,7 +578,7 @@ export default function CallScreen() {
 
       {isVideoCall && needsAudioTap && (
         <TouchableOpacity style={[styles.enableAudioButton, styles.enableAudioOverlay]} onPress={playRemoteAudio}>
-          <Ionicons name="volume-high" size={20} color="#0F172A" />
+          <Ionicons name="volume-high" size={20} color={coffee.buttonText} />
           <Text style={styles.enableAudioText}>Nyalakan suara</Text>
         </TouchableOpacity>
       )}
@@ -585,20 +586,20 @@ export default function CallScreen() {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.headerIconBtn} onPress={() => endCall(true)}>
-          <Ionicons name="chevron-down" size={28} color="#fff" />
+          <Ionicons name="chevron-down" size={28} color={coffee.text} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer}>
           <Text style={styles.nameText}>{name || 'Contact'}</Text>
           <View style={styles.encryptionInfo}>
-            <Ionicons name="lock-closed" size={12} color="#A0AAB3" />
+            <Ionicons name="lock-closed" size={12} color={coffee.secondary} />
             <Text style={styles.encryptionText}> Terenkripsi secara end-to-end</Text>
           </View>
           <Text style={styles.statusText}>{status}{connectedAtRef.current ? ` - ${formatCallDuration(elapsedSeconds)}` : ''}</Text>
         </View>
-        
+
         <TouchableOpacity style={styles.headerIconBtn}>
-          <Ionicons name="person-add" size={24} color="#fff" />
+          <Ionicons name="person-add" size={24} color={coffee.text} />
         </TouchableOpacity>
       </View>
 
@@ -606,10 +607,10 @@ export default function CallScreen() {
       {isVideoCall && (
         <View style={styles.rightSideIcons}>
           <TouchableOpacity style={styles.sideBtn}>
-            <Ionicons name="camera-reverse" size={22} color="#fff" />
+            <Ionicons name="camera-reverse" size={22} color={coffee.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.sideBtn}>
-            <Ionicons name="color-wand" size={22} color="#fff" />
+            <Ionicons name="color-wand" size={22} color={coffee.text} />
           </TouchableOpacity>
         </View>
       )}
@@ -631,27 +632,27 @@ export default function CallScreen() {
       <View style={styles.bottomControlsContainer}>
         <View style={styles.controlsPill}>
           <TouchableOpacity style={styles.controlBtn}>
-            <Ionicons name="ellipsis-horizontal" size={24} color="#fff" />
+            <Ionicons name="ellipsis-horizontal" size={24} color={coffee.text} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo} disabled={!isVideoCall}>
-            <Ionicons 
-              name={isCameraOff ? "videocam-off" : "videocam"} 
-              size={24} 
-              color={!isVideoCall ? "#555" : (isCameraOff ? "#fff" : "#fff")} 
+            <Ionicons
+              name={isCameraOff ? "videocam-off" : "videocam"}
+              size={24}
+              color={!isVideoCall ? coffee.muted : (isCameraOff ? coffee.text : coffee.text)}
             />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.controlBtn} onPress={() => setIsSpeaker(!isSpeaker)}>
-            <Ionicons name={isSpeaker ? "volume-high" : "volume-medium"} size={24} color="#fff" />
+            <Ionicons name={isSpeaker ? "volume-high" : "volume-medium"} size={24} color={coffee.text} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.controlBtn} onPress={toggleMute}>
-            <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? "#fff" : "#fff"} />
+            <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? coffee.text : coffee.text} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.endCallBtn} onPress={() => endCall(true)}>
-            <MaterialIcons name="call-end" size={28} color="#fff" />
+            <MaterialIcons name="call-end" size={28} color={coffee.text} />
           </TouchableOpacity>
         </View>
       </View>
@@ -662,7 +663,7 @@ export default function CallScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     position: 'relative',
   },
   absoluteFill: {
@@ -671,7 +672,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#000',
+    backgroundColor: coffee.shadow,
   },
   voiceBackground: {
     position: 'absolute',
@@ -679,7 +680,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#111B21',
+    backgroundColor: coffee.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -687,7 +688,7 @@ const styles = StyleSheet.create({
     width: 150,
     height: 150,
     borderRadius: 75,
-    backgroundColor: '#6b7280',
+    backgroundColor: coffee.muted,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -696,13 +697,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#86EFAC',
+    backgroundColor: coffee.successButton,
     paddingHorizontal: 18,
     paddingVertical: 12,
     borderRadius: 24,
   },
   enableAudioText: {
-    color: '#0F172A',
+    color: coffee.buttonText,
     fontWeight: '800',
   },
   enableAudioOverlay: {
@@ -728,7 +729,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -738,7 +739,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   nameText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 20,
     fontWeight: '600',
     marginBottom: 4,
@@ -749,11 +750,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   encryptionText: {
-    color: '#A0AAB3',
+    color: coffee.secondary,
     fontSize: 12,
   },
   statusText: {
-    color: '#A0AAB3',
+    color: coffee.secondary,
     fontSize: 14,
   },
   rightSideIcons: {
@@ -767,7 +768,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
@@ -780,9 +781,9 @@ const styles = StyleSheet.create({
     height: 150,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     zIndex: 10,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 5,
@@ -802,7 +803,7 @@ const styles = StyleSheet.create({
   },
   controlsPill: {
     flexDirection: 'row',
-    backgroundColor: '#1E2329',
+    backgroundColor: coffee.surface,
     borderRadius: 40,
     paddingVertical: 12,
     paddingHorizontal: 20,
@@ -813,7 +814,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#2A3138',
+    backgroundColor: coffee.raised,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -821,7 +822,7 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,

@@ -1,3 +1,4 @@
+import { coffee } from '../../src/theme/coffee';
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
@@ -790,7 +791,7 @@ export default function AlihBahasaScreen() {
             }
           }}
         >
-          <Ionicons name="arrow-back" size={20} color="#94A3B8" />
+          <Ionicons name="arrow-back" size={20} color={coffee.secondary} />
           <Text style={styles.backBtnText}>Chat</Text>
         </TouchableOpacity>
 
@@ -798,7 +799,7 @@ export default function AlihBahasaScreen() {
           <Text style={styles.headerTitle} numberOfLines={1}>🎙️ Alih Bahasa Live</Text>
           <View style={styles.statusRow}>
             <View style={[styles.statusDot, isRecording && !isPaused ? styles.statusDotActive : null]} />
-            <Text style={[styles.statusLabel, isRecording && !isPaused ? { color: '#34D399' } : null]}>
+            <Text style={[styles.statusLabel, isRecording && !isPaused ? { color: coffee.accent } : null]}>
               {isRecording ? (isPaused ? 'Dijeda' : micStatus) : micStatus}
             </Text>
           </View>
@@ -809,7 +810,7 @@ export default function AlihBahasaScreen() {
             style={[styles.viewSwitchBtn, activeView === 'notulen' && styles.viewSwitchBtnActive]}
             onPress={() => setActiveView(activeView === 'conversation' ? 'notulen' : 'conversation')}
           >
-            <Ionicons name={activeView === 'conversation' ? 'document-text-outline' : 'chatbubbles-outline'} size={15} color={activeView === 'notulen' ? '#22D3EE' : '#94A3B8'} />
+            <Ionicons name={activeView === 'conversation' ? 'document-text-outline' : 'chatbubbles-outline'} size={15} color={activeView === 'notulen' ? coffee.accent : coffee.secondary} />
             <Text style={[styles.viewSwitchBtnText, activeView === 'notulen' && styles.viewSwitchBtnTextActive]}>
               {activeView === 'conversation' ? 'Notulen' : 'Live'}
             </Text>
@@ -817,7 +818,7 @@ export default function AlihBahasaScreen() {
 
           {messages.length > 0 && (
             <TouchableOpacity style={styles.resetBtn} onPress={clearAll}>
-              <Ionicons name="trash-outline" size={15} color="#94A3B8" />
+              <Ionicons name="trash-outline" size={15} color={coffee.secondary} />
             </TouchableOpacity>
           )}
         </View>
@@ -826,7 +827,7 @@ export default function AlihBahasaScreen() {
       {/* Browser Warning */}
       {browserWarning && (
         <View style={styles.warningBanner}>
-          <Ionicons name="alert-circle" size={16} color="#F59E0B" style={{ marginRight: 6 }} />
+          <Ionicons name="alert-circle" size={16} color={coffee.warning} style={{ marginRight: 6 }} />
           <Text style={styles.warningText}>{browserWarning}</Text>
         </View>
       )}
@@ -842,13 +843,13 @@ export default function AlihBahasaScreen() {
           <Text style={styles.pickerSubLabel}>Bicara (Input)</Text>
           <View style={styles.pickerMainRow}>
             <Text style={styles.pickerMainText} numberOfLines={1}>{srcLangObj.label}</Text>
-            <Ionicons name="chevron-down" size={14} color="#38BDF8" style={{ marginLeft: 4 }} />
+            <Ionicons name="chevron-down" size={14} color={coffee.accent} style={{ marginLeft: 4 }} />
           </View>
         </TouchableOpacity>
 
         {/* Swap Button */}
         <TouchableOpacity style={styles.swapRoundButton} onPress={swapLanguages} activeOpacity={0.75}>
-          <Ionicons name="swap-horizontal" size={18} color="#06B6D4" />
+          <Ionicons name="swap-horizontal" size={18} color={coffee.accent} />
         </TouchableOpacity>
 
         {/* Target Dropdown Button */}
@@ -859,8 +860,8 @@ export default function AlihBahasaScreen() {
         >
           <Text style={styles.pickerSubLabel}>Terjemah (Output)</Text>
           <View style={styles.pickerMainRow}>
-            <Text style={[styles.pickerMainText, { color: '#34D399' }]} numberOfLines={1}>{tgtLangObj.label}</Text>
-            <Ionicons name="chevron-down" size={14} color="#34D399" style={{ marginLeft: 4 }} />
+            <Text style={[styles.pickerMainText, { color: coffee.accent }]} numberOfLines={1}>{tgtLangObj.label}</Text>
+            <Ionicons name="chevron-down" size={14} color={coffee.accent} style={{ marginLeft: 4 }} />
           </View>
         </TouchableOpacity>
       </View>
@@ -873,7 +874,7 @@ export default function AlihBahasaScreen() {
             onPress={() => setMeetingGuideVisible(true)}
             activeOpacity={0.8}
           >
-            <Ionicons name="people" size={13} color="#06B6D4" />
+            <Ionicons name="people" size={13} color={coffee.accent} />
             <Text style={styles.meetingModeBtnText}>Meeting {'>'}2 Org</Text>
           </TouchableOpacity>
 
@@ -885,7 +886,7 @@ export default function AlihBahasaScreen() {
                 style={[styles.speakerChip, isSelected && styles.speakerChipActive]}
                 onPress={() => setActiveSpeaker(spk)}
               >
-                <Ionicons name={spk.includes('Lawan') ? 'call' : 'person'} size={12} color={isSelected ? '#0B1120' : '#94A3B8'} />
+                <Ionicons name={spk.includes('Lawan') ? 'call' : 'person'} size={12} color={isSelected ? coffee.buttonText : coffee.secondary} />
                 <Text style={[styles.speakerChipText, isSelected && styles.speakerChipTextActive]}>{spk}</Text>
               </TouchableOpacity>
             );
@@ -927,7 +928,7 @@ export default function AlihBahasaScreen() {
             style={[styles.headsetToggleChip, isHeadsetMode && styles.headsetToggleChipActive]}
             onPress={() => setIsHeadsetMode(!isHeadsetMode)}
           >
-            <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={13} color={isHeadsetMode ? '#22D3EE' : '#64748B'} />
+            <Ionicons name={isHeadsetMode ? 'headset' : 'headset-outline'} size={13} color={isHeadsetMode ? coffee.accent : coffee.muted} />
             <Text style={[styles.headsetToggleChipText, isHeadsetMode && styles.headsetToggleChipTextActive]}>
               {isHeadsetMode ? 'Earphone ON' : 'Earphone OFF'}
             </Text>
@@ -937,7 +938,7 @@ export default function AlihBahasaScreen() {
             style={[styles.coPilotToggleChip, isCoPilotActive && styles.coPilotToggleChipActive]}
             onPress={() => setCoPilotGuideVisible(true)}
           >
-            <Ionicons name="sparkles" size={13} color={isCoPilotActive ? '#F59E0B' : '#64748B'} />
+            <Ionicons name="sparkles" size={13} color={isCoPilotActive ? coffee.warning : coffee.muted} />
             <Text style={[styles.coPilotToggleChipText, isCoPilotActive && styles.coPilotToggleChipTextActive]}>
               AI Co-Pilot ON
             </Text>
@@ -948,7 +949,7 @@ export default function AlihBahasaScreen() {
             onPress={() => setHeadsetGuideVisible(true)}
             activeOpacity={0.7}
           >
-            <Ionicons name="help-circle-outline" size={15} color="#38BDF8" />
+            <Ionicons name="help-circle-outline" size={15} color={coffee.accent} />
           </TouchableOpacity>
         </View>
       </View>
@@ -964,11 +965,11 @@ export default function AlihBahasaScreen() {
           {messages.length === 0 && !currentSpokenText ? (
             <View style={styles.emptyPrompt}>
               <View style={styles.emptyIconCircle}>
-                <Ionicons name="globe-outline" size={50} color="#06B6D4" />
+                <Ionicons name="globe-outline" size={50} color={coffee.accent} />
               </View>
               <Text style={styles.emptyTitle}>Penerjemah Suara & Co-Pilot Telepon</Text>
               <Text style={styles.emptySub}>
-                Bicara dalam <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>{srcLangObj.name}</Text> dan sistem akan menerjemahkan instan ke <Text style={{ color: '#34D399', fontWeight: 'bold' }}>{tgtLangObj.name}</Text> serta menampilkan saran respon cerdas otomatis di layar.
+                Bicara dalam <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>{srcLangObj.name}</Text> dan sistem akan menerjemahkan instan ke <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>{tgtLangObj.name}</Text> serta menampilkan saran respon cerdas otomatis di layar.
               </Text>
 
               {/* Simulation Quick Testers */}
@@ -978,7 +979,7 @@ export default function AlihBahasaScreen() {
                   style={styles.simBtn}
                   onPress={() => runSimulatedCall('All I want to know is how do we progress and start the project?')}
                 >
-                  <Ionicons name="play-circle" size={18} color="#06B6D4" />
+                  <Ionicons name="play-circle" size={18} color={coffee.accent} />
                   <View style={{ flex: 1, marginLeft: 8 }}>
                     <Text style={styles.simBtnText}>Tes: "All I want to know is how do we progress?"</Text>
                     <Text style={styles.simBtnSub}>Simulasi lawan bicara bertanya progress di telepon</Text>
@@ -989,7 +990,7 @@ export default function AlihBahasaScreen() {
                   style={styles.simBtn}
                   onPress={() => runSimulatedCall('We agree with your proposal, can you give us a 15% discount for this batch?')}
                 >
-                  <Ionicons name="play-circle" size={18} color="#F59E0B" />
+                  <Ionicons name="play-circle" size={18} color={coffee.warning} />
                   <View style={{ flex: 1, marginLeft: 8 }}>
                     <Text style={styles.simBtnText}>Tes: "We agree with your proposal, can you give discount?"</Text>
                     <Text style={styles.simBtnSub}>Simulasi negosiasi & persetujuan harga</Text>
@@ -1003,7 +1004,7 @@ export default function AlihBahasaScreen() {
                 <View key={msg.id} style={styles.chatCard}>
                   <View style={styles.chatCardHeader}>
                     <View style={styles.speakerPill}>
-                      <Ionicons name={msg.speaker.includes('Lawan') ? 'call-outline' : 'person-circle-outline'} size={14} color="#06B6D4" />
+                      <Ionicons name={msg.speaker.includes('Lawan') ? 'call-outline' : 'person-circle-outline'} size={14} color={coffee.accent} />
                       <Text style={styles.speakerPillText}>{msg.speaker}</Text>
                       <Text style={styles.timestampPill}>{msg.timestamp}</Text>
                     </View>
@@ -1013,15 +1014,15 @@ export default function AlihBahasaScreen() {
                         style={styles.aiReplyQuickBtn}
                         onPress={() => generateLiveSmartReplies(msg.sourceText, msg.sourceLang, msg.targetLang)}
                       >
-                        <Ionicons name="sparkles" size={13} color="#F59E0B" />
+                        <Ionicons name="sparkles" size={13} color={coffee.warning} />
                         <Text style={styles.aiReplyQuickBtnText}>Respon AI</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity style={styles.actionIconBtn} onPress={() => speakTranslation(msg.translatedText, msg.targetLang)}>
-                        <Ionicons name="volume-high" size={16} color="#38BDF8" />
+                        <Ionicons name="volume-high" size={16} color={coffee.accent} />
                       </TouchableOpacity>
                       <TouchableOpacity style={styles.actionIconBtn} onPress={() => handleCopy(`${msg.sourceText}\n↳ ${msg.translatedText}`, msg.id)}>
-                        <Ionicons name={copiedId === msg.id ? 'checkmark' : 'copy-outline'} size={16} color={copiedId === msg.id ? '#34D399' : '#94A3B8'} />
+                        <Ionicons name={copiedId === msg.id ? 'checkmark' : 'copy-outline'} size={16} color={copiedId === msg.id ? coffee.accent : coffee.secondary} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1044,10 +1045,10 @@ export default function AlihBahasaScreen() {
                 <View style={styles.coPilotContainer}>
                   <View style={styles.coPilotHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="sparkles" size={17} color="#F59E0B" />
+                      <Ionicons name="sparkles" size={17} color={coffee.warning} />
                       <Text style={styles.coPilotTitle}>💡 AI Co-Pilot: Rekomendasi Respon Cepat di Layar</Text>
                     </View>
-                    {isGeneratingReplies && <ActivityIndicator size="small" color="#F59E0B" />}
+                    {isGeneratingReplies && <ActivityIndicator size="small" color={coffee.warning} />}
                   </View>
 
                   <Text style={styles.coPilotContextNote}>
@@ -1064,14 +1065,14 @@ export default function AlihBahasaScreen() {
                               style={styles.replySpeakBtn}
                               onPress={() => speakTranslation(reply.targetText, reply.targetLang)}
                             >
-                              <Ionicons name="volume-medium" size={14} color="#FFF" />
+                              <Ionicons name="volume-medium" size={14} color={coffee.text} />
                               <Text style={styles.replySpeakBtnText}>Bicara ({reply.targetLang.toUpperCase()})</Text>
                             </TouchableOpacity>
                             <TouchableOpacity
                               style={styles.replyCopyBtn}
                               onPress={() => handleCopy(`${reply.idText}\n↳ (${reply.targetLang.toUpperCase()}): ${reply.targetText}`, reply.id)}
                             >
-                              <Ionicons name={copiedId === reply.id ? 'checkmark' : 'copy-outline'} size={15} color={copiedId === reply.id ? '#34D399' : '#94A3B8'} />
+                              <Ionicons name={copiedId === reply.id ? 'checkmark' : 'copy-outline'} size={15} color={copiedId === reply.id ? coffee.accent : coffee.secondary} />
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1091,7 +1092,7 @@ export default function AlihBahasaScreen() {
           {currentSpokenText ? (
             <View style={[styles.chatCard, styles.liveSpeakingCard]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <ActivityIndicator size="small" color="#EF4444" />
+                <ActivityIndicator size="small" color={coffee.danger} />
                 <Text style={styles.liveSpeakingTag}>Sedang Berbicara ({activeSpeaker} - {sourceLangCode.toUpperCase()})...</Text>
               </View>
               <Text style={styles.liveSpeakingText}>"{currentSpokenText}"</Text>
@@ -1111,7 +1112,7 @@ export default function AlihBahasaScreen() {
                   handleCopy(full, 'notulen_all');
                 }}
               >
-                <Ionicons name="copy-outline" size={14} color="#FFF" style={{ marginRight: 4 }} />
+                <Ionicons name="copy-outline" size={14} color={coffee.text} style={{ marginRight: 4 }} />
                 <Text style={styles.notulenCopyBtnText}>{copiedId === 'notulen_all' ? 'Tersalin' : 'Salin Semua'}</Text>
               </TouchableOpacity>
             </View>
@@ -1146,7 +1147,7 @@ export default function AlihBahasaScreen() {
                   styles.waveformStick,
                   {
                     height: `${val}%`,
-                    backgroundColor: isRecording && !isPaused ? (val > 25 ? '#22D3EE' : '#06B6D4') : '#334155',
+                    backgroundColor: isRecording && !isPaused ? (val > 25 ? coffee.accent : coffee.accent) : coffee.border,
                   },
                 ]}
               />
@@ -1154,7 +1155,7 @@ export default function AlihBahasaScreen() {
           </View>
 
           {/* Timer Display */}
-          <Text style={[styles.dockTimer, isRecording && !isPaused && { color: '#EF4444' }]}>
+          <Text style={[styles.dockTimer, isRecording && !isPaused && { color: coffee.danger }]}>
             {formatTime(durationSec)}
           </Text>
 
@@ -1162,22 +1163,22 @@ export default function AlihBahasaScreen() {
           <View style={styles.dockBtnGroup}>
             {!isRecording ? (
               <TouchableOpacity style={styles.recordMainBtn} onPress={startRecording} activeOpacity={0.85}>
-                <Ionicons name="mic" size={18} color="#FFF" />
+                <Ionicons name="mic" size={18} color={coffee.text} />
                 <Text style={styles.recordMainBtnText}>Rekam</Text>
               </TouchableOpacity>
             ) : (
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {isPaused ? (
                   <TouchableOpacity style={styles.resumeCircle} onPress={resumeRecording}>
-                    <Ionicons name="play" size={18} color="#FFF" />
+                    <Ionicons name="play" size={18} color={coffee.text} />
                   </TouchableOpacity>
                 ) : (
                   <TouchableOpacity style={styles.pauseCircle} onPress={pauseRecording}>
-                    <Ionicons name="pause" size={18} color="#FFF" />
+                    <Ionicons name="pause" size={18} color={coffee.text} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity style={styles.stopCircle} onPress={stopRecording}>
-                  <Ionicons name="square" size={18} color="#FFF" />
+                  <Ionicons name="square" size={18} color={coffee.text} />
                 </TouchableOpacity>
               </View>
             )}
@@ -1199,7 +1200,7 @@ export default function AlihBahasaScreen() {
                 Pilih Bahasa {langPickerVisible === 'source' ? 'Bicara (Input)' : 'Terjemahan (Output)'}
               </Text>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setLangPickerVisible(null)}>
-                <Ionicons name="close" size={20} color="#94A3B8" />
+                <Ionicons name="close" size={20} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
@@ -1227,7 +1228,7 @@ export default function AlihBahasaScreen() {
                     <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
                       {lang.label}
                     </Text>
-                    {isSelected && <Ionicons name="checkmark-circle" size={18} color="#06B6D4" />}
+                    {isSelected && <Ionicons name="checkmark-circle" size={18} color={coffee.accent} />}
                   </TouchableOpacity>
                 );
               })}
@@ -1247,11 +1248,11 @@ export default function AlihBahasaScreen() {
           <View style={[styles.modalCard, { maxHeight: '88%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="people" size={20} color="#06B6D4" />
+                <Ionicons name="people" size={20} color={coffee.accent} />
                 <Text style={styles.modalTitle}>Solusi Meeting {'>'} 2 Orang Efektif</Text>
               </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setMeetingGuideVisible(false)}>
-                <Ionicons name="close" size={20} color="#94A3B8" />
+                <Ionicons name="close" size={20} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
@@ -1305,17 +1306,17 @@ export default function AlihBahasaScreen() {
           <View style={[styles.modalCard, { maxHeight: '88%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="sparkles" size={20} color="#F59E0B" />
+                <Ionicons name="sparkles" size={20} color={coffee.warning} />
                 <Text style={styles.modalTitle}>Panduan AI Co-Pilot Telepon</Text>
               </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setCoPilotGuideVisible(false)}>
-                <Ionicons name="close" size={20} color="#94A3B8" />
+                <Ionicons name="close" size={20} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.modalList} showsVerticalScrollIndicator={false}>
               <View style={styles.guideStepCard}>
-                <Text style={[styles.guideStepNum, { backgroundColor: '#F59E0B' }]}>1</Text>
+                <Text style={[styles.guideStepNum, { backgroundColor: coffee.warningButton }]}>1</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.guideStepTitle}>Dengarkan Lawan Bicara</Text>
                   <Text style={styles.guideStepDesc}>
@@ -1325,7 +1326,7 @@ export default function AlihBahasaScreen() {
               </View>
 
               <View style={styles.guideStepCard}>
-                <Text style={[styles.guideStepNum, { backgroundColor: '#F59E0B' }]}>2</Text>
+                <Text style={[styles.guideStepNum, { backgroundColor: coffee.warningButton }]}>2</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.guideStepTitle}>Pilih Rekomendasi Respon Cerdas</Text>
                   <Text style={styles.guideStepDesc}>
@@ -1335,7 +1336,7 @@ export default function AlihBahasaScreen() {
               </View>
 
               <View style={styles.guideStepCard}>
-                <Text style={[styles.guideStepNum, { backgroundColor: '#F59E0B' }]}>3</Text>
+                <Text style={[styles.guideStepNum, { backgroundColor: coffee.warningButton }]}>3</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.guideStepTitle}>1-Tap Suarakan ke Telepon</Text>
                   <Text style={styles.guideStepDesc}>
@@ -1344,7 +1345,7 @@ export default function AlihBahasaScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={[styles.guideUnderstoodBtn, { backgroundColor: '#D97706' }]} onPress={() => setCoPilotGuideVisible(false)}>
+              <TouchableOpacity style={[styles.guideUnderstoodBtn, { backgroundColor: coffee.warningButton }]} onPress={() => setCoPilotGuideVisible(false)}>
                 <Text style={styles.guideUnderstoodBtnText}>Siap Digunakan</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -1363,11 +1364,11 @@ export default function AlihBahasaScreen() {
           <View style={[styles.modalCard, { maxHeight: '85%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="headset" size={20} color="#06B6D4" />
+                <Ionicons name="headset" size={20} color={coffee.accent} />
                 <Text style={styles.modalTitle}>Panduan Earphone / Headset</Text>
               </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setHeadsetGuideVisible(false)}>
-                <Ionicons name="close" size={20} color="#94A3B8" />
+                <Ionicons name="close" size={20} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
@@ -1387,7 +1388,7 @@ export default function AlihBahasaScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.guideStepTitle}>Pastikan Tombol "Earphone ON"</Text>
                   <Text style={styles.guideStepDesc}>
-                    Ketika tombol <Text style={{ color: '#22D3EE', fontWeight: 'bold' }}>Earphone ON</Text> menyala, setiap kalimat terjemahan akan langsung otomatis disuarakan ke telinga Anda tanpa perlu menekan tombol speaker manual.
+                    Ketika tombol <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>Earphone ON</Text> menyala, setiap kalimat terjemahan akan langsung otomatis disuarakan ke telinga Anda tanpa perlu menekan tombol speaker manual.
                   </Text>
                 </View>
               </View>
@@ -1397,7 +1398,7 @@ export default function AlihBahasaScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.guideStepTitle}>Pilih Bahasa Lawan Bicara & Mulai</Text>
                   <Text style={styles.guideStepDesc}>
-                    Atur bahasa asal dan bahasa target (misal: 🇬🇧 English ke 🇮🇩 Indonesia). Tekan <Text style={{ color: '#EF4444', fontWeight: 'bold' }}>Rekam</Text> — Anda dapat mendengar terjemahan secara simultan langsung di telinga Anda!
+                    Atur bahasa asal dan bahasa target (misal: 🇬🇧 English ke 🇮🇩 Indonesia). Tekan <Text style={{ color: coffee.danger, fontWeight: 'bold' }}>Rekam</Text> — Anda dapat mendengar terjemahan secara simultan langsung di telinga Anda!
                   </Text>
                 </View>
               </View>
@@ -1416,7 +1417,7 @@ export default function AlihBahasaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0B1120',
+    backgroundColor: coffee.background,
   },
   header: {
     flexDirection: 'row',
@@ -1425,9 +1426,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingTop: Platform.OS === 'ios' ? 48 : 12,
     paddingBottom: 10,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: coffee.surface,
   },
   backBtn: {
     flexDirection: 'row',
@@ -1436,10 +1437,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   backBtnText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -1447,7 +1448,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -1461,13 +1462,13 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#64748B',
+    backgroundColor: coffee.muted,
   },
   statusDotActive: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
   },
   statusLabel: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -1483,38 +1484,38 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   viewSwitchBtnActive: {
-    backgroundColor: 'rgba(34, 211, 238, 0.15)',
+    backgroundColor: coffee.accentWash,
     borderWidth: 1,
-    borderColor: '#06B6D4',
+    borderColor: coffee.accent,
   },
   viewSwitchBtnText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     fontWeight: '600',
   },
   viewSwitchBtnTextActive: {
-    color: '#22D3EE',
+    color: coffee.accent,
     fontWeight: 'bold',
   },
   resetBtn: {
     padding: 7,
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   warningBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: coffee.accentWash,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(245, 158, 11, 0.3)',
+    borderBottomColor: coffee.accentWash,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   warningText: {
-    color: '#FDE68A',
+    color: coffee.accent,
     fontSize: 12,
     flex: 1,
     lineHeight: 16,
@@ -1525,22 +1526,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 8,
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#243044',
+    borderBottomColor: coffee.raised,
     gap: 8,
   },
   langPickerButton: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
   },
   pickerSubLabel: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -1552,7 +1553,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   pickerMainText: {
-    color: '#38BDF8',
+    color: coffee.accent,
     fontSize: 13,
     fontWeight: 'bold',
     flex: 1,
@@ -1561,17 +1562,17 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#06B6D4',
+    borderColor: coffee.accent,
   },
   speakerBar: {
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
   },
   speakerScrollContent: {
     paddingHorizontal: 14,
@@ -1583,16 +1584,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: coffee.accentWash,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#06B6D4',
+    borderColor: coffee.accent,
     marginRight: 4,
   },
   meetingModeBtnText: {
-    color: '#22D3EE',
+    color: coffee.accent,
     fontSize: 11,
     fontWeight: 'bold',
   },
@@ -1600,21 +1601,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     paddingHorizontal: 9,
     paddingVertical: 5,
     borderRadius: 14,
   },
   speakerChipActive: {
-    backgroundColor: '#06B6D4',
+    backgroundColor: coffee.button,
   },
   speakerChipText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 11,
     fontWeight: '600',
   },
   speakerChipTextActive: {
-    color: '#0B1120',
+    color: coffee.buttonText,
     fontWeight: 'bold',
   },
   quickSettingsStrip: {
@@ -1623,17 +1624,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 14,
     paddingVertical: 6,
-    backgroundColor: '#0B1120',
+    backgroundColor: coffee.background,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
   },
   genderSegment: {
     flexDirection: 'row',
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     padding: 2,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
   },
   genderSegmentBtn: {
     paddingHorizontal: 8,
@@ -1641,63 +1642,63 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   genderSegmentBtnActive: {
-    backgroundColor: '#0284C7',
+    backgroundColor: coffee.button,
   },
   genderSegmentText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 11,
     fontWeight: '600',
   },
   genderSegmentTextActive: {
-    color: '#FFF',
+    color: coffee.text,
     fontWeight: 'bold',
   },
   headsetToggleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
   },
   headsetToggleChipActive: {
-    borderColor: '#06B6D4',
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    borderColor: coffee.accent,
+    backgroundColor: coffee.accentWash,
   },
   headsetToggleChipText: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 10,
     fontWeight: '600',
   },
   headsetToggleChipTextActive: {
-    color: '#22D3EE',
+    color: coffee.accent,
     fontWeight: 'bold',
   },
   coPilotToggleChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     paddingHorizontal: 8,
     paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
   },
   coPilotToggleChipActive: {
-    borderColor: '#F59E0B',
-    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+    borderColor: coffee.warning,
+    backgroundColor: coffee.accentWash,
   },
   coPilotToggleChipText: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 10,
     fontWeight: '600',
   },
   coPilotToggleChipTextActive: {
-    color: '#F59E0B',
+    color: coffee.warning,
     fontWeight: 'bold',
   },
   infoGuideBtn: {
@@ -1705,7 +1706,7 @@ const styles = StyleSheet.create({
   },
   chatStreamContainer: {
     flex: 1,
-    backgroundColor: '#0B1120',
+    backgroundColor: coffee.background,
   },
   chatStreamContent: {
     padding: 14,
@@ -1721,22 +1722,22 @@ const styles = StyleSheet.create({
     width: 70,
     height: 70,
     borderRadius: 35,
-    backgroundColor: 'rgba(6, 182, 212, 0.1)',
+    backgroundColor: coffee.accentWash,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: 'rgba(6, 182, 212, 0.25)',
+    borderColor: coffee.accentWash,
   },
   emptyTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 17,
     fontWeight: 'bold',
     marginBottom: 6,
     textAlign: 'center',
   },
   emptySub: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 19,
@@ -1744,15 +1745,15 @@ const styles = StyleSheet.create({
   },
   simulationBox: {
     width: '100%',
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderRadius: 12,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
     gap: 8,
   },
   simulationBoxTitle: {
-    color: '#FBBF24',
+    color: coffee.warning,
     fontSize: 12,
     fontWeight: 'bold',
     marginBottom: 4,
@@ -1760,29 +1761,29 @@ const styles = StyleSheet.create({
   simBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 8,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
   },
   simBtnText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: 'bold',
   },
   simBtnSub: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 10,
     marginTop: 2,
   },
   chatCard: {
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
   },
   chatCardHeader: {
     flexDirection: 'row',
@@ -1796,12 +1797,12 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   speakerPillText: {
-    color: '#38BDF8',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: 'bold',
   },
   timestampPill: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 10,
     marginLeft: 4,
   },
@@ -1814,16 +1815,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: coffee.accentWash,
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
+    borderColor: coffee.accentWash,
     marginRight: 2,
   },
   aiReplyQuickBtnText: {
-    color: '#FBBF24',
+    color: coffee.warning,
     fontSize: 10,
     fontWeight: 'bold',
   },
@@ -1831,45 +1832,45 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   cardSourceText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     lineHeight: 21,
     marginBottom: 8,
   },
   cardTranslatedBlock: {
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 10,
     padding: 10,
     borderLeftWidth: 3,
-    borderLeftColor: '#34D399',
+    borderLeftColor: coffee.accent,
   },
   langBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(52, 211, 153, 0.15)',
+    backgroundColor: coffee.accentWash,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4,
     marginBottom: 4,
   },
   langBadgeText: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 10,
     fontWeight: 'bold',
   },
   cardTranslatedText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '600',
     lineHeight: 21,
   },
   coPilotContainer: {
-    backgroundColor: '#171E2E',
+    backgroundColor: coffee.surface,
     borderRadius: 14,
     padding: 14,
     marginVertical: 8,
     borderWidth: 1.5,
-    borderColor: '#F59E0B',
-    shadowColor: '#F59E0B',
+    borderColor: coffee.warning,
+    shadowColor: coffee.warning,
     shadowOpacity: 0.2,
     shadowRadius: 10,
     elevation: 4,
@@ -1880,15 +1881,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#243044',
+    borderBottomColor: coffee.raised,
   },
   coPilotTitle: {
-    color: '#FBBF24',
+    color: coffee.warning,
     fontSize: 13,
     fontWeight: 'bold',
   },
   coPilotContextNote: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 11,
     fontStyle: 'italic',
     marginVertical: 6,
@@ -1897,11 +1898,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   replyCard: {
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 10,
     padding: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
   },
   replyCardTop: {
     flexDirection: 'row',
@@ -1910,7 +1911,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   replyCategoryBadge: {
-    color: '#38BDF8',
+    color: coffee.accent,
     fontSize: 11,
     fontWeight: 'bold',
   },
@@ -1918,13 +1919,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: '#D97706',
+    backgroundColor: coffee.warningButton,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 6,
   },
   replySpeakBtnText: {
-    color: '#FFF',
+    color: coffee.text,
     fontSize: 11,
     fontWeight: 'bold',
   },
@@ -1932,28 +1933,28 @@ const styles = StyleSheet.create({
     padding: 3,
   },
   replyIdText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 18,
   },
   replyTargetText: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '600',
     marginTop: 4,
   },
   liveSpeakingCard: {
-    borderColor: '#EF4444',
-    backgroundColor: 'rgba(239, 68, 68, 0.05)',
+    borderColor: coffee.danger,
+    backgroundColor: coffee.accentWash,
   },
   liveSpeakingTag: {
-    color: '#EF4444',
+    color: coffee.danger,
     fontSize: 11,
     fontWeight: 'bold',
   },
   liveSpeakingText: {
-    color: '#FCA5A5',
+    color: coffee.danger,
     fontSize: 14,
     fontStyle: 'italic',
     marginTop: 4,
@@ -1963,11 +1964,11 @@ const styles = StyleSheet.create({
     paddingBottom: 30,
   },
   notulenBox: {
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
   },
   notulenHeaderRow: {
     flexDirection: 'row',
@@ -1975,24 +1976,24 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#243044',
+    borderBottomColor: coffee.raised,
     marginBottom: 14,
   },
   notulenMainTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
   notulenCopyBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0284C7',
+    backgroundColor: coffee.button,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 8,
   },
   notulenCopyBtnText: {
-    color: '#FFF',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: 'bold',
   },
@@ -2000,13 +2001,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   notulenSecHeader: {
-    color: '#38BDF8',
+    color: coffee.accent,
     fontSize: 13,
     fontWeight: 'bold',
     marginBottom: 6,
   },
   notulenSecBody: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     lineHeight: 21,
   },
@@ -2014,22 +2015,22 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     paddingBottom: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#243044',
+    borderBottomColor: coffee.raised,
   },
   notulenListSrc: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 13,
   },
   notulenListTgt: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 13,
     fontWeight: '600',
     marginTop: 3,
   },
   bottomDock: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderTopWidth: 1,
-    borderTopColor: '#1F2937',
+    borderTopColor: coffee.surface,
     paddingHorizontal: 14,
     paddingTop: 10,
     paddingBottom: Platform.OS === 'web' ? 14 : 30,
@@ -2052,7 +2053,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
   dockTimer: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     fontWeight: 'bold',
@@ -2066,17 +2067,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 20,
-    shadowColor: '#EF4444',
+    shadowColor: coffee.danger,
     shadowOpacity: 0.5,
     shadowRadius: 8,
     elevation: 4,
   },
   recordMainBtnText: {
-    color: '#FFF',
+    color: coffee.text,
     fontWeight: 'bold',
     fontSize: 14,
   },
@@ -2084,7 +2085,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#F59E0B',
+    backgroundColor: coffee.warningButton,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2092,7 +2093,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2100,23 +2101,23 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 19,
-    backgroundColor: '#EF4444',
+    backgroundColor: coffee.dangerButton,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'flex-end',
   },
   modalCard: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
     maxHeight: '75%',
     borderWidth: 1,
-    borderColor: '#1F2937',
+    borderColor: coffee.surface,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -2124,11 +2125,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingBottom: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1F2937',
+    borderBottomColor: coffee.surface,
     marginBottom: 10,
   },
   modalTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -2146,30 +2147,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 10,
     marginBottom: 6,
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
   },
   modalItemActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: coffee.accentWash,
     borderWidth: 1,
-    borderColor: '#06B6D4',
+    borderColor: coffee.accent,
   },
   modalItemText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '500',
   },
   modalItemTextActive: {
-    color: '#22D3EE',
+    color: coffee.accent,
     fontWeight: 'bold',
   },
   guideStepCard: {
     flexDirection: 'row',
-    backgroundColor: '#161F30',
+    backgroundColor: coffee.surface,
     borderRadius: 12,
     padding: 14,
     marginBottom: 10,
     borderWidth: 1,
-    borderColor: '#243044',
+    borderColor: coffee.raised,
     gap: 12,
     alignItems: 'flex-start',
   },
@@ -2177,26 +2178,26 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: '#06B6D4',
-    color: '#0B1120',
+    backgroundColor: coffee.button,
+    color: coffee.buttonText,
     fontSize: 14,
     fontWeight: '900',
     textAlign: 'center',
     lineHeight: 26,
   },
   guideStepTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 4,
   },
   guideStepDesc: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     lineHeight: 18,
   },
   guideUnderstoodBtn: {
-    backgroundColor: '#0284C7',
+    backgroundColor: coffee.button,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -2204,7 +2205,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   guideUnderstoodBtnText: {
-    color: '#FFF',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: 'bold',
   },

@@ -1,3 +1,4 @@
+import { coffee } from '../src/theme/coffee';
 import { useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { router } from 'expo-router';
@@ -21,16 +22,16 @@ export default function IndexScreen() {
   return (
     <View style={styles.container}>
       <NgopiBrand />
-      
-      <TouchableOpacity 
+
+      <TouchableOpacity
         style={styles.button}
         onPress={() => router.push('/test-payment')}
       >
         <Text style={styles.buttonText}>Langsung ke Test Payment</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity 
-        style={[styles.button, { backgroundColor: '#65503D', marginTop: 15 }]}
+      <TouchableOpacity
+        style={[styles.button, { backgroundColor: coffee.border, marginTop: 15 }]}
         onPress={() => router.push('/(auth)/login')}
       >
         <Text style={styles.buttonText}>Masuk ke Aplikasi</Text>
@@ -44,16 +45,16 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#171411',
+    backgroundColor: coffee.background,
   },
   button: {
-    backgroundColor: '#916038',
+    backgroundColor: coffee.button,
     paddingVertical: 15,
     paddingHorizontal: 30,
     borderRadius: 30,
   },
   buttonText: {
-    color: '#FFF',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   }

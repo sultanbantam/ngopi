@@ -1,3 +1,4 @@
+import { coffee } from '../../../src/theme/coffee';
 import React, { useEffect, useState, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Linking, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
@@ -144,12 +145,12 @@ function PrivateChatRoomScreen() {
 
   // Auto-scroll control
   const shouldAutoScroll = useRef(true);
-  
+
   // Real-time states
   const [isTyping, setIsTyping] = useState(false);
   const [partnerStatus, setPartnerStatus] = useState<string>('');
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  
+
   // Attachments
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -309,7 +310,7 @@ function PrivateChatRoomScreen() {
       } else {
         myId = (await SecureStore.getItemAsync('userId')) || '';
       }
-      
+
       const partnerId = roomId as string;
       const roomKey = isGroupChat ? partnerId : [myId, partnerId].sort().join('-');
       let encryptionSecret = roomKey;
@@ -493,8 +494,8 @@ function PrivateChatRoomScreen() {
           receiver_id: isGroupChat ? undefined : roomId,
           new_content: ciphertext
         });
-        
-        setMessages(prev => prev.map(msg => 
+
+        setMessages(prev => prev.map(msg =>
           msg.id === editingMessageId ? { ...msg, content: inputText.trim(), is_edited: true } : msg
         ));
       }
@@ -666,7 +667,7 @@ function PrivateChatRoomScreen() {
       const asset = result.assets[0];
       const fileName = asset.fileName || `image_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
       const url = await uploadFile(asset.uri, 'image', fileName, asset.mimeType, (asset as any).file);
-      
+
       if (url) {
         // Send image message
         const messageData = {
@@ -699,7 +700,7 @@ function PrivateChatRoomScreen() {
     if (!result.canceled && result.assets && result.assets.length > 0) {
       const doc = result.assets[0];
       const url = await uploadFile(doc.uri, 'document', doc.name, doc.mimeType, (doc as any).file);
-      
+
       if (url) {
         // We will store the original file name in the content (encrypted)
         const encryptedName = encryptMessage(doc.name, secretKey);
@@ -733,7 +734,7 @@ function PrivateChatRoomScreen() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
         webAudioChunksRef.current = [];
-        
+
         mediaRecorder.ondataavailable = (e) => {
           if (e.data.size > 0) webAudioChunksRef.current.push(e.data);
         };
@@ -760,15 +761,15 @@ function PrivateChatRoomScreen() {
     if (Platform.OS === 'web') {
       if (!webMediaRecorderRef.current) return;
       setIsRecording(false);
-      
+
       const mediaRecorder = webMediaRecorderRef.current;
       mediaRecorder.onstop = async () => {
         const audioBlob = new Blob(webAudioChunksRef.current, { type: 'audio/webm' });
-        
+
         const formData = new FormData();
         const fileObj = new File([audioBlob], 'upload.webm', { type: 'audio/webm' });
         formData.append('file', fileObj);
-        
+
         try {
           const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
           const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
@@ -776,11 +777,11 @@ function PrivateChatRoomScreen() {
 
           const response = await axios.post(`${API_URL}/upload`, formData, { headers });
           const url = normalizeAttachmentUrl(response.data.url);
-          
+
           if (url) {
             const messageData = { room_id: actualRoomId, receiver_id: isGroupChat ? undefined : roomId, type: 'audio', attachment_url: url };
             if (socketService.socket) socketService.socket.emit('send_message', messageData);
-            
+
             setMessages(prev => [...prev, {
               id: Math.random().toString(), sender_id: 'me', isMine: true,
               timestamp: new Date().toISOString(), type: 'audio', attachment_url: url
@@ -1027,7 +1028,7 @@ function PrivateChatRoomScreen() {
   }, [rawOnlineList, allUsers, myUserId, roomId]);
 
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
@@ -1039,12 +1040,12 @@ function PrivateChatRoomScreen() {
         {isSearchMode ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={() => { setIsSearchMode(false); setSearchQuery(''); }}>
-              <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
+              <Ionicons name="arrow-back" size={22} color={coffee.text} />
             </TouchableOpacity>
             <TextInput
-              style={{ flex: 1, color: '#F8FAFC', fontSize: 16, paddingHorizontal: 10, outlineStyle: 'none' } as any}
+              style={{ flex: 1, color: coffee.text, fontSize: 16, paddingHorizontal: 10, outlineStyle: 'none' } as any}
               placeholder="Cari pesan atau dokumen..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={coffee.secondary}
               value={searchQuery}
               onChangeText={setSearchQuery}
               autoFocus
@@ -1053,7 +1054,7 @@ function PrivateChatRoomScreen() {
         ) : (
           <>
             <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={22} color="#F8FAFC" />
+              <Ionicons name="arrow-back" size={22} color={coffee.text} />
             </TouchableOpacity>
             <View style={styles.headerAvatar}>
               {isGroupChat && groupDetails?.avatar_url ? (
@@ -1076,16 +1077,16 @@ function PrivateChatRoomScreen() {
             </View>
             <View style={styles.headerRightIcons}>
               <TouchableOpacity style={styles.headerIconButton} onPress={() => setIsSearchMode(true)}>
-                <Ionicons name="search" size={22} color="#F8FAFC" />
+                <Ionicons name="search" size={22} color={coffee.text} />
               </TouchableOpacity>
               {isGroupChat ? (
                 <TouchableOpacity style={styles.headerIconButton} onPress={openGroupInfo}>
-                  <Ionicons name="information-circle-outline" size={24} color="#F8FAFC" />
+                  <Ionicons name="information-circle-outline" size={24} color={coffee.text} />
                 </TouchableOpacity>
               ) : (
                 <>
-                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color="#F8FAFC" /></TouchableOpacity>
-                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'false' } })}><Ionicons name="call" size={22} color="#F8FAFC" /></TouchableOpacity>
+                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'true' } })}><Ionicons name="videocam" size={22} color={coffee.text} /></TouchableOpacity>
+                  <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/call/[id]', params: { id: roomId, name: chatTitle, isVideo: 'false' } })}><Ionicons name="call" size={22} color={coffee.text} /></TouchableOpacity>
                 </>
               )}
             </View>
@@ -1102,7 +1103,7 @@ function PrivateChatRoomScreen() {
       {/* Loading more indicator */}
       {isLoadingMore && (
         <View style={{ padding: 12, alignItems: 'center' }}>
-          <Text style={{ color: '#64748B', fontSize: 13 }}>Memuat pesan lama...</Text>
+          <Text style={{ color: coffee.muted, fontSize: 13 }}>Memuat pesan lama...</Text>
         </View>
       )}
 
@@ -1137,7 +1138,7 @@ function PrivateChatRoomScreen() {
         renderItem={({ item }) => {
           const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
           return (
-            <TouchableOpacity 
+            <TouchableOpacity
               style={[styles.messageBubble, item.isMine ? styles.myMessage : styles.theirMessage]}
               onLongPress={() => {
                 setSelectedMessage(item);
@@ -1171,7 +1172,7 @@ function PrivateChatRoomScreen() {
                   {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
                 </View>
               )}
-              
+
               <View style={styles.messageFooter}>
                 <Text style={styles.timeText}>{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
                 {item.isMine && (
@@ -1181,7 +1182,7 @@ function PrivateChatRoomScreen() {
                 )}
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.dropdownButton}
                 onPress={() => {
                   setSelectedMessage(item);
@@ -1198,11 +1199,11 @@ function PrivateChatRoomScreen() {
       />
 
       {showScrollButton && !isSearchMode && (
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.scrollToBottomBtn}
           onPress={() => flatListRef.current?.scrollToEnd({ animated: true })}
         >
-          <Ionicons name="chevron-down" size={24} color="#F8FAFC" />
+          <Ionicons name="chevron-down" size={24} color={coffee.text} />
         </TouchableOpacity>
       )}
 
@@ -1212,7 +1213,7 @@ function PrivateChatRoomScreen() {
             <View style={styles.groupInfoHeader}>
               <Text style={styles.groupInfoTitle}>Info Rumpun</Text>
               <TouchableOpacity style={styles.closeButton} onPress={() => setIsGroupInfoVisible(false)}>
-                <Ionicons name="close" size={22} color="#F8FAFC" />
+                <Ionicons name="close" size={22} color={coffee.text} />
               </TouchableOpacity>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -1364,11 +1365,11 @@ function PrivateChatRoomScreen() {
               </TouchableOpacity>
               {selectedMessage?.isMine && (
                 <TouchableOpacity style={styles.menuItem} onPress={handleDeleteEveryone}>
-                  <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Hapus untuk Semua</Text>
+                  <Text style={[styles.menuItemText, { color: coffee.danger }]}>Hapus untuk Semua</Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.menuItem} onPress={handleDeleteSelf}>
-                <Text style={[styles.menuItemText, { color: '#EF4444' }]}>Hapus untuk Saya</Text>
+                <Text style={[styles.menuItemText, { color: coffee.danger }]}>Hapus untuk Saya</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1379,7 +1380,7 @@ function PrivateChatRoomScreen() {
       <Modal transparent visible={isForwardModalVisible} animationType="slide" onRequestClose={() => setIsForwardModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.menuContainer, { maxHeight: '80%', padding: 0 }]}>
-            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: '#334155' }}>
+            <View style={{ padding: 16, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
               <Text style={styles.headerTitle}>Teruskan Pesan</Text>
             </View>
             <FlatList
@@ -1395,7 +1396,7 @@ function PrivateChatRoomScreen() {
                 </TouchableOpacity>
               )}
             />
-            <TouchableOpacity onPress={() => setIsForwardModalVisible(false)} style={{ padding: 16, borderTopWidth: 1, borderTopColor: '#334155', alignItems: 'center' }}>
+            <TouchableOpacity onPress={() => setIsForwardModalVisible(false)} style={{ padding: 16, borderTopWidth: 1, borderTopColor: coffee.border, alignItems: 'center' }}>
               <Text style={styles.cancelBtnText}>Batal</Text>
             </TouchableOpacity>
           </View>
@@ -1404,14 +1405,14 @@ function PrivateChatRoomScreen() {
 
       {/* Upload Progress Bar */}
       {isUploading && (
-        <View style={{ backgroundColor: '#1E293B', paddingHorizontal: 16, paddingTop: 8 }}>
+        <View style={{ backgroundColor: coffee.surface, paddingHorizontal: 16, paddingTop: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ flex: 1, height: 4, backgroundColor: '#334155', borderRadius: 2, overflow: 'hidden' }}>
-              <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: '#10B981', borderRadius: 2 } as any} />
+            <View style={{ flex: 1, height: 4, backgroundColor: coffee.border, borderRadius: 2, overflow: 'hidden' }}>
+              <View style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: coffee.button, borderRadius: 2 } as any} />
             </View>
-            <Text style={{ color: '#94A3B8', fontSize: 12, minWidth: 36 }}>{uploadProgress}%</Text>
+            <Text style={{ color: coffee.secondary, fontSize: 12, minWidth: 36 }}>{uploadProgress}%</Text>
           </View>
-          <Text style={{ color: '#64748B', fontSize: 11, marginTop: 4 }}>Mengunggah file...</Text>
+          <Text style={{ color: coffee.muted, fontSize: 11, marginTop: 4 }}>Mengunggah file...</Text>
         </View>
       )}
 
@@ -1434,13 +1435,13 @@ function PrivateChatRoomScreen() {
         )}
         <View style={styles.actionButtons}>
           <TouchableOpacity style={styles.attachButton} onPress={pickDocument}>
-            <Ionicons name="attach" size={20} color="#F8FAFC" />
+            <Ionicons name="attach" size={20} color={coffee.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachButton} onPress={pickImage}>
-            <Ionicons name="camera" size={20} color="#F8FAFC" />
+            <Ionicons name="camera" size={20} color={coffee.text} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.attachButton} onPress={() => setShowEmojiPanel(!showEmojiPanel)}>
-            <Ionicons name="happy-outline" size={20} color="#F8FAFC" />
+            <Ionicons name="happy-outline" size={20} color={coffee.text} />
           </TouchableOpacity>
         </View>
         {showEmojiPanel && (
@@ -1455,20 +1456,20 @@ function PrivateChatRoomScreen() {
             ))}
           </View>
         )}
-        
+
         <View style={styles.inputRow}>
           <TextInput
             style={styles.input}
             placeholder="Type an encrypted message..."
-            placeholderTextColor="#64748b"
+            placeholderTextColor={coffee.muted}
             value={inputText}
             onChangeText={handleTextChange}
             multiline
           />
 
           {inputText.trim() === '' ? (
-            <TouchableOpacity 
-              style={[styles.sendButton, isRecording ? { backgroundColor: '#EF4444' } : {}]} 
+            <TouchableOpacity
+              style={[styles.sendButton, isRecording ? { backgroundColor: coffee.dangerButton } : {}]}
               onPressIn={startRecording}
               onPressOut={stopRecording}
             >
@@ -1484,7 +1485,7 @@ function PrivateChatRoomScreen() {
       {/* Online Users Horizontal Bar */}
       {onlineUsersList.length > 0 && (
         <View style={styles.onlineChatBar}>
-          <Text style={{ color: '#10B981', fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Contacts</Text>
+          <Text style={{ color: coffee.accent, fontSize: 12, marginBottom: 8, fontWeight: 'bold' }}>Online Contacts</Text>
           <FlatList
             horizontal
             data={onlineUsersList}
@@ -1494,14 +1495,14 @@ function PrivateChatRoomScreen() {
               <TouchableOpacity style={styles.onlineUserItem} onPress={() => {
                 router.push({ pathname: '/(main)/chat/[id]', params: { id: item.id, name: item.display_name } });
               }}>
-                <View style={[styles.onlineAvatar, { width: 36, height: 36, borderRadius: 18, marginRight: 8, borderWidth: 2, borderColor: '#10B981' }]}>
+                <View style={[styles.onlineAvatar, { width: 36, height: 36, borderRadius: 18, marginRight: 8, borderWidth: 2, borderColor: coffee.accent }]}>
                   {item.avatar_url ? (
                     <Image source={{ uri: item.avatar_url }} style={styles.avatarImage} />
                   ) : (
                     <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
                   )}
                 </View>
-                <Text style={{color: '#94A3B8', fontSize: 10, textAlign: 'center', width: 44}} numberOfLines={1}>{item.display_name.split(' ')[0]}</Text>
+                <Text style={{color: coffee.secondary, fontSize: 10, textAlign: 'center', width: 44}} numberOfLines={1}>{item.display_name.split(' ')[0]}</Text>
               </TouchableOpacity>
             )}
           />
@@ -1517,13 +1518,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 80,
     right: 20,
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     width: 44,
     height: 44,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.3,
     shadowRadius: 4,
@@ -1532,7 +1533,7 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   messageList: {
     padding: 16,
@@ -1545,20 +1546,20 @@ const styles = StyleSheet.create({
   },
   myMessage: {
     alignSelf: 'flex-end',
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     borderBottomRightRadius: 4,
   },
   theirMessage: {
     alignSelf: 'flex-start',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderBottomLeftRadius: 4,
   },
   messageText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 16,
   },
   statusText: {
-    color: '#0F172A', // Dark color for high contrast against green background
+    color: coffee.buttonText, // Readable label on coffee-colored buttons
     fontSize: 12, // Slightly larger
     fontWeight: 'bold',
     alignSelf: 'flex-end',
@@ -1566,7 +1567,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     padding: 16,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1579,8 +1580,8 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
-    backgroundColor: '#0F172A',
-    color: '#fff',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -1590,21 +1591,21 @@ const styles = StyleSheet.create({
     marginRight: 12,
   },
   sendButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     borderRadius: 20,
     paddingHorizontal: 20,
     paddingVertical: 12,
     justifyContent: 'center',
   },
   sendButtonText: {
-    color: '#fff',
+    color: coffee.text,
     fontWeight: 'bold',
     fontSize: 16,
   },
   attachButton: {
     padding: 12,
     marginRight: 8,
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1621,19 +1622,19 @@ const styles = StyleSheet.create({
   audioPlayer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     padding: 8,
     borderRadius: 20,
     width: 150,
   },
   audioText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 14,
   },
   documentContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     padding: 12,
     borderRadius: 8,
   },
@@ -1642,7 +1643,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   documentName: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 14,
     maxWidth: 200,
   },
@@ -1653,12 +1654,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   timeText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 10,
     marginRight: 4,
   },
   editedText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 10,
     fontStyle: 'italic',
     marginTop: 2,
@@ -1668,57 +1669,57 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: -10,
     right: 10,
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     borderRadius: 12,
     padding: 2,
     paddingHorizontal: 4,
     borderWidth: 1,
-    borderColor: '#0F172A'
+    borderColor: coffee.background
   },
   reactionText: {
     fontSize: 12,
   },
   pinnedBanner: {
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     padding: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B'
+    borderBottomColor: coffee.surface
   },
   pinnedBannerTitle: {
-    color: '#10B981',
+    color: coffee.accent,
     fontWeight: 'bold',
     fontSize: 12,
   },
   pinnedBannerContent: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 14,
     marginTop: 2,
   },
   editingBanner: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     padding: 8,
     borderRadius: 8,
     marginBottom: 8,
   },
   editingBannerText: {
-    color: '#10B981',
+    color: coffee.accent,
     fontSize: 12,
   },
   editingBannerClose: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: 'bold'
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'center',
     alignItems: 'center',
   },
   menuContainer: {
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderRadius: 16,
     padding: 16,
     width: '80%',
@@ -1728,7 +1729,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: coffee.border,
     paddingBottom: 16,
   },
   menuEmoji: {
@@ -1741,7 +1742,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   menuItemText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 16,
   },
   dropdownButton: {
@@ -1751,23 +1752,23 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   dropdownIcon: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 18,
     fontWeight: 'bold',
   },
   onlineChatBar: {
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderTopWidth: 1,
-    borderTopColor: '#0F172A',
+    borderTopColor: coffee.background,
   },
   onlineUserItem: {
     alignItems: 'center',
     marginRight: 8,
   },
   onlineAvatar: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
@@ -1778,18 +1779,18 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   avatarText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
   customHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     paddingVertical: 12,
     paddingHorizontal: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: coffee.border,
   },
   backButton: {
     padding: 8,
@@ -1799,13 +1800,13 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   headerAvatarText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
@@ -1813,16 +1814,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   headerTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
   headerSubtitle: {
-    color: '#10B981',
+    color: coffee.accent,
     fontSize: 12,
   },
   headerSubtitleOffline: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
   },
   headerRightIcons: {
@@ -1834,23 +1835,23 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   headerIcon: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 20,
   },
   emojiInputPanel: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     paddingHorizontal: 8,
     paddingVertical: 8,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: coffee.border,
     gap: 4,
   },
   emojiInputBtn: {
     padding: 6,
     borderRadius: 8,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     margin: 2,
   },
   emojiInputText: {
@@ -1863,40 +1864,40 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   myRepliedBanner: {
-    backgroundColor: '#059669', // Darker emerald for my message
-    borderLeftColor: '#047857',
+    backgroundColor: coffee.button, // Darker emerald for my message
+    borderLeftColor: coffee.accent,
   },
   theirRepliedBanner: {
-    backgroundColor: '#334155', // Slate for their message
-    borderLeftColor: '#475569',
+    backgroundColor: coffee.border, // Slate for their message
+    borderLeftColor: coffee.border,
   },
   repliedBannerSender: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#10B981', // Emerald text
+    color: coffee.accent, // Emerald text
     marginBottom: 2,
   },
   repliedBannerContent: {
     fontSize: 14,
-    color: '#CBD5E1', // Slate-300 text
+    color: coffee.secondary, // Slate-300 text
   },
   groupSenderName: {
-    color: '#67E8F9',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 4,
   },
   groupInfoOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(2,6,23,0.72)',
+    backgroundColor: coffee.overlay,
     justifyContent: 'flex-end',
   },
   groupInfoPanel: {
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
     maxHeight: '92%',
     paddingHorizontal: 16,
     paddingBottom: 18,
@@ -1907,10 +1908,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
   },
   groupInfoTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: '800',
   },
@@ -1918,7 +1919,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1930,26 +1931,26 @@ const styles = StyleSheet.create({
     width: 76,
     height: 76,
     borderRadius: 38,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
     marginBottom: 10,
   },
   groupHeroTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 20,
     fontWeight: '800',
     textAlign: 'center',
   },
   groupHeroMeta: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 13,
     marginTop: 4,
     textAlign: 'center',
   },
   groupDescription: {
-    color: '#CBD5E1',
+    color: coffee.secondary,
     fontSize: 14,
     lineHeight: 20,
     textAlign: 'center',
@@ -1962,20 +1963,20 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   groupStatusChip: {
-    backgroundColor: '#102A22',
+    backgroundColor: coffee.highlight,
     borderWidth: 1,
-    borderColor: '#14532D',
+    borderColor: coffee.highlight,
     borderRadius: 14,
     paddingVertical: 6,
     paddingHorizontal: 10,
   },
   groupStatusLabel: {
-    color: '#A7F3D0',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '700',
   },
   groupInfoSectionTitle: {
-    color: '#67E8F9',
+    color: coffee.accent,
     fontSize: 13,
     fontWeight: '800',
     textTransform: 'uppercase',
@@ -1983,14 +1984,14 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   groupInviteBox: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     borderRadius: 12,
     padding: 12,
   },
   groupInviteText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 13,
     lineHeight: 18,
   },
@@ -2001,7 +2002,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   groupPrimaryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -2009,9 +2010,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   groupSecondaryButton: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     borderRadius: 10,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -2019,12 +2020,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   groupButtonText: {
-    color: '#07111F',
+    color: coffee.buttonText,
     fontWeight: '800',
     fontSize: 13,
   },
   groupSecondaryButtonText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontWeight: '800',
     fontSize: 13,
   },
@@ -2033,7 +2034,7 @@ const styles = StyleSheet.create({
   },
   groupAdminBox: {
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: coffee.surface,
     marginTop: 12,
     paddingTop: 4,
   },
@@ -2043,37 +2044,37 @@ const styles = StyleSheet.create({
   },
   groupUserChip: {
     maxWidth: 140,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
   groupUserChipActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#064E3B',
+    borderColor: coffee.accent,
+    backgroundColor: coffee.highlight,
   },
   groupUserChipText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 13,
     fontWeight: '700',
   },
   groupMemberRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 12,
     padding: 10,
     marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
   },
   groupMemberAvatar: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -2084,12 +2085,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   groupMemberName: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '800',
   },
   groupMemberMeta: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
     marginTop: 2,
   },
@@ -2100,10 +2101,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 8,
   },
   groupStatusDotOnline: {
-    backgroundColor: '#22C55E',
+    backgroundColor: coffee.successButton,
   },
   groupStatusDotOffline: {
-    backgroundColor: '#64748B',
+    backgroundColor: coffee.muted,
   },
   groupMemberActions: {
     flexDirection: 'row',
@@ -2112,25 +2113,25 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   miniButton: {
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     borderRadius: 8,
     paddingVertical: 6,
     paddingHorizontal: 8,
   },
   miniButtonDanger: {
-    borderColor: '#7F1D1D',
-    backgroundColor: '#2A1114',
+    borderColor: coffee.dangerSurface,
+    backgroundColor: coffee.dangerSurface,
   },
   miniButtonText: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 12,
     fontWeight: '800',
   },  contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     padding: 12,
     borderRadius: 12,
     marginBottom: 8,
@@ -2139,19 +2140,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
 
   contactName: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
   cancelBtnText: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 16,
     fontWeight: 'bold',
   }

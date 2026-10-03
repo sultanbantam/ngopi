@@ -1,3 +1,4 @@
+import { coffee } from '../../src/theme/coffee';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -83,7 +84,7 @@ export default function LoginScreen() {
         return;
       }
       const { token, refresh_token: refreshToken, user } = response.data;
-      
+
       await setStoredToken(token);
       await setStoredRefreshToken(refreshToken);
 
@@ -118,30 +119,30 @@ export default function LoginScreen() {
       <View style={styles.card}>
         <NgopiBrand />
         <Text style={styles.subtitle}>Selamat datang kembali.</Text>
-        
+
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
         <TextInput
           style={styles.input}
           placeholder="Username"
-          placeholderTextColor="#A99B8C"
+          placeholderTextColor={coffee.muted}
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
           autoCorrect={false}
         />
-        
+
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
             placeholder="Password"
-            placeholderTextColor="#A99B8C"
+            placeholderTextColor={coffee.muted}
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Text style={{ color: '#C3B5A5' }}>{showPassword ? 'Hide' : 'Show'}</Text>
+            <Text style={{ color: coffee.secondary }}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         </View>
 
@@ -149,7 +150,7 @@ export default function LoginScreen() {
           <TextInput
             style={styles.input}
             placeholder="Kode MFA 6 digit"
-            placeholderTextColor="#A99B8C"
+            placeholderTextColor={coffee.muted}
             value={mfaCode}
             onChangeText={setMfaCode}
             keyboardType="number-pad"
@@ -162,7 +163,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
+          {loading ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.buttonText}>Login</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.bambooSsoButton} onPress={handleBamboochainLogin}>
@@ -178,7 +179,7 @@ export default function LoginScreen() {
 
         {/* Temporary button for Pi Developer Portal Step 10 */}
         <TouchableOpacity style={{ marginTop: 20, alignItems: 'center' }} onPress={() => router.push('/test-payment')}>
-          <Text style={{ color: '#F59E0B', textDecorationLine: 'underline' }}>
+          <Text style={{ color: coffee.warning, textDecorationLine: 'underline' }}>
             [Developer] Go to Test Payment (Step 10)
           </Text>
         </TouchableOpacity>
@@ -193,15 +194,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: '#171411',
+    backgroundColor: coffee.background,
   },
   card: {
     width: '100%',
     maxWidth: 400,
-    backgroundColor: '#26201B',
+    backgroundColor: coffee.surface,
     padding: 24,
     borderRadius: 20,
-    shadowColor: '#000',
+    shadowColor: coffee.shadow,
     shadowOffset: { width: 0, height: 10 },
     shadowOpacity: 0.3,
     shadowRadius: 20,
@@ -209,32 +210,32 @@ const styles = StyleSheet.create({
   },
   subtitle: {
     fontSize: 16,
-    color: '#C3B5A5',
+    color: coffee.secondary,
     textAlign: 'center',
     marginBottom: 30,
   },
   input: {
-    backgroundColor: '#171411',
-    color: '#F6E6D2',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: '#554536',
+    borderColor: coffee.border,
   },
   passwordContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#171411',
+    backgroundColor: coffee.background,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#554536',
+    borderColor: coffee.border,
     marginBottom: 16,
   },
   passwordInput: {
     flex: 1,
-    color: '#F6E6D2',
+    color: coffee.text,
     padding: 16,
     fontSize: 16,
   },
@@ -242,36 +243,36 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   forgotPasswordText: {
-    color: '#C3B5A5',
+    color: coffee.secondary,
     textAlign: 'right',
     marginBottom: 16,
   },
   button: {
-    backgroundColor: '#916038',
+    backgroundColor: coffee.button,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   buttonText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 18,
     fontWeight: 'bold',
   },
   bambooSsoButton: {
-    backgroundColor: '#34A853', // Hijau yang sesuai
+    backgroundColor: coffee.button,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   bambooSsoButtonText: {
-    color: '#fff',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: 'bold',
   },
   errorText: {
-    color: '#EF4444',
+    color: coffee.danger,
     marginBottom: 16,
     textAlign: 'center',
   },
@@ -281,10 +282,10 @@ const styles = StyleSheet.create({
     marginTop: 24,
   },
   footerText: {
-    color: '#C3B5A5',
+    color: coffee.secondary,
   },
   linkText: {
-    color: '#916038',
+    color: coffee.accent,
     fontWeight: 'bold',
   }
 });

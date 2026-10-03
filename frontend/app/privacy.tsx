@@ -1,3 +1,4 @@
+import { coffee } from '../src/theme/coffee';
 import React from 'react';
 import { ScrollView, Text, StyleSheet, View, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
@@ -8,14 +9,14 @@ export default function PrivacyPolicyScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-          <Ionicons name="arrow-back" size={24} color="#FFF" />
+          <Ionicons name="arrow-back" size={24} color={coffee.text} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Privacy Policy</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Ngopi Privacy Policy</Text>
         <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
-        
+
         <Text style={styles.sectionTitle}>1. Introduction</Text>
         <Text style={styles.paragraph}>
           Welcome to Ngopi. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
@@ -57,7 +58,7 @@ export default function PrivacyPolicyScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   header: {
     flexDirection: 'row',
@@ -65,7 +66,7 @@ const styles = StyleSheet.create({
     paddingTop: 50,
     paddingBottom: 15,
     paddingHorizontal: 20,
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   backButton: {
     marginRight: 15,
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: coffee.text,
   },
   content: {
     flex: 1,
@@ -85,28 +86,28 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#10B981',
+    color: coffee.accent,
     marginBottom: 5,
   },
   date: {
     fontSize: 14,
-    color: '#94A3B8',
+    color: coffee.secondary,
     marginBottom: 20,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#F8FAFC',
+    color: coffee.text,
     marginTop: 20,
     marginBottom: 10,
   },
   paragraph: {
     fontSize: 15,
-    color: '#CBD5E1',
+    color: coffee.secondary,
     lineHeight: 24,
   },
   bold: {
     fontWeight: 'bold',
-    color: '#FFFFFF',
+    color: coffee.text,
   }
 });

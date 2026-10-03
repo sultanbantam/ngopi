@@ -1,3 +1,4 @@
+import { coffee } from '../../theme/coffee';
 import React, { useState } from 'react';
 import { ActivityIndicator, Image, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import axios from 'axios';
@@ -39,20 +40,20 @@ export default function MFASetup() {
 
   return (
     <View style={{ gap: 12 }}>
-      <TouchableOpacity onPress={startSetup} disabled={loading} style={{ backgroundColor: '#10B981', padding: 12, borderRadius: 8 }}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff', fontWeight: '800' }}>Aktifkan MFA</Text>}
+      <TouchableOpacity onPress={startSetup} disabled={loading} style={{ backgroundColor: coffee.button, padding: 12, borderRadius: 8 }}>
+        {loading ? <ActivityIndicator color={coffee.text} /> : <Text style={{ color: coffee.text, fontWeight: '800' }}>Aktifkan MFA</Text>}
       </TouchableOpacity>
       {qrCodeDataUrl ? <Image source={{ uri: qrCodeDataUrl }} style={{ width: 220, height: 220 }} /> : null}
-      {otpAuthUrl ? <Text selectable style={{ color: '#94A3B8' }}>{otpAuthUrl}</Text> : null}
+      {otpAuthUrl ? <Text selectable style={{ color: coffee.secondary }}>{otpAuthUrl}</Text> : null}
       {qrCodeDataUrl ? (
         <>
-          <TextInput value={code} onChangeText={setCode} placeholder="Kode 6 digit" keyboardType="number-pad" maxLength={6} />
-          <TouchableOpacity onPress={verifySetup} disabled={loading || code.length !== 6} style={{ backgroundColor: '#0EA5E9', padding: 12, borderRadius: 8 }}>
-            <Text style={{ color: '#fff', fontWeight: '800' }}>Verifikasi MFA</Text>
+          <TextInput style={{ backgroundColor: coffee.inset, color: coffee.text, padding: 12, borderWidth: 1, borderColor: coffee.border, borderRadius: 8 }} placeholderTextColor={coffee.muted} value={code} onChangeText={setCode} placeholder="Kode 6 digit" keyboardType="number-pad" maxLength={6} />
+          <TouchableOpacity onPress={verifySetup} disabled={loading || code.length !== 6} style={{ backgroundColor: coffee.button, padding: 12, borderRadius: 8 }}>
+            <Text style={{ color: coffee.text, fontWeight: '800' }}>Verifikasi MFA</Text>
           </TouchableOpacity>
         </>
       ) : null}
-      {message ? <Text>{message}</Text> : null}
+      {message ? <Text style={{ color: coffee.secondary }}>{message}</Text> : null}
     </View>
   );
 }

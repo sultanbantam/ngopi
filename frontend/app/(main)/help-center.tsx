@@ -1,3 +1,4 @@
+import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -52,10 +53,10 @@ const statusLabels: Record<TicketItem['status'], string> = {
 };
 
 const statusColors: Record<TicketItem['status'], string> = {
-  open: '#38BDF8',
-  in_progress: '#F59E0B',
-  resolved: '#10B981',
-  closed: '#94A3B8',
+  open: coffee.accent,
+  in_progress: coffee.warning,
+  resolved: coffee.accent,
+  closed: coffee.secondary,
 };
 
 const formatDate = (iso: string) => new Date(iso).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
@@ -271,7 +272,7 @@ export default function HelpCenterScreen() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#10B981" />
+        <ActivityIndicator size="large" color={coffee.accent} />
       </View>
     );
   }
@@ -284,7 +285,7 @@ export default function HelpCenterScreen() {
           <Text style={styles.subtitle}>BambooCS AI dan tiket dukungan ekosistem</Text>
         </View>
         <View style={[styles.liveBadge, isCompact && styles.liveBadgeCompact]}>
-          <Ionicons name="headset-outline" size={16} color="#34D399" />
+          <Ionicons name="headset-outline" size={16} color={coffee.accent} />
           <Text style={styles.liveBadgeText}>BambooCS Online</Text>
         </View>
       </View>
@@ -326,7 +327,7 @@ export default function HelpCenterScreen() {
             </View>
 
             {faqLoading ? (
-              <ActivityIndicator color="#34D399" />
+              <ActivityIndicator color={coffee.accent} />
             ) : faqs.length > 0 ? (
               faqs.map((item) => {
                 const expanded = item.id === expandedFaqId;
@@ -334,7 +335,7 @@ export default function HelpCenterScreen() {
                   <View key={item.id} style={styles.faqItem}>
                     <TouchableOpacity style={styles.faqQuestionRow} onPress={() => setExpandedFaqId(expanded ? '' : item.id)}>
                       <Text style={styles.faqQuestion}>{item.question}</Text>
-                      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color="#67E8F9" />
+                      <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={coffee.accent} />
                     </TouchableOpacity>
                     {expanded && <Text style={styles.faqAnswer}>{item.answer}</Text>}
                   </View>
@@ -353,16 +354,16 @@ export default function HelpCenterScreen() {
               value={question}
               onChangeText={setQuestion}
               placeholder="Tulis pertanyaan atau keluhan"
-              placeholderTextColor="#64748B"
+              placeholderTextColor={coffee.muted}
               multiline
             />
             <View style={styles.actionRow}>
               <TouchableOpacity style={[styles.primaryButton, aiLoading && styles.buttonDisabled]} onPress={askAi} disabled={aiLoading || !question.trim()}>
-                <Ionicons name="sparkles-outline" size={16} color="#FFFFFF" />
+                <Ionicons name="sparkles-outline" size={16} color={coffee.text} />
                 <Text style={styles.primaryButtonText}>{aiLoading ? 'Memeriksa' : 'Tanya AI'}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.secondaryButton, saving && styles.buttonDisabled]} onPress={createTicket} disabled={saving || !question.trim()}>
-                <Ionicons name="ticket-outline" size={16} color="#34D399" />
+                <Ionicons name="ticket-outline" size={16} color={coffee.accent} />
                 <Text style={styles.secondaryButtonText}>{saving ? 'Membuat' : 'Buat Tiket'}</Text>
               </TouchableOpacity>
             </View>
@@ -407,7 +408,7 @@ export default function HelpCenterScreen() {
                 </View>
                 {selectedTicket.status !== 'closed' && (
                   <TouchableOpacity style={styles.closeButton} onPress={closeTicket}>
-                    <Ionicons name="checkmark-done-outline" size={16} color="#F8FAFC" />
+                    <Ionicons name="checkmark-done-outline" size={16} color={coffee.text} />
                     <Text style={styles.closeButtonText}>Tutup</Text>
                   </TouchableOpacity>
                 )}
@@ -431,11 +432,11 @@ export default function HelpCenterScreen() {
                     value={reply}
                     onChangeText={setReply}
                     placeholder="Balas tiket"
-                    placeholderTextColor="#64748B"
+                    placeholderTextColor={coffee.muted}
                     multiline
                   />
                   <TouchableOpacity style={styles.sendReplyButton} onPress={sendReply} disabled={!reply.trim()}>
-                    <Ionicons name="send" size={18} color="#FFFFFF" />
+                    <Ionicons name="send" size={18} color={coffee.text} />
                   </TouchableOpacity>
                 </View>
               )}
@@ -450,31 +451,31 @@ export default function HelpCenterScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
   },
   header: {
     minHeight: 76,
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#1E293B',
+    borderBottomColor: coffee.surface,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   title: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 22,
     fontWeight: '800',
   },
   subtitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     marginTop: 3,
     fontSize: 13,
   },
@@ -483,14 +484,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     borderWidth: 1,
-    borderColor: '#14532D',
-    backgroundColor: '#052E1A',
+    borderColor: coffee.highlight,
+    backgroundColor: coffee.highlight,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
   },
   liveBadgeText: {
-    color: '#A7F3D0',
+    color: coffee.accent,
     fontWeight: '700',
     fontSize: 12,
   },
@@ -517,7 +518,7 @@ const styles = StyleSheet.create({
     width: 280,
     borderRightWidth: 1,
     borderBottomWidth: 0,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
     padding: 14,
   },
   platformPanelCompact: {
@@ -532,9 +533,9 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   faqPanel: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#1E3A4A',
+    borderColor: coffee.highlight,
     borderRadius: 12,
     padding: 16,
   },
@@ -545,25 +546,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   faqSubtitle: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 12,
   },
   faqCountBadge: {
-    backgroundColor: '#083344',
+    backgroundColor: coffee.highlight,
     borderWidth: 1,
-    borderColor: '#155E75',
+    borderColor: coffee.highlight,
     borderRadius: 12,
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
   faqCountText: {
-    color: '#A5F3FC',
+    color: coffee.accent,
     fontSize: 11,
     fontWeight: '700',
   },
   faqItem: {
     borderTopWidth: 1,
-    borderTopColor: '#1E293B',
+    borderTopColor: coffee.surface,
   },
   faqQuestionRow: {
     minHeight: 48,
@@ -575,18 +576,18 @@ const styles = StyleSheet.create({
   },
   faqQuestion: {
     flex: 1,
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 14,
     fontWeight: '700',
   },
   faqAnswer: {
-    color: '#CBD5E1',
+    color: coffee.secondary,
     fontSize: 13,
     lineHeight: 20,
     paddingBottom: 14,
   },
   sectionTitle: {
-    color: '#E2E8F0',
+    color: coffee.text,
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 10,
@@ -597,9 +598,9 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginBottom: 7,
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
   },
   platformItemCompact: {
     width: 154,
@@ -609,20 +610,20 @@ const styles = StyleSheet.create({
     padding: 7,
   },
   platformItemActive: {
-    borderColor: '#10B981',
-    backgroundColor: '#082F24',
+    borderColor: coffee.accent,
+    backgroundColor: coffee.highlight,
   },
   platformIcon: {
     width: 38,
     height: 38,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
   platformIconText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontWeight: '900',
     fontSize: 12,
   },
@@ -631,12 +632,12 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   platformName: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: '800',
     fontSize: 13,
   },
   platformLink: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 11,
     marginTop: 2,
   },
@@ -657,25 +658,25 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   aiPanel: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
   },
   platformDescription: {
-    color: '#94A3B8',
+    color: coffee.secondary,
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 10,
   },
   questionInput: {
     minHeight: 100,
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     padding: 12,
     fontSize: 14,
     textAlignVertical: 'top',
@@ -691,13 +692,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: coffee.text,
     fontWeight: '800',
   },
   secondaryButton: {
@@ -705,13 +706,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 7,
     borderWidth: 1,
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 8,
   },
   secondaryButtonText: {
-    color: '#34D399',
+    color: coffee.accent,
     fontWeight: '800',
   },
   buttonDisabled: {
@@ -720,27 +721,27 @@ const styles = StyleSheet.create({
   answerBox: {
     marginTop: 12,
     borderLeftWidth: 3,
-    borderLeftColor: '#10B981',
-    backgroundColor: '#0B2A22',
+    borderLeftColor: coffee.accent,
+    backgroundColor: coffee.highlight,
     padding: 12,
     borderRadius: 8,
   },
   answerMeta: {
-    color: '#6EE7B7',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 6,
   },
   answerText: {
-    color: '#D1FAE5',
+    color: coffee.accent,
     lineHeight: 20,
   },
   ticketPanel: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
   },
   ticketHeaderRow: {
     flexDirection: 'row',
@@ -748,7 +749,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   ticketCount: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 12,
   },
   ticketList: {
@@ -757,23 +758,23 @@ const styles = StyleSheet.create({
   ticketCard: {
     width: 210,
     minHeight: 118,
-    backgroundColor: '#0F172A',
+    backgroundColor: coffee.background,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     padding: 12,
   },
   ticketCardActive: {
-    borderColor: '#10B981',
+    borderColor: coffee.accent,
   },
   ticketPlatform: {
-    color: '#34D399',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 6,
   },
   ticketTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: '800',
     minHeight: 38,
   },
@@ -790,15 +791,15 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   emptyText: {
-    color: '#64748B',
+    color: coffee.muted,
     paddingVertical: 20,
   },
   threadPanel: {
-    backgroundColor: '#111827',
+    backgroundColor: coffee.surface,
     borderRadius: 8,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#1E293B',
+    borderColor: coffee.surface,
   },
   threadHeader: {
     flexDirection: 'row',
@@ -807,12 +808,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   threadTitle: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontSize: 16,
     fontWeight: '900',
   },
   threadMeta: {
-    color: '#64748B',
+    color: coffee.muted,
     fontSize: 12,
     marginTop: 4,
   },
@@ -820,14 +821,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#334155',
+    backgroundColor: coffee.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
     alignSelf: 'flex-start',
   },
   closeButtonText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     fontWeight: '800',
     fontSize: 12,
   },
@@ -839,24 +840,24 @@ const styles = StyleSheet.create({
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#059669',
+    backgroundColor: coffee.button,
   },
   staffBubble: {
     alignSelf: 'flex-start',
-    backgroundColor: '#1E293B',
+    backgroundColor: coffee.surface,
   },
   messageSender: {
-    color: '#D1FAE5',
+    color: coffee.accent,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 4,
   },
   messageText: {
-    color: '#F8FAFC',
+    color: coffee.text,
     lineHeight: 20,
   },
   messageTime: {
-    color: 'rgba(255,255,255,0.55)',
+    color: coffee.secondary,
     fontSize: 10,
     marginTop: 6,
   },
@@ -870,11 +871,11 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 44,
     maxHeight: 120,
-    backgroundColor: '#0F172A',
-    color: '#F8FAFC',
+    backgroundColor: coffee.background,
+    color: coffee.text,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: coffee.border,
     padding: 10,
     outlineStyle: 'none',
   } as any,
@@ -882,7 +883,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
   },
