@@ -26,14 +26,15 @@ router.get('/', async (req: Request, res: Response) => {
   let image = DEFAULT_IMAGE;
   try {
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
-    const target = parts.length === 1 && !reserved.has(parts[0]) ? parts[0] : parts.length === 2 && parts[0] === 'chat' ? parts[1] : '';
+    const first = parts[0] || '';
+    const target = parts.length === 1 && !reserved.has(first) ? first : parts.length === 2 && first === 'chat' ? (parts[1] || '') : '';
     if (target) {
       // Only public profile fields are selected. Ambiguous display names use the brand image.
       const users = await prisma.user.findMany({ select: { id: true, username: true, display_name: true, avatar_url: true } });
       let matches = users.filter(user => user.id === target || slug(user.username) === slug(target));
       if (!matches.length) matches = users.filter(user => slug(user.display_name || user.username) === slug(target));
       if (matches.length === 1) {
-        const user = matches[0];
+        const user = matches[0]!;
         const name = user.display_name || user.username;
         title = `${name} — Ngopi`;
         description = `Ngobrol dengan ${name} (@${user.username}) di Ngopi.`;
