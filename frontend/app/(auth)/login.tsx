@@ -37,7 +37,7 @@ export default function LoginScreen() {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
-        router.replace('/(main)/bambupedia');
+        router.replace('/(main)/warkop');
       } else if (params.sso === 'success') {
         setLoading(true);
         const token = await refreshAccessToken(true);
@@ -53,7 +53,7 @@ export default function LoginScreen() {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
-        router.replace('/(main)/bambupedia');
+        router.replace('/(main)/warkop');
       }
     };
     handleSSO();
@@ -98,7 +98,7 @@ export default function LoginScreen() {
         await SecureStore.setItemAsync('userId', user.id);
       }
 
-      router.replace('/(main)/bambupedia');
+      router.replace('/(main)/warkop');
     } catch (err: any) {
       setError(explainAuthError(err, 'login'));
     } finally {

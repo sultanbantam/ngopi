@@ -80,7 +80,7 @@ export default function RegisterScreen() {
         await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
 
-      router.replace('/(main)/bambupedia');
+      router.replace('/(main)/warkop');
     } catch (err: any) {
       setError(explainAuthError(err, 'register'));
 

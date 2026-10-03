@@ -47,5 +47,8 @@
       "source": "/(.*)",
       "destination": "/index.html"
     }
-  ]
+  ],
+  "framework": null,
+  "buildCommand": "npm run build",
+  "installCommand": "npm ci"
 }

@@ -11,7 +11,7 @@ export default function IndexScreen() {
     const checkSession = async () => {
       const hasSession = await hasStoredSession();
       if (hasSession) {
-        router.replace('/(main)/bambupedia');
+        router.replace('/(main)/warkop');
       } else {
         router.replace('/(auth)/register');
       }

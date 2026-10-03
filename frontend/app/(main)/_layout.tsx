@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Stack, Slot, router, usePathname } from 'expo-router';
 import { View, useWindowDimensions, StyleSheet, Text, Platform, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import BambupediaRoom from './bambupedia';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 
@@ -538,13 +537,9 @@ export default function MainLayout() {
   };
 
   if (isLargeScreen) {
-    const showBambupedia =
-      pathname === '/' ||
-      pathname === '/bambupedia';
-
     return (
       <View style={styles.singleContainer}>
-        {showBambupedia ? <BambupediaRoom /> : <Slot />}
+        <Slot />
         {renderIncomingCallModal()}
         {renderToast()}
         {renderNotificationCenter()}
@@ -561,6 +556,7 @@ export default function MainLayout() {
         contentStyle: { backgroundColor: coffee.background }
       }}>
         <Stack.Screen name="contacts" options={{ title: 'Ngopi' }} />
+        <Stack.Screen name="warkop" options={{ headerShown: false }} />
         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
         <Stack.Screen name="alihbahasa" options={{ headerShown: false }} />
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />

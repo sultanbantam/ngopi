@@ -10,7 +10,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import axios from 'axios';
-import BambupediaRoom from '../bambupedia';
+import BambupediaRoom from '../warkop';
 import { Ionicons } from '@expo/vector-icons';
 import { getMimeType } from '../../../src/utils/fileHelpers';
 import { API_URL } from '../../../src/utils/session';
@@ -118,7 +118,7 @@ export default function ChatRoomScreen() {
   const isBambupediaLink = rawType !== 'group' && (/bamboo(cs|pedia)|rumpun/i.test(routeLabel) || rawId === 'bambupedia');
 
   useEffect(() => {
-    if (isBambupediaLink) router.replace('/(main)/bambupedia');
+    if (isBambupediaLink) router.replace('/(main)/warkop');
   }, [isBambupediaLink, router]);
 
   if (isBambupediaLink) return <BambupediaRoom />;

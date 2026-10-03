@@ -590,9 +590,9 @@ export default function ContactsScreen() {
       <TouchableOpacity style={styles.backToBambupediaButton} onPress={() => {
         setDropdownVisible(false);
         if (Platform.OS === 'web') {
-          window.location.assign('/bambupedia');
+          window.location.assign('/warkop');
         } else {
-          router.replace('/(main)/bambupedia' as any);
+          router.replace('/(main)/warkop' as any);
         }
       }}>
         <Ionicons name="arrow-back" size={20} color={coffee.text} />
