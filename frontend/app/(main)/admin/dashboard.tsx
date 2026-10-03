@@ -160,7 +160,7 @@ export default function AdminDashboardScreen() {
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>CS Dashboard</Text>
-          <Text style={styles.subtitle}>Tiket, routing agent, dan statistik BambooCS</Text>
+          <Text style={styles.subtitle}>Tiket, routing agent, dan statistik NgopiCS</Text>
         </View>
         <TouchableOpacity style={styles.refreshButton} onPress={() => loadDashboard().catch(console.error)}>
           <Ionicons name="refresh" size={18} color={coffee.text} />
@@ -258,7 +258,7 @@ export default function AdminDashboardScreen() {
                   const staff = message.sender?.role === 'admin' || message.sender?.role === 'agent';
                   return (
                     <View key={message.id} style={[styles.messageBubble, staff ? styles.staffBubble : styles.userBubble, internal && styles.internalBubble]}>
-                      <Text style={styles.messageSender}>{internal ? 'Internal Note' : staff ? 'BambooCS' : message.sender.display_name}</Text>
+                      <Text style={styles.messageSender}>{internal ? 'Internal Note' : staff ? 'NgopiCS' : message.sender.display_name}</Text>
                       <Text style={styles.messageText}>{message.content}</Text>
                       <Text style={styles.messageTime}>{formatDate(message.created_at)}</Text>
                     </View>

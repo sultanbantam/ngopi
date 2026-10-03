@@ -385,12 +385,12 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
     faqs: [
       {
         question: 'Tutorial cepat: bagaimana mulai menggunakan BambooChat?',
-        answer: '1. Buka https://bamboochat.click.\n2. Pilih Sign Up, buat username minimal 3 karakter dan password minimal 8 karakter, lalu konfirmasi password.\n3. Login dengan akun tersebut. Sesi akan tetap tersimpan sampai Anda memilih keluar.\n4. Setelah masuk, Anda berada di Rumpun Bambupedia untuk membaca informasi dan berdiskusi.\n5. Buka Kontak untuk memilih pengguna atau rumpun.\n6. Di chat, Anda dapat mengirim pesan, gambar, dokumen, voice message, dan reaksi.\n7. Gunakan ikon telepon atau kamera untuk voice call dan video call; izinkan mikrofon/kamera saat diminta.\n8. Buka Pusat Bantuan untuk membaca FAQ, bertanya kepada BambooCS AI, atau membuat tiket.',
+        answer: '1. Buka https://bamboochat.click.\n2. Pilih Sign Up, buat username minimal 3 karakter dan password minimal 8 karakter, lalu konfirmasi password.\n3. Login dengan akun tersebut. Sesi akan tetap tersimpan sampai Anda memilih keluar.\n4. Setelah masuk, Anda berada di Rumpun Bambupedia untuk membaca informasi dan berdiskusi.\n5. Buka Kontak untuk memilih pengguna atau rumpun.\n6. Di chat, Anda dapat mengirim pesan, gambar, dokumen, voice message, dan reaksi.\n7. Gunakan ikon telepon atau kamera untuk voice call dan video call; izinkan mikrofon/kamera saat diminta.\n8. Buka Pusat Bantuan untuk membaca FAQ, bertanya kepada NgopiCS AI, atau membuat tiket.',
         keywords: ['tutorial', 'panduan', 'mulai', 'cara menggunakan', 'pemula', 'langkah'],
       },
       {
         question: 'Apa itu BambooChat?',
-        answer: 'BambooChat adalah platform komunikasi ekosistem Bambu. Fitur utamanya meliputi Rumpun Bambupedia, pesan privat, rumpun komunitas, lampiran, voice message, reaksi, notifikasi, voice call, video call, BambooBot, dan Pusat Bantuan BambooCS.',
+        answer: 'BambooChat adalah platform komunikasi ekosistem Bambu. Fitur utamanya meliputi Rumpun Bambupedia, pesan privat, rumpun komunitas, lampiran, voice message, reaksi, notifikasi, voice call, video call, WarkopBot, dan Pusat Bantuan NgopiCS.',
         keywords: ['apa itu', 'bamboochat', 'fitur', 'fungsi', 'komunikasi'],
       },
       {
@@ -405,12 +405,12 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
       },
       {
         question: 'Apa fungsi Rumpun Bambupedia?',
-        answer: 'Rumpun Bambupedia adalah ruang komunitas publik untuk informasi ekosistem Bambu, diskusi, sapaan, mention pengguna, dan jawaban BambooBot. Tautan resmi yang dibagikan BambooBot dapat langsung diketuk.',
+        answer: 'Rumpun Bambupedia adalah ruang komunitas publik untuk informasi ekosistem Bambu, diskusi, sapaan, mention pengguna, dan jawaban WarkopBot. Tautan resmi yang dibagikan WarkopBot dapat langsung diketuk.',
         keywords: ['bambupedia', 'rumpun', 'room', 'komunitas', 'tautan'],
       },
       {
-        question: 'Bagaimana menggunakan BambooBot di Bambupedia?',
-        answer: 'Tulis pertanyaan tentang platform ekosistem Bambu. Gunakan !list untuk melihat daftar platform dan !info nama-platform untuk meminta ringkasan serta link resmi. Anda juga dapat bertanya dengan bahasa biasa; BambooBot akan mencocokkan pertanyaan dengan knowledge base.',
+        question: 'Bagaimana menggunakan WarkopBot di Bambupedia?',
+        answer: 'Tulis pertanyaan tentang platform ekosistem Bambu. Gunakan !list untuk melihat daftar platform dan !info nama-platform untuk meminta ringkasan serta link resmi. Anda juga dapat bertanya dengan bahasa biasa; WarkopBot akan mencocokkan pertanyaan dengan knowledge base.',
         keywords: ['bamboobot', 'bot', '!list', '!info', 'perintah', 'knowledge base'],
       },
       {
@@ -454,7 +454,7 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
         keywords: ['offline', 'status', 'socket', 'jaringan', 'room tetap'],
       },
       {
-        question: 'Bagaimana melaporkan masalah kepada BambooCS?',
+        question: 'Bagaimana melaporkan masalah kepada NgopiCS?',
         answer: 'Buka Pusat Bantuan, pilih platform BambooChat, tulis pertanyaan, lalu pilih Tanya AI. Jika belum selesai, pilih Buat Tiket. Sertakan waktu kejadian, perangkat/browser, langkah yang dilakukan, pesan error, serta screenshot tanpa data rahasia.',
         keywords: ['bamboocs', 'tiket', 'lapor masalah', 'screenshot', 'dukungan', 'help center'],
       },

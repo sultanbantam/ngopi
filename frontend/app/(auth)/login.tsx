@@ -1,3 +1,4 @@
+import { afterProfileLogin } from '../../src/utils/profileLink';
 import { coffee } from '../../src/theme/coffee';
 import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
@@ -37,7 +38,7 @@ export default function LoginScreen() {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
-        router.replace('/(main)/warkop');
+        await afterProfileLogin();
       } else if (params.sso === 'success') {
         setLoading(true);
         const token = await refreshAccessToken(true);
@@ -53,7 +54,7 @@ export default function LoginScreen() {
           await SecureStore.setItemAsync('username', String(params.sso_username || ''));
           await SecureStore.setItemAsync('userId', String(params.sso_userid || ''));
         }
-        router.replace('/(main)/warkop');
+        await afterProfileLogin();
       }
     };
     handleSSO();
@@ -98,7 +99,7 @@ export default function LoginScreen() {
         await SecureStore.setItemAsync('userId', user.id);
       }
 
-      router.replace('/(main)/warkop');
+      await afterProfileLogin();
     } catch (err: any) {
       setError(explainAuthError(err, 'login'));
     } finally {

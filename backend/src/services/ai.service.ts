@@ -185,7 +185,7 @@ export const answerQuestion = async (question: string, platformId?: string | nul
 
   if (!best || suggestTicket) {
     return {
-      answer: `Untuk pertanyaan ini, saya akan menghubungkan Anda dengan CS kami. Mohon tunggu. Anda juga bisa membuat tiket agar tim ${platform?.display_name || 'BambooCS'} dapat menindaklanjuti.`,
+      answer: `Untuk pertanyaan ini, saya akan menghubungkan Anda dengan CS kami. Mohon tunggu. Anda juga bisa membuat tiket agar tim ${platform?.display_name || 'NgopiCS'} dapat menindaklanjuti.`,
       confidence,
       suggest_ticket: true,
       platform,

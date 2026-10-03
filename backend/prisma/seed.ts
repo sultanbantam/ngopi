@@ -11,7 +11,7 @@ const main = async () => {
   const csAgent = await prisma.user.upsert({
     where: { username: 'bamboo_cs' },
     update: {
-      display_name: 'BambooCS',
+      display_name: 'NgopiCS',
       role: 'agent',
       status: 'Online 24/7 untuk bantuan ekosistem Bambu',
       is_online: true,
@@ -19,7 +19,7 @@ const main = async () => {
     create: {
       username: 'bamboo_cs',
       password_hash: await seedPassword(csPassword),
-      display_name: 'BambooCS',
+      display_name: 'NgopiCS',
       role: 'agent',
       status: 'Online 24/7 untuk bantuan ekosistem Bambu',
       is_online: true,

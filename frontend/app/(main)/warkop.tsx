@@ -608,8 +608,8 @@ export default function BambupediaRoom() {
     );
   };
   const renderSystemContent = (message: ChatMessage) => {
-    const content = (message.content || '').replace(/Rumpun Bambupedia/gi, ROOM_NAME).replace(/🎋/g, '☕');
-    if (message.sender_name === 'BambooBot') {
+    const content = (message.content || '').replace(/Rumpun Bambupedia/gi, ROOM_NAME).replace(/🎋/g, '☕').replace(/BambooCS/g, 'NgopiCS').replace(/BambooBot/g, 'WarkopBot');
+    if (['WarkopBot', 'BambooBot'].includes(message.sender_name)) {
       const [headline = '', ...bodyLines] = content.split('\n');
       return (
         <View>
@@ -693,7 +693,7 @@ export default function BambupediaRoom() {
 
     if (isSystem) {
       const isTip = item.type === 'tip';
-      const systemSender = item.sender_name || 'SISTEM';
+      const systemSender = (item.sender_name || 'SISTEM').replace(/BambooBot/g, 'WarkopBot').replace(/BambooCS/g, 'NgopiCS');
       return (
         <View style={[styles.systemMessage, isTip ? styles.tipMessage : styles.joinMessage, isMentioned && styles.mentionedSystemMessage]}>
           <Text style={[styles.systemLabel, isTip ? styles.tipLabel : styles.joinLabel]}>{isTip ? `${TIP_ICON} TIPS` : `${SYSTEM_ICON} ${systemSender}`}</Text>
@@ -751,7 +751,7 @@ export default function BambupediaRoom() {
 
           <View style={[styles.drawerSection, styles.membersSection]}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.drawerSectionTitle}>Daftar User/Rumpun</Text>
+              <Text style={styles.drawerSectionTitle}>DAFTAR USER/WARKOP</Text>
               <Text style={styles.memberCounter}>{visibleMembers.length}</Text>
             </View>
             <View style={styles.searchBox}>
@@ -801,7 +801,7 @@ export default function BambupediaRoom() {
 
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Informasi Room</Text>
-            <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem Bambu untuk sapaan, tanya jawab, dan koordinasi lintas platform.</Text>
+            <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem WARKOP untuk sapaan, tanya jawab, dan koordinasi lintas platform.</Text>
           </View>
           </ScrollView>
         </View>

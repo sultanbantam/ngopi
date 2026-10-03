@@ -275,7 +275,7 @@ const emitEcosystemInfoMessage = (io: Server) => {
   if (!platform) return;
 
   ecosystemInfoIndex = (ecosystemInfoIndex + 1) % ECOSYSTEM_INFO_PLATFORMS.length;
-  const message = createSystemMessage('sys-ecosystem', 'system', formatEcosystemInfoMessage(platform), 'BambooBot');
+  const message = createSystemMessage('sys-ecosystem', 'system', formatEcosystemInfoMessage(platform), 'WarkopBot');
   lastEcosystemInfoMessage = message;
   io.to(BAMBUPEDIA_ROOM).emit('system_message', message);
   io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', message);
@@ -330,7 +330,7 @@ const resolveBotResponse = async (content: string) => {
 
   const result = await answerQuestion(trimmed);
   if (!result.platform && result.confidence < 0.5) return null;
-  return `${BOT_ICON} BambooCS AI (${Math.round(result.confidence * 100)}%)\n${result.answer}`;
+  return `${BOT_ICON} NgopiCS AI (${Math.round(result.confidence * 100)}%)\n${result.answer}`;
 };
 
 export const handleBambupediaEvents = (io: Server, socket: Socket, user: BambupediaUser) => {
@@ -399,7 +399,7 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
       io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', botMessage);
     } catch (error) {
       console.error('Bambupedia command error:', error);
-      const botMessage = createSystemMessage('sys-bot-error', 'system', 'BambooCS AI sedang tidak bisa memproses command. Coba lagi sebentar lagi.');
+      const botMessage = createSystemMessage('sys-bot-error', 'system', 'NgopiCS AI sedang tidak bisa memproses command. Coba lagi sebentar lagi.');
       socket.emit('bambupedia_message', botMessage);
     }
   };

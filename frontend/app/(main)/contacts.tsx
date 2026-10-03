@@ -1,6 +1,6 @@
 import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView, KeyboardAvoidingView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
@@ -9,6 +9,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 
 import axios from 'axios';
+import { profileSlug } from '../../src/utils/profileLink';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -59,6 +60,8 @@ export default function ContactsScreen() {
   const [editAvatar, setEditAvatar] = useState('');
   const [currentAvatarUrl, setCurrentAvatarUrl] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const profileLink = `https://ngopi.top/${encodeURIComponent(profileSlug(currentUser || currentUsername))}`;
 
   // Online Users State
   const [onlineUsers, setOnlineUsers] = useState<any[]>([]);
@@ -504,7 +507,7 @@ export default function ContactsScreen() {
       list.unshift({
         _type: 'cs',
         id: 'bamboo-cs',
-        display_name: 'BambooCS',
+        display_name: 'NgopiCS',
         username: 'support',
         status: 'Online 24/7 untuk semua platform ekosistem',
       });
@@ -520,8 +523,8 @@ export default function ContactsScreen() {
             <Ionicons name="headset-outline" size={24} color={coffee.text} />
           </View>
           <View style={styles.contactInfo}>
-            <Text style={styles.contactName}>BambooCS</Text>
-            <Text style={styles.usernameTag}>@support_hub</Text>
+            <Text style={styles.contactName}>NgopiCS</Text>
+            <Text style={styles.usernameTag}>@NgopiCS</Text>
             <Text style={styles.contactStatus}>{item.status}</Text>
           </View>
           <View style={styles.onlineDotSmall} />
@@ -695,10 +698,11 @@ export default function ContactsScreen() {
       )}
 
       {/* Profile Modal */}
-      <Modal visible={isProfileModalVisible} transparent={true} animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { padding: 32, backgroundColor: coffee.background, borderWidth: 1, borderColor: coffee.border }]}>
-            <Text style={[styles.modalTitle, { fontSize: 24, textAlign: 'center', marginBottom: 24, color: coffee.accent }]}>My Profile</Text>
+      <Modal visible={isProfileModalVisible} transparent={true} animationType="slide" onRequestClose={() => setProfileModalVisible(false)}>
+        <KeyboardAvoidingView style={[styles.modalOverlay, { padding: 16 }]} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <View style={styles.profileModalContent}>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
+            <Text style={[styles.modalTitle, { fontSize: 24, textAlign: 'center', marginBottom: 24, color: coffee.accent }]}>Profil Saya</Text>
 
             <View style={{ alignItems: 'center', marginBottom: 24 }}>
               <TouchableOpacity onPress={pickImage} style={{ alignItems: 'center' }}>
@@ -709,7 +713,7 @@ export default function ContactsScreen() {
                     <Text style={[styles.avatarText, { fontSize: 40 }]}>{editDisplayName.charAt(0) || 'U'}</Text>
                   )}
                 </View>
-                <Text style={{ color: coffee.secondary, marginTop: 12, fontWeight: 'bold', fontSize: 14 }}>Tap to Change Photo</Text>
+                <Text style={{ color: coffee.secondary, marginTop: 12, fontWeight: 'bold', fontSize: 14 }}>Ketuk untuk mengganti foto</Text>
               </TouchableOpacity>
             </View>
 
@@ -725,15 +729,15 @@ export default function ContactsScreen() {
             <Text style={styles.inputLabel}>Profile Link</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
               <TextInput
-                style={[styles.inputField, { flex: 1, marginBottom: 0, color: coffee.accent, backgroundColor: coffee.surface }]}
-                value={`https://www.bamboochat.click/chat/${currentUsername}`}
+                style={[styles.inputField, { flex: 1, minWidth: 0, marginBottom: 0, color: coffee.accent, backgroundColor: coffee.surface }]}
+                value={profileLink}
                 editable={false}
               />
               <TouchableOpacity
                 style={{ marginLeft: 10, padding: 12, backgroundColor: coffee.border, borderRadius: 8, height: 48, justifyContent: 'center', alignItems: 'center' }}
                 onPress={() => {
                   if (Platform.OS === 'web') {
-                    navigator.clipboard.writeText(`https://www.bamboochat.click/chat/${currentUsername}`);
+                    navigator.clipboard.writeText(profileLink);
                     alert('Link profil disalin!');
                   } else {
                     Alert.alert('Info', 'Fitur copy tersedia di web.');
@@ -744,16 +748,18 @@ export default function ContactsScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={[styles.modalActions, { marginTop: 16 }]}>
+            <Text style={{ color: coffee.muted, marginBottom: 12 }}>Tautan mengikuti nama yang sudah disimpan.</Text>
+            </ScrollView>
+            <View style={[styles.modalActions, { padding: 16, flexWrap: 'wrap', gap: 8 }]}>
               <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: coffee.border, borderRadius: 8, paddingHorizontal: 20 }]}>
-                <Text style={[styles.cancelBtnText, { color: coffee.text }]}>Close</Text>
+                <Text style={[styles.cancelBtnText, { color: coffee.text }]}>Tutup</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={saveProfile} disabled={isSavingProfile}>
                 {isSavingProfile ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.saveBtnText}>Simpan Perubahan</Text>}
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Wallet Modal */}
@@ -1277,6 +1283,17 @@ const styles = StyleSheet.create({
     backgroundColor: coffee.surface,
     borderRadius: 16,
     padding: 24,
+  },
+  profileModalContent: {
+    width: '100%',
+    maxWidth: 560,
+    maxHeight: '100%',
+    flexShrink: 1,
+    backgroundColor: coffee.background,
+    borderWidth: 1,
+    borderColor: coffee.border,
+    borderRadius: 16,
+    overflow: 'hidden',
   },
   groupModalContent: {
     maxHeight: '88%',

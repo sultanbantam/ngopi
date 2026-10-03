@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
+import { router } from 'expo-router';
 import { API_URL, getAuthHeaders } from '../../src/utils/api';
 import { socketService } from '../../src/utils/socket';
 
@@ -279,14 +280,18 @@ export default function HelpCenterScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Kembali ke Warung Kopi" onPress={() => router.replace('/(main)/warkop')} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, padding: 16, minHeight: 48 }}>
+        <Ionicons name="arrow-back" size={22} color={coffee.accent} />
+        <Text style={{ color: coffee.accent, fontWeight: '700' }}>Kembali ke Warung Kopi</Text>
+      </TouchableOpacity>
       <View style={[styles.header, isCompact && styles.headerCompact]}>
         <View>
           <Text style={styles.title}>Pusat Bantuan</Text>
-          <Text style={styles.subtitle}>BambooCS AI dan tiket dukungan ekosistem</Text>
+          <Text style={styles.subtitle}>NgopiCS AI dan tiket dukungan ekosistem</Text>
         </View>
         <View style={[styles.liveBadge, isCompact && styles.liveBadgeCompact]}>
           <Ionicons name="headset-outline" size={16} color={coffee.accent} />
-          <Text style={styles.liveBadgeText}>BambooCS Online</Text>
+          <Text style={styles.liveBadgeText}>NgopiCS Online</Text>
         </View>
       </View>
 
@@ -347,7 +352,7 @@ export default function HelpCenterScreen() {
           </View>
 
           <View style={[styles.aiPanel, isCompact && styles.panelCompact]}>
-            <Text style={styles.sectionTitle}>BambooCS AI</Text>
+            <Text style={styles.sectionTitle}>NgopiCS AI</Text>
             {selectedPlatform && <Text style={styles.platformDescription}>{selectedPlatform.description}</Text>}
             <TextInput
               style={styles.questionInput}
@@ -418,7 +423,7 @@ export default function HelpCenterScreen() {
                 const staff = message.sender?.role === 'admin' || message.sender?.role === 'agent';
                 return (
                   <View key={message.id} style={[styles.messageBubble, staff ? styles.staffBubble : styles.userBubble]}>
-                    <Text style={styles.messageSender}>{staff ? 'BambooCS' : message.sender.display_name}</Text>
+                    <Text style={styles.messageSender}>{staff ? 'NgopiCS' : message.sender.display_name}</Text>
                     <Text style={styles.messageText}>{message.content}</Text>
                     <Text style={styles.messageTime}>{formatDate(message.created_at)}</Text>
                   </View>

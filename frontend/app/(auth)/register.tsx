@@ -1,3 +1,4 @@
+import { afterProfileLogin } from '../../src/utils/profileLink';
 import { coffee } from '../../src/theme/coffee';
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
@@ -80,7 +81,7 @@ export default function RegisterScreen() {
         await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
 
-      router.replace('/(main)/warkop');
+      await afterProfileLogin();
     } catch (err: any) {
       setError(explainAuthError(err, 'register'));
 
