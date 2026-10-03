@@ -106,14 +106,6 @@ export default function LoginScreen() {
     }
   };
 
-  const handleBamboochainLogin = () => {
-    if (Platform.OS === 'web') {
-      window.location.href = `${API_URL}/auth/bamboochain`;
-    } else {
-      alert('Mobile SSO not fully supported yet');
-    }
-  };
-
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
@@ -158,16 +150,12 @@ export default function LoginScreen() {
           />
         ) : null}
 
-        <TouchableOpacity onPress={() => alert('Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin atau gunakan login BambooChain wallet Anda.')}>
+        <TouchableOpacity onPress={() => alert('Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin untuk bantuan lebih lanjut.')}>
           <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
           {loading ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.buttonText}>Login</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.bambooSsoButton} onPress={handleBamboochainLogin}>
-          <Text style={styles.bambooSsoButtonText}>🎋 Login with BaMbooChain</Text>
         </TouchableOpacity>
 
         <View style={styles.footer}>
@@ -177,12 +165,6 @@ export default function LoginScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Temporary button for Pi Developer Portal Step 10 */}
-        <TouchableOpacity style={{ marginTop: 20, alignItems: 'center' }} onPress={() => router.push('/test-payment')}>
-          <Text style={{ color: coffee.warning, textDecorationLine: 'underline' }}>
-            [Developer] Go to Test Payment (Step 10)
-          </Text>
-        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -257,18 +239,6 @@ const styles = StyleSheet.create({
   buttonText: {
     color: coffee.text,
     fontSize: 18,
-    fontWeight: 'bold',
-  },
-  bambooSsoButton: {
-    backgroundColor: coffee.button,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  bambooSsoButtonText: {
-    color: coffee.text,
-    fontSize: 16,
     fontWeight: 'bold',
   },
   errorText: {
