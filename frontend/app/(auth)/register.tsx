@@ -92,7 +92,7 @@ export default function RegisterScreen() {
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
         <NgopiBrand />
-        <Text style={styles.subtitle}>Mulai obrolan dengan akun Ngopi.</Text>
+        <Text style={styles.subtitle}>Mulai obrolan dengan akun unikmu.</Text>
         
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
