@@ -16,7 +16,7 @@ import { profileSlug } from '../../src/utils/profileLink';
 const API_URL = 'https://api.ngopi.top/api';
 
 export default function ContactsScreen() {
-  const { openMenu } = useLocalSearchParams<{ openMenu?: string }>();
+  const { openMenu, createWarkop, editWarkop } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string }>();
   const [loading, setLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
@@ -33,6 +33,8 @@ export default function ContactsScreen() {
   const [dropdownVisible, setDropdownVisible] = useState(false);
 
   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
+  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
   const [groupMinBmc, setGroupMinBmc] = useState('0');
@@ -201,6 +203,8 @@ export default function ContactsScreen() {
 
   const openCreateGroupModal = () => {
     setEditingGroupId(null);
+    setSelectedMembers([]);
+    setMemberSearch('');
     setGroupName('');
     setGroupDescription('');
     setGroupMinBmc('0');
@@ -211,6 +215,14 @@ export default function ContactsScreen() {
     setGroupCallEnabled(true);
     setGroupModalVisible(true);
   };
+
+  useEffect(() => {
+    if (createWarkop === '1') {
+      openCreateGroupModal();
+      setActiveTab('warkop');
+      router.setParams({ createWarkop: '' });
+    }
+  }, [createWarkop]);
 
   const openEditGroupModal = (group: any) => {
     setEditingGroupId(group.id);
@@ -224,6 +236,11 @@ export default function ContactsScreen() {
     setGroupCallEnabled(group.call_enabled !== false);
     setGroupModalVisible(true);
   };
+  useEffect(() => {
+    const group = groups.find(item => item.id === editWarkop);
+    if (group) { openEditGroupModal(group); router.setParams({ editWarkop: '' }); }
+  }, [editWarkop, groups]);
+
   const openHelpCenter = () => {
     router.push('/(main)/help-center' as any);
   };
@@ -318,28 +335,10 @@ export default function ContactsScreen() {
 
     try {
       setIsSavingGroup(true);
-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const minBmcNumber = Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0);
-      let finalGroupAvatar = groupAvatar;
-
-      if (groupAvatar && (groupAvatar.startsWith('blob:') || groupAvatar.startsWith('file:'))) {
-        const formData = new FormData();
-        if (Platform.OS === 'web') {
-          const res = await fetch(groupAvatar);
-          const blob = await res.blob();
-          formData.append('file', blob, 'group-avatar.jpg');
-        } else {
-          formData.append('file', {
-            uri: groupAvatar,
-            name: 'group-avatar.jpg',
-            type: 'image/jpeg',
-          } as any);
-        }
-        const uploadRes = await axios.post(`${API_URL}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' }
-        });
-        finalGroupAvatar = uploadRes.data.url;
-      }
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) throw new Error('Silakan masuk kembali.');
+      const minBmcNumber = editingGroupId ? Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0) : 0;
+      const finalGroupAvatar = await uploadProfileAvatar(groupAvatar, null, headers);
 
       const payload = {
         name: trimmedName,
@@ -350,9 +349,8 @@ export default function ContactsScreen() {
         onlyAdminsCanSend: groupOnlyAdminsCanSend,
         allowMemberInvites: groupAllowMemberInvites,
         callEnabled: groupCallEnabled,
+        ...(!editingGroupId ? { memberIds: selectedMembers } : {}),
       };
-      const headers = { Authorization: `Bearer ${token}` };
-
       if (editingGroupId) {
         const res = await axios.put(`${API_URL}/groups/${editingGroupId}`, payload, { headers });
         setGroups(prev => prev.map(group => group.id === editingGroupId ? { ...group, ...res.data } : group));
@@ -374,7 +372,7 @@ export default function ContactsScreen() {
       setGroupCallEnabled(true);
     } catch (e: any) {
       console.error(e);
-      const errorMsg = e.response?.data?.error || 'Gagal menyimpan warkop';
+      const errorMsg = e.response?.data?.error || e.message || 'Gagal menyimpan warkop';
       if (Platform.OS === 'web') alert(errorMsg);
       else Alert.alert('Error', errorMsg);
     } finally {
@@ -484,7 +482,7 @@ export default function ContactsScreen() {
           <View style={styles.contactInfo}>
             <Text style={styles.contactName}>{item.name}</Text>
             {item.description && <Text style={styles.contactBio}>{item.description}</Text>}
-            <Text style={styles.contactUsername}>{Number(item.min_bmc_balance) > 0 ? `Min ${item.min_bmc_balance} BMC` : 'Terbuka - 0 BMC'}</Text>
+            <Text style={styles.contactUsername}>{Number(item.min_bmc_balance) > 0 ? `Min ${item.min_bmc_balance} BMC` : (item.join_policy === 'approval' ? 'Masuk dengan persetujuan admin' : 'Terbuka')}</Text>
           </View>
           <View style={styles.groupActions}>
             {unreadCounts[item.id] > 0 && (
@@ -600,7 +598,7 @@ export default function ContactsScreen() {
         </ScrollView>
       </View>
 
-      {activeTab === 'warkop' && (
+      {(
         <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
           <Text style={styles.createGroupBtnText}>+ Buat Warkop Baru</Text>
         </TouchableOpacity>
@@ -750,7 +748,7 @@ export default function ContactsScreen() {
       </Modal>
 
       {/* Create Group Modal */}
-      <Modal visible={isGroupModalVisible} transparent={true} animationType="fade">
+      <Modal visible={isGroupModalVisible} transparent={true} animationType="fade" onRequestClose={() => setGroupModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, styles.groupModalContent]}>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -784,14 +782,17 @@ export default function ContactsScreen() {
                 onChangeText={setGroupDescription}
                 multiline
               />
-              <TextInput
-                style={styles.input}
-                placeholder="Minimum BMC Balance (0 untuk terbuka)"
-                placeholderTextColor={coffee.muted}
-                keyboardType="numeric"
-                value={groupMinBmc}
-                onChangeText={setGroupMinBmc}
-              />
+              {!editingGroupId && <View>
+                <Text style={styles.inputLabel}>Pilih anggota ({selectedMembers.length})</Text>
+                <TextInput style={styles.input} placeholder="Cari nama atau username" placeholderTextColor={coffee.muted} value={memberSearch} onChangeText={setMemberSearch} />
+                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
+                  {contacts.filter(user => user.id !== currentUserId && `${user.display_name} ${user.username}`.toLowerCase().includes(memberSearch.toLowerCase())).map(user => <TouchableOpacity key={user.id} style={{ paddingVertical: 10, flexDirection: 'row', gap: 10 }} onPress={() => setSelectedMembers(previous => previous.includes(user.id) ? previous.filter(id => id !== user.id) : [...previous, user.id])}>
+                    <Ionicons name={selectedMembers.includes(user.id) ? 'checkbox' : 'square-outline'} size={22} color={coffee.accent} />
+                    <Text style={{ color: coffee.text, flex: 1 }}>{user.display_name || user.username} (@{user.username})</Text>
+                  </TouchableOpacity>)}
+                </ScrollView>
+                <Text style={styles.groupHint}>Warkop tampil di direktori. Pilih persetujuan admin untuk membatasi siapa yang bisa bergabung.</Text>
+              </View>}
 
               <Text style={styles.inputLabel}>Cara Join</Text>
               <View style={styles.segmentRow}>
@@ -820,16 +821,6 @@ export default function ContactsScreen() {
                 </View>
                 <TouchableOpacity style={[styles.toggleBtn, groupAllowMemberInvites && styles.toggleBtnActive]} onPress={() => setGroupAllowMemberInvites(!groupAllowMemberInvites)}>
                   <View style={[styles.toggleKnob, groupAllowMemberInvites && styles.toggleKnobActive]} />
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.settingRow}>
-                <View style={styles.settingTextWrap}>
-                  <Text style={styles.settingTitle}>Voice/video call warkop</Text>
-                  <Text style={styles.groupHint}>Menyiapkan izin fitur call untuk warkop.</Text>
-                </View>
-                <TouchableOpacity style={[styles.toggleBtn, groupCallEnabled && styles.toggleBtnActive]} onPress={() => setGroupCallEnabled(!groupCallEnabled)}>
-                  <View style={[styles.toggleKnob, groupCallEnabled && styles.toggleKnobActive]} />
                 </TouchableOpacity>
               </View>
 

@@ -829,6 +829,9 @@ export default function BambupediaRoom() {
 
         </View>
         <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
+        <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
+          <Ionicons name="add-circle-outline" size={24} color={coffee.accent} />
+        </TouchableOpacity>
         <TouchableOpacity
           style={[styles.headerIconButton, { backgroundColor: coffee.accentWash }]}
           onPress={() => {

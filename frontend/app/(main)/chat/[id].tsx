@@ -1054,7 +1054,7 @@ function PrivateChatRoomScreen() {
           </>
         ) : (
           <>
-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/(main)/warkop")}>
               <Ionicons name="arrow-back" size={22} color={coffee.text} />
             </TouchableOpacity>
             <View style={styles.headerAvatar}>
@@ -1233,10 +1233,20 @@ function PrivateChatRoomScreen() {
 
               <View style={styles.groupStatusRow}>
                 <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.join_policy === 'approval' ? 'Join disetujui admin' : 'Join terbuka'}</Text></View>
-                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{Number(groupDetails?.min_bmc_balance || 0) > 0 ? `Min ${groupDetails.min_bmc_balance} BMC` : '0 BMC'}</Text></View>
+                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{Number(groupDetails?.min_bmc_balance || 0) > 0 ? `Min ${groupDetails.min_bmc_balance} BMC` : 'Tanpa biaya masuk'}</Text></View>
                 <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.only_admins_can_send ? 'Admin only' : 'Semua bisa chat'}</Text></View>
               </View>
 
+              {groupDetails?.is_admin && <TouchableOpacity style={styles.groupPrimaryButton} onPress={() => { setIsGroupInfoVisible(false); router.push({ pathname: '/(main)/contacts', params: { editWarkop: currentRoomId } }); }}><Text style={styles.groupButtonText}>Pengaturan Warkop</Text></TouchableOpacity>}
+              {groupDetails?.created_by !== myUserId && <TouchableOpacity style={styles.groupSecondaryButton} onPress={async () => {
+                if (Platform.OS === 'web' && !window.confirm('Keluar dari Warkop ini?')) return;
+                try {
+                  const token = await getAuthToken();
+                  await axios.delete(`${API_ORIGIN}/api/groups/${currentRoomId}/members/${myUserId}`, { headers: { Authorization: `Bearer ${token}` } });
+                  setIsGroupInfoVisible(false);
+                  router.replace('/(main)/warkop');
+                } catch { alert('Belum bisa keluar dari Warkop. Coba lagi.'); }
+              }}><Text style={styles.groupSecondaryButtonText}>Keluar dari Warkop</Text></TouchableOpacity>}
               <Text style={styles.groupInfoSectionTitle}>Link Undangan</Text>
               <View style={styles.groupInviteBox}>
                 <Text style={styles.groupInviteText} numberOfLines={2}>{groupDetails?.invite_url || 'Memuat link...'}</Text>

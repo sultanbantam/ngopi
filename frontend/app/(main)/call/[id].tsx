@@ -1,6 +1,6 @@
 import { coffee } from '../../../src/theme/coffee';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform, SafeAreaView, Modal, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { socketService } from '../../../src/utils/socket';
 import * as SecureStore from '../../../src/utils/storage';
@@ -59,6 +59,14 @@ export default function CallScreen() {
   const [isMuted, setIsMuted] = useState(false);
   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
   const [isSpeaker, setIsSpeaker] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const [participantsOpen, setParticipantsOpen] = useState(false);
+  const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
+  const [displayFilter, setDisplayFilter] = useState(false);
+  const [cameraBusy, setCameraBusy] = useState(false);
+  const [sharingScreen, setSharingScreen] = useState(false);
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const aliveRef = useRef(true);
   const [needsAudioTap, setNeedsAudioTap] = useState(false);
 
   // Refs for video elements (Web only)
@@ -142,6 +150,7 @@ export default function CallScreen() {
   };
 
   useEffect(() => {
+    aliveRef.current = true;
     if (Platform.OS !== 'web') {
       alert('Fitur Panggilan (WebRTC) saat ini baru dioptimalkan untuk versi Web (Browser).');
       if (router.canGoBack()) router.back();
@@ -502,6 +511,7 @@ export default function CallScreen() {
 
     return () => {
       isCallActive = false;
+      aliveRef.current = false;
       if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
       endCall(false, true); // true = isUnmounting
       if (activeSocket) {
@@ -546,6 +556,9 @@ export default function CallScreen() {
       }
     }
 
+    aliveRef.current = false;
+    screenStreamRef.current?.getTracks().forEach(track => track.stop());
+    screenStreamRef.current = null;
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((track: any) => track.stop());
     }
@@ -580,6 +593,80 @@ export default function CallScreen() {
     }
   };
 
+  const selectAudioOutput = async () => {
+    const audio = remoteAudioRef.current as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+    const devices = navigator.mediaDevices as MediaDevices & { selectAudioOutput?: () => Promise<MediaDeviceInfo> };
+    try {
+      if (devices.selectAudioOutput && audio?.setSinkId) {
+        const selected = await devices.selectAudioOutput();
+        await audio.setSinkId(selected.deviceId);
+        setIsSpeaker(selected.deviceId !== 'default');
+        await playRemoteAudio();
+      } else {
+        await playRemoteAudio();
+        alert('Browser ini memakai keluaran suara bawaan perangkat. Pilih speaker, headset, atau Bluetooth melalui pengaturan suara perangkat.');
+      }
+    } catch { setConnectionHint('Pemilihan keluaran suara dibatalkan atau tidak diizinkan.'); }
+  };
+
+  const switchCamera = async () => {
+    if (cameraBusy || sharingScreen || !streamRef.current) return;
+    setCameraBusy(true);
+    let acquired: MediaStream | null = null;
+    try {
+      const oldTrack = streamRef.current.getVideoTracks()[0] as MediaStreamTrack | undefined;
+      const devices = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput');
+      if (devices.length < 2) { setConnectionHint('Perangkat ini hanya menyediakan satu kamera.'); return; }
+      const currentId = oldTrack?.getSettings().deviceId;
+      const index = devices.findIndex(device => device.deviceId === currentId);
+      const next = devices[(index + 1) % devices.length]!;
+      acquired = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: next.deviceId } }, audio: false });
+      if (!aliveRef.current) { acquired.getTracks().forEach(track => track.stop()); return; }
+      const replacement = acquired.getVideoTracks()[0]!;
+      replacement.enabled = !isCameraOff;
+      const sender = (peerRef.current as RTCPeerConnection).getSenders().find(item => item.track?.kind === 'video');
+      if (!sender) throw new Error('Pengirim video belum siap');
+      await sender.replaceTrack(replacement);
+      if (oldTrack) { streamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
+      streamRef.current.addTrack(replacement);
+      if (myVideoRef.current) { myVideoRef.current.srcObject = streamRef.current; await myVideoRef.current.play(); }
+      setConnectionHint('');
+    } catch {
+      if (acquired && !streamRef.current?.getTracks().includes(acquired.getVideoTracks()[0])) acquired.getTracks().forEach(track => track.stop());
+      setConnectionHint('Kamera lain belum dapat dibuka. Kamera saat ini tetap dipakai.');
+    } finally { setCameraBusy(false); }
+  };
+
+  const stopScreenShare = async () => {
+    const camera = streamRef.current?.getVideoTracks()[0];
+    const sender = (peerRef.current as RTCPeerConnection | null)?.getSenders().find(item => item.track?.kind === 'video');
+    try { if (aliveRef.current && sender && camera) await sender.replaceTrack(camera); }
+    catch { setConnectionHint('Kamera belum dapat dipulihkan setelah berbagi layar.'); }
+    const previous = screenStreamRef.current;
+    screenStreamRef.current = null;
+    previous?.getTracks().forEach(track => { track.onended = null; track.stop(); });
+    setSharingScreen(false);
+  };
+
+  const shareScreen = async () => {
+    if (sharingScreen) { await stopScreenShare(); return; }
+    if (!navigator.mediaDevices.getDisplayMedia) { setConnectionHint('Browser ini belum mendukung berbagi layar.'); return; }
+    let display: MediaStream | null = null;
+    try {
+      display = await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+      if (!aliveRef.current) { display.getTracks().forEach(track => track.stop()); return; }
+      const track = display.getVideoTracks()[0]!;
+      const sender = (peerRef.current as RTCPeerConnection).getSenders().find(item => item.track?.kind === 'video');
+      if (!sender) throw new Error('Mulai panggilan video untuk berbagi layar');
+      await sender.replaceTrack(track);
+      screenStreamRef.current = display;
+      track.onended = () => void stopScreenShare();
+      setSharingScreen(true);
+      setConnectionHint('Layar sedang dibagikan kepada lawan bicara.');
+      setOptionsOpen(false);
+    } catch { display?.getTracks().forEach(track => track.stop()); setConnectionHint('Berbagi layar dibatalkan atau tidak didukung.'); }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -592,7 +679,7 @@ export default function CallScreen() {
             autoPlay
             playsInline
             muted
-            style={styles.remoteVideo as any}
+            style={{ ...styles.remoteVideo as any, objectFit: videoFit, filter: displayFilter ? 'grayscale(1)' : 'none' }}
           />
         </View>
       )}
@@ -640,44 +727,45 @@ export default function CallScreen() {
           {!!connectionHint && <Text style={[styles.statusText, { textAlign: 'center', marginTop: 8 }]}>{connectionHint}</Text>}
         </View>
 
-        <TouchableOpacity style={styles.headerIconBtn}>
-          <Ionicons name="person-add" size={24} color={coffee.text} />
+        <TouchableOpacity style={styles.headerIconBtn} onPress={() => setParticipantsOpen(true)} accessibilityLabel="Peserta panggilan">
+          <Ionicons name="people-outline" size={24} color={coffee.text} />
         </TouchableOpacity>
       </View>
 
       {/* Right Side Icons (Video Call only) */}
       {isVideoCall && (
         <View style={styles.rightSideIcons}>
-          <TouchableOpacity style={styles.sideBtn}>
+          <TouchableOpacity style={styles.sideBtn} onPress={switchCamera} disabled={cameraBusy || sharingScreen} accessibilityLabel="Ganti kamera">
             <Ionicons name="camera-reverse" size={22} color={coffee.text} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.sideBtn}>
+          <TouchableOpacity style={styles.sideBtn} onPress={() => { setDisplayFilter(!displayFilter); setConnectionHint("Filter ini hanya mengubah tampilan di perangkat kamu."); }} accessibilityLabel="Filter tampilan lokal">
             <Ionicons name="color-wand" size={22} color={coffee.text} />
           </TouchableOpacity>
         </View>
       )}
 
       {/* Local Video PIP (Video Call only) */}
-      {Platform.OS === 'web' && isVideoCall && !isCameraOff && (
+      {Platform.OS === 'web' && isVideoCall && (
         <View style={styles.localVideoWrapper}>
           <video
             ref={myVideoRef as any}
             autoPlay
             playsInline
             muted
-            style={styles.localVideo as any}
+            style={{ ...styles.localVideo as any, visibility: isCameraOff ? 'hidden' : 'visible' }}
           />
+          {isCameraOff && <Text style={{ position: 'absolute', top: '40%', alignSelf: 'center', color: coffee.text }}>Kamera mati</Text>}
         </View>
       )}
 
       {/* Bottom Floating Pill Controls */}
       <View style={styles.bottomControlsContainer}>
         <View style={styles.controlsPill}>
-          <TouchableOpacity style={styles.controlBtn}>
+          <TouchableOpacity style={styles.controlBtn} onPress={() => setOptionsOpen(true)} accessibilityLabel="Pengaturan panggilan">
             <Ionicons name="ellipsis-horizontal" size={24} color={coffee.text} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo} disabled={!isVideoCall}>
+          <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo} accessibilityLabel={isCameraOff ? "Nyalakan kamera" : "Matikan kamera"} disabled={!isVideoCall || sharingScreen}>
             <Ionicons
               name={isCameraOff ? "videocam-off" : "videocam"}
               size={24}
@@ -685,11 +773,11 @@ export default function CallScreen() {
             />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlBtn} onPress={() => setIsSpeaker(!isSpeaker)}>
+          <TouchableOpacity style={styles.controlBtn} onPress={selectAudioOutput} accessibilityLabel="Pilih keluaran suara">
             <Ionicons name={isSpeaker ? "volume-high" : "volume-medium"} size={24} color={coffee.text} />
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.controlBtn} onPress={toggleMute}>
+          <TouchableOpacity style={styles.controlBtn} onPress={toggleMute} accessibilityLabel={isMuted ? "Nyalakan mikrofon" : "Matikan mikrofon"}>
             <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? coffee.text : coffee.text} />
           </TouchableOpacity>
 
@@ -698,6 +786,26 @@ export default function CallScreen() {
           </TouchableOpacity>
         </View>
       </View>
+      <Modal transparent visible={optionsOpen || participantsOpen} animationType="fade" onRequestClose={() => { setOptionsOpen(false); setParticipantsOpen(false); }}>
+        <View style={{ flex: 1, backgroundColor: coffee.overlay, justifyContent: 'center', padding: 24 }}>
+          <ScrollView style={{ flexGrow: 0, maxHeight: '85%', width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: coffee.surface, borderRadius: 20 }} contentContainerStyle={{ padding: 24, gap: 18 }}>
+            <Text style={{ color: coffee.text, fontSize: 20, fontWeight: 'bold' }}>{participantsOpen ? 'Peserta panggilan' : 'Pengaturan panggilan'}</Text>
+            {participantsOpen ? <>
+              <Text style={{ color: coffee.text }}>Kamu</Text><Text style={{ color: coffee.text }}>{name || 'Kontak'}</Text>
+              <Text style={{ color: coffee.secondary }}>Panggilan ini mendukung dua orang. Penambahan peserta konferensi belum tersedia.</Text>
+            </> : <>
+              <TouchableOpacity onPress={toggleMute}><Text style={{ color: coffee.text }}>{isMuted ? 'Nyalakan mikrofon' : 'Matikan mikrofon'}</Text></TouchableOpacity>
+              <TouchableOpacity onPress={selectAudioOutput}><Text style={{ color: coffee.text }}>Pilih keluaran suara</Text></TouchableOpacity>
+              {isVideoCall && <>
+                <TouchableOpacity onPress={() => setVideoFit(videoFit === 'contain' ? 'cover' : 'contain')}><Text style={{ color: coffee.text }}>{videoFit === 'contain' ? 'Isi layar (gambar terpotong)' : 'Tampilkan video utuh'}</Text></TouchableOpacity>
+                <TouchableOpacity onPress={shareScreen}><Text style={{ color: coffee.text }}>{sharingScreen ? 'Berhenti berbagi layar' : 'Bagikan layar'}</Text></TouchableOpacity>
+              </>}
+              <Text style={{ color: coffee.secondary }}>Mikrofon: {isMuted ? 'mati' : 'aktif'} • Kamera: {isCameraOff ? 'mati' : 'aktif'}</Text>
+            </>}
+            <TouchableOpacity onPress={() => { setOptionsOpen(false); setParticipantsOpen(false); }}><Text style={{ color: coffee.accent }}>Tutup</Text></TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

@@ -67,6 +67,7 @@ export const createGroupSchema = Joi.object({
   onlyAdminsCanSend: Joi.boolean().optional(),
   allowMemberInvites: Joi.boolean().optional(),
   callEnabled: Joi.boolean().optional(),
+  memberIds: Joi.array().items(Joi.string().uuid()).unique().max(100).optional(),
 });
 
 export const updateGroupSchema = createGroupSchema;

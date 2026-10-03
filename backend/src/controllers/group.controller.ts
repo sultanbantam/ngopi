@@ -57,6 +57,12 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
+    const memberIds = [...new Set<string>((req.body.memberIds || []) as string[])].filter(id => id !== userId);
+    if (memberIds.length) {
+      const count = await prisma.user.count({ where: { id: { in: memberIds } } });
+      if (count !== memberIds.length) { res.status(400).json({ error: 'Sebagian anggota tidak ditemukan' }); return; }
+    }
+
     const group = await prisma.group.create({
       data: {
         name: trimmedName,
@@ -70,11 +76,10 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
         call_enabled: normalizeBoolean(callEnabled, true),
         created_by: userId,
         members: {
-          create: {
-            user_id: userId,
-            role: 'admin',
-            status: 'active',
-          }
+          create: [
+            { user_id: userId, role: 'admin', status: 'active' },
+            ...memberIds.map(id => ({ user_id: id, role: 'member', status: 'active', invited_by: userId })),
+          ]
         }
       },
       include: {
@@ -135,7 +140,7 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
       avatar_url: group.avatar_url,
       min_bmc_balance: group.min_bmc_balance,
       invite_code: inviteCode,
-      invite_url: `https://www.bamboochat.click/contacts?join=${inviteCode}`,
+      invite_url: `https://ngopi.top/contacts?join=${inviteCode}`,
       join_policy: group.join_policy,
       only_admins_can_send: group.only_admins_can_send,
       allow_member_invites: group.allow_member_invites,
@@ -334,7 +339,7 @@ export const removeGroupMember = async (req: Request, res: Response): Promise<vo
     const groupId = req.params.id as string;
     const userId = req.params.userId as string;
     const actorId = (req as any).user?.id as string;
-    if (!actorId || !(await isGroupAdmin(groupId, actorId))) {
+    if (!actorId || (actorId !== userId && !(await isGroupAdmin(groupId, actorId)))) {
       res.status(403).json({ error: 'Only group admins can remove members' });
       return;
     }
@@ -388,7 +393,7 @@ export const regenerateInviteCode = async (req: Request, res: Response): Promise
     }
     const invite_code = createInviteCode();
     const group = await prisma.group.update({ where: { id: groupId }, data: { invite_code } });
-    res.status(200).json({ invite_code, invite_url: `https://www.bamboochat.click/contacts?join=${group.invite_code}` });
+    res.status(200).json({ invite_code, invite_url: `https://ngopi.top/contacts?join=${group.invite_code}` });
   } catch (error) {
     console.error('Regenerate invite code error:', error);
     res.status(500).json({ error: 'Internal server error' });
