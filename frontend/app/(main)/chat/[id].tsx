@@ -16,12 +16,12 @@ import { getMimeType } from '../../../src/utils/fileHelpers';
 import { API_URL } from '../../../src/utils/session';
 
 const NoTranslateText = Text as any;
-const API_ORIGIN = 'https://api.bamboochat.click';
+const API_ORIGIN = 'https://api.ngopi.top';
 const emojiOptions = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F64F}', '\u{1F525}', '\u{1F389}', '\u{1F60D}', '\u{1F914}', '\u{1F605}', '\u{1F973}'];
 
 const normalizeAttachmentUrl = (url?: string | null) => {
   if (!url) return '';
-  if (url.startsWith('http://api.bamboochat.click')) return url.replace('http://', 'https://');
+  if (url.startsWith('http://api.ngopi.top')) return url.replace('http://', 'https://');
   if (url.startsWith('/uploads/')) return `${API_ORIGIN}${url}`;
   return url;
 };
@@ -321,7 +321,7 @@ function PrivateChatRoomScreen() {
       // Fetch history
       try {
         const token = await SecureStore.getItemAsync('token') || localStorage.getItem('token');
-        const usersResponse = await axios.get(`https://api.bamboochat.click/api/auth/users`, {
+        const usersResponse = await axios.get(`https://api.ngopi.top/api/auth/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const userDirectory = Array.isArray(usersResponse.data) ? usersResponse.data : [];
@@ -336,7 +336,7 @@ function PrivateChatRoomScreen() {
         }
         setSecretKey(encryptionSecret);
 
-        const response = await axios.get(`https://api.bamboochat.click/api/messages/${roomKey}?limit=50`, {
+        const response = await axios.get(`https://api.ngopi.top/api/messages/${roomKey}?limit=50`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         const data = response.data;
@@ -553,7 +553,7 @@ function PrivateChatRoomScreen() {
     setIsLoadingMore(true);
     try {
       const token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
-      const response = await axios.get(`https://api.bamboochat.click/api/messages/${actualRoomId}?cursor=${nextCursor}&limit=50`, {
+      const response = await axios.get(`https://api.ngopi.top/api/messages/${actualRoomId}?cursor=${nextCursor}&limit=50`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = response.data;
@@ -906,8 +906,8 @@ function PrivateChatRoomScreen() {
       let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
       const headers = { Authorization: `Bearer ${token}` };
       const [usersRes, groupsRes] = await Promise.all([
-        axios.get(`https://api.bamboochat.click/api/auth/users`, { headers }),
-        axios.get(`https://api.bamboochat.click/api/groups`, { headers })
+        axios.get(`https://api.ngopi.top/api/auth/users`, { headers }),
+        axios.get(`https://api.ngopi.top/api/groups`, { headers })
       ]);
       let myId = Platform.OS === 'web' ? localStorage.getItem('userId') : await SecureStore.getItemAsync('userId');
       setForwardContacts(usersRes.data.filter((u: any) => u.id !== myId));

@@ -76,7 +76,7 @@ export default function TestPaymentScreen() {
         onReadyForServerApproval: async (paymentId: string) => {
           console.log('onReadyForServerApproval:', paymentId);
           try {
-            await axios.post('https://api.bamboochat.click/api/payments/approve', { paymentId });
+            await axios.post('https://api.ngopi.top/api/payments/approve', { paymentId });
           } catch (err) {
             console.error('Approval failed:', err);
             setMessage('Backend failed to approve payment.');
@@ -85,7 +85,7 @@ export default function TestPaymentScreen() {
         onReadyForServerCompletion: async (paymentId: string, txid: string) => {
           console.log('onReadyForServerCompletion:', paymentId, txid);
           try {
-            await axios.post('https://api.bamboochat.click/api/payments/complete', { paymentId, txid });
+            await axios.post('https://api.ngopi.top/api/payments/complete', { paymentId, txid });
             setMessage('Payment Completed Successfully! ✅');
           } catch (err) {
             console.error('Completion failed:', err);

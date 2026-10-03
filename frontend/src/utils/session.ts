@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import * as SecureStore from './storage';
 
-export const API_URL = 'https://api.bamboochat.click/api';
+export const API_URL = 'https://api.ngopi.top/api';
 
 const TOKEN_REFRESH_WINDOW_MS = 2 * 60 * 1000;
 const REFRESH_RETRY_COOLDOWN_MS = 5 * 1000;

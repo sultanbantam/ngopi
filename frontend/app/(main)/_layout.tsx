@@ -7,7 +7,7 @@ import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 
 
-const API_URL = 'https://api.bamboochat.click/api';
+const API_URL = 'https://api.ngopi.top/api';
 const NOTIFICATION_STORAGE_KEY = 'bamboochat.notifications.v1';
 const CALL_ALERT_STORAGE_KEY = 'bamboochat.call-alert-mode.v1';
 const CALL_RING_DURATION_MS = 30_000;

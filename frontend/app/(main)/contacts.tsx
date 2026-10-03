@@ -10,7 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import axios from 'axios';
 
-const API_URL = 'https://api.bamboochat.click/api';
+const API_URL = 'https://api.ngopi.top/api';
 
 export default function ContactsScreen() {
   const { openMenu } = useLocalSearchParams<{ openMenu?: string }>();

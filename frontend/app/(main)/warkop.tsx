@@ -26,7 +26,7 @@ import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { getMimeType } from '../../src/utils/fileHelpers';
 
-const API_URL = 'https://api.bamboochat.click/api';
+const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
 const ROOM_NAME = 'Warung Kopi';
 const BAMBOO_ICON = '☕';

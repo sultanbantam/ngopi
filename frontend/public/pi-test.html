@@ -41,7 +41,7 @@
                     onReadyForServerApproval: async function(paymentId) {
                         statusEl.innerText = "Approving payment on server...";
                         try {
-                            await axios.post('https://api.bamboochat.click/api/payments/approve', { paymentId });
+                            await axios.post('https://api.ngopi.top/api/payments/approve', { paymentId });
                         } catch(e) {
                             statusEl.innerText = "Server approval failed: " + e.message;
                         }
@@ -49,7 +49,7 @@
                     onReadyForServerCompletion: async function(paymentId, txid) {
                         statusEl.innerText = "Completing payment on server...";
                         try {
-                            await axios.post('https://api.bamboochat.click/api/payments/complete', { paymentId, txid });
+                            await axios.post('https://api.ngopi.top/api/payments/complete', { paymentId, txid });
                             statusEl.innerText = "Payment Completed Successfully! ✅";
                         } catch(e) {
                             statusEl.innerText = "Server completion failed: " + e.message;

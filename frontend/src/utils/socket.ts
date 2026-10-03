@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { Platform } from 'react-native';
 import { clearStoredSession, getLastRefreshFailureReason, getValidAccessToken, refreshAccessToken } from './session';
 
-const SOCKET_URL = 'https://api.bamboochat.click';
+const SOCKET_URL = 'https://api.ngopi.top';
 
 class SocketService {
   public socket: Socket | null = null;

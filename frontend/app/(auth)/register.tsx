@@ -8,7 +8,7 @@ import { generateDeviceKeyPair } from '../../src/utils/e2ee';
 import { setStoredRefreshToken, setStoredToken } from '../../src/utils/session';
 import { explainAuthError } from '../../src/utils/auth-errors';
 
-const API_URL = 'https://api.bamboochat.click/api';
+const API_URL = 'https://api.ngopi.top/api';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 
