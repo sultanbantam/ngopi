@@ -1,0 +1,558 @@
+From 6cb6b0db4017fdcbcb8080294743c22bf2ba3b0e Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Sat, 3 Oct 2026 19:32:07 +0800
+Subject: [PATCH] Fix camera preview, enable call controls and expose Warkop
+ creation and settings
+
+---
+ backend/src/controllers/group.controller.ts |  21 ++--
+ backend/src/utils/validation.ts             |   1 +
+ frontend/app/(main)/call/[id].tsx           | 132 ++++++++++++++++++--
+ frontend/app/(main)/chat/[id].tsx           |  14 ++-
+ frontend/app/(main)/contacts.tsx            |  85 ++++++-------
+ frontend/app/(main)/warkop.tsx              |   3 +
+ 6 files changed, 187 insertions(+), 69 deletions(-)
+
+diff --git a/backend/src/controllers/group.controller.ts b/backend/src/controllers/group.controller.ts
+index b7956d3..a60ef1b 100644
+--- a/backend/src/controllers/group.controller.ts
++++ b/backend/src/controllers/group.controller.ts
+@@ -57,6 +57,12 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
+       return;
+     }
+ 
++    const memberIds = [...new Set<string>((req.body.memberIds || []) as string[])].filter(id => id !== userId);
++    if (memberIds.length) {
++      const count = await prisma.user.count({ where: { id: { in: memberIds } } });
++      if (count !== memberIds.length) { res.status(400).json({ error: 'Sebagian anggota tidak ditemukan' }); return; }
++    }
++
+     const group = await prisma.group.create({
+       data: {
+         name: trimmedName,
+@@ -70,11 +76,10 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
+         call_enabled: normalizeBoolean(callEnabled, true),
+         created_by: userId,
+         members: {
+-          create: {
+-            user_id: userId,
+-            role: 'admin',
+-            status: 'active',
+-          }
++          create: [
++            { user_id: userId, role: 'admin', status: 'active' },
++            ...memberIds.map(id => ({ user_id: id, role: 'member', status: 'active', invited_by: userId })),
++          ]
+         }
+       },
+       include: {
+@@ -135,7 +140,7 @@ export const getGroupMembers = async (req: Request, res: Response): Promise<void
+       avatar_url: group.avatar_url,
+       min_bmc_balance: group.min_bmc_balance,
+       invite_code: inviteCode,
+-      invite_url: `https://www.bamboochat.click/contacts?join=${inviteCode}`,
++      invite_url: `https://ngopi.top/contacts?join=${inviteCode}`,
+       join_policy: group.join_policy,
+       only_admins_can_send: group.only_admins_can_send,
+       allow_member_invites: group.allow_member_invites,
+@@ -334,7 +339,7 @@ export const removeGroupMember = async (req: Request, res: Response): Promise<vo
+     const groupId = req.params.id as string;
+     const userId = req.params.userId as string;
+     const actorId = (req as any).user?.id as string;
+-    if (!actorId || !(await isGroupAdmin(groupId, actorId))) {
++    if (!actorId || (actorId !== userId && !(await isGroupAdmin(groupId, actorId)))) {
+       res.status(403).json({ error: 'Only group admins can remove members' });
+       return;
+     }
+@@ -388,7 +393,7 @@ export const regenerateInviteCode = async (req: Request, res: Response): Promise
+     }
+     const invite_code = createInviteCode();
+     const group = await prisma.group.update({ where: { id: groupId }, data: { invite_code } });
+-    res.status(200).json({ invite_code, invite_url: `https://www.bamboochat.click/contacts?join=${group.invite_code}` });
++    res.status(200).json({ invite_code, invite_url: `https://ngopi.top/contacts?join=${group.invite_code}` });
+   } catch (error) {
+     console.error('Regenerate invite code error:', error);
+     res.status(500).json({ error: 'Internal server error' });
+diff --git a/backend/src/utils/validation.ts b/backend/src/utils/validation.ts
+index dcb8fa7..90a315c 100644
+--- a/backend/src/utils/validation.ts
++++ b/backend/src/utils/validation.ts
+@@ -67,6 +67,7 @@ export const createGroupSchema = Joi.object({
+   onlyAdminsCanSend: Joi.boolean().optional(),
+   allowMemberInvites: Joi.boolean().optional(),
+   callEnabled: Joi.boolean().optional(),
++  memberIds: Joi.array().items(Joi.string().uuid()).unique().max(100).optional(),
+ });
+ 
+ export const updateGroupSchema = createGroupSchema;
+diff --git a/frontend/app/(main)/call/[id].tsx b/frontend/app/(main)/call/[id].tsx
+index 5d15f4d..adddf8a 100644
+--- a/frontend/app/(main)/call/[id].tsx
++++ b/frontend/app/(main)/call/[id].tsx
+@@ -1,6 +1,6 @@
+ import { coffee } from '../../../src/theme/coffee';
+ import React, { useEffect, useRef, useState } from 'react';
+-import { View, Text, StyleSheet, TouchableOpacity, Platform, SafeAreaView } from 'react-native';
++import { View, Text, StyleSheet, TouchableOpacity, Platform, SafeAreaView, Modal, ScrollView } from 'react-native';
+ import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
+ import { socketService } from '../../../src/utils/socket';
+ import * as SecureStore from '../../../src/utils/storage';
+@@ -59,6 +59,14 @@ export default function CallScreen() {
+   const [isMuted, setIsMuted] = useState(false);
+   const [isCameraOff, setIsCameraOff] = useState(!isVideoCall);
+   const [isSpeaker, setIsSpeaker] = useState(false);
++  const [optionsOpen, setOptionsOpen] = useState(false);
++  const [participantsOpen, setParticipantsOpen] = useState(false);
++  const [videoFit, setVideoFit] = useState<'contain' | 'cover'>('contain');
++  const [displayFilter, setDisplayFilter] = useState(false);
++  const [cameraBusy, setCameraBusy] = useState(false);
++  const [sharingScreen, setSharingScreen] = useState(false);
++  const screenStreamRef = useRef<MediaStream | null>(null);
++  const aliveRef = useRef(true);
+   const [needsAudioTap, setNeedsAudioTap] = useState(false);
+ 
+   // Refs for video elements (Web only)
+@@ -142,6 +150,7 @@ export default function CallScreen() {
+   };
+ 
+   useEffect(() => {
++    aliveRef.current = true;
+     if (Platform.OS !== 'web') {
+       alert('Fitur Panggilan (WebRTC) saat ini baru dioptimalkan untuk versi Web (Browser).');
+       if (router.canGoBack()) router.back();
+@@ -502,6 +511,7 @@ export default function CallScreen() {
+ 
+     return () => {
+       isCallActive = false;
++      aliveRef.current = false;
+       if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+       endCall(false, true); // true = isUnmounting
+       if (activeSocket) {
+@@ -546,6 +556,9 @@ export default function CallScreen() {
+       }
+     }
+ 
++    aliveRef.current = false;
++    screenStreamRef.current?.getTracks().forEach(track => track.stop());
++    screenStreamRef.current = null;
+     if (streamRef.current) {
+       streamRef.current.getTracks().forEach((track: any) => track.stop());
+     }
+@@ -580,6 +593,80 @@ export default function CallScreen() {
+     }
+   };
+ 
++  const selectAudioOutput = async () => {
++    const audio = remoteAudioRef.current as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
++    const devices = navigator.mediaDevices as MediaDevices & { selectAudioOutput?: () => Promise<MediaDeviceInfo> };
++    try {
++      if (devices.selectAudioOutput && audio?.setSinkId) {
++        const selected = await devices.selectAudioOutput();
++        await audio.setSinkId(selected.deviceId);
++        setIsSpeaker(selected.deviceId !== 'default');
++        await playRemoteAudio();
++      } else {
++        await playRemoteAudio();
++        alert('Browser ini memakai keluaran suara bawaan perangkat. Pilih speaker, headset, atau Bluetooth melalui pengaturan suara perangkat.');
++      }
++    } catch { setConnectionHint('Pemilihan keluaran suara dibatalkan atau tidak diizinkan.'); }
++  };
++
++  const switchCamera = async () => {
++    if (cameraBusy || sharingScreen || !streamRef.current) return;
++    setCameraBusy(true);
++    let acquired: MediaStream | null = null;
++    try {
++      const oldTrack = streamRef.current.getVideoTracks()[0] as MediaStreamTrack | undefined;
++      const devices = (await navigator.mediaDevices.enumerateDevices()).filter(device => device.kind === 'videoinput');
++      if (devices.length < 2) { setConnectionHint('Perangkat ini hanya menyediakan satu kamera.'); return; }
++      const currentId = oldTrack?.getSettings().deviceId;
++      const index = devices.findIndex(device => device.deviceId === currentId);
++      const next = devices[(index + 1) % devices.length]!;
++      acquired = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: next.deviceId } }, audio: false });
++      if (!aliveRef.current) { acquired.getTracks().forEach(track => track.stop()); return; }
++      const replacement = acquired.getVideoTracks()[0]!;
++      replacement.enabled = !isCameraOff;
++      const sender = (peerRef.current as RTCPeerConnection).getSenders().find(item => item.track?.kind === 'video');
++      if (!sender) throw new Error('Pengirim video belum siap');
++      await sender.replaceTrack(replacement);
++      if (oldTrack) { streamRef.current.removeTrack(oldTrack); oldTrack.stop(); }
++      streamRef.current.addTrack(replacement);
++      if (myVideoRef.current) { myVideoRef.current.srcObject = streamRef.current; await myVideoRef.current.play(); }
++      setConnectionHint('');
++    } catch {
++      if (acquired && !streamRef.current?.getTracks().includes(acquired.getVideoTracks()[0])) acquired.getTracks().forEach(track => track.stop());
++      setConnectionHint('Kamera lain belum dapat dibuka. Kamera saat ini tetap dipakai.');
++    } finally { setCameraBusy(false); }
++  };
++
++  const stopScreenShare = async () => {
++    const camera = streamRef.current?.getVideoTracks()[0];
++    const sender = (peerRef.current as RTCPeerConnection | null)?.getSenders().find(item => item.track?.kind === 'video');
++    try { if (aliveRef.current && sender && camera) await sender.replaceTrack(camera); }
++    catch { setConnectionHint('Kamera belum dapat dipulihkan setelah berbagi layar.'); }
++    const previous = screenStreamRef.current;
++    screenStreamRef.current = null;
++    previous?.getTracks().forEach(track => { track.onended = null; track.stop(); });
++    setSharingScreen(false);
++  };
++
++  const shareScreen = async () => {
++    if (sharingScreen) { await stopScreenShare(); return; }
++    if (!navigator.mediaDevices.getDisplayMedia) { setConnectionHint('Browser ini belum mendukung berbagi layar.'); return; }
++    let display: MediaStream | null = null;
++    try {
++      display = await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
++      if (!aliveRef.current) { display.getTracks().forEach(track => track.stop()); return; }
++      const track = display.getVideoTracks()[0]!;
++      const sender = (peerRef.current as RTCPeerConnection).getSenders().find(item => item.track?.kind === 'video');
++      if (!sender) throw new Error('Mulai panggilan video untuk berbagi layar');
++      await sender.replaceTrack(track);
++      screenStreamRef.current = display;
++      track.onended = () => void stopScreenShare();
++      setSharingScreen(true);
++      setConnectionHint('Layar sedang dibagikan kepada lawan bicara.');
++      setOptionsOpen(false);
++    } catch { display?.getTracks().forEach(track => track.stop()); setConnectionHint('Berbagi layar dibatalkan atau tidak didukung.'); }
++  };
++
+   return (
+     <SafeAreaView style={styles.container}>
+       <Stack.Screen options={{ headerShown: false }} />
+@@ -592,7 +679,7 @@ export default function CallScreen() {
+             autoPlay
+             playsInline
+             muted
+-            style={styles.remoteVideo as any}
++            style={{ ...styles.remoteVideo as any, objectFit: videoFit, filter: displayFilter ? 'grayscale(1)' : 'none' }}
+           />
+         </View>
+       )}
+@@ -640,44 +727,45 @@ export default function CallScreen() {
+           {!!connectionHint && <Text style={[styles.statusText, { textAlign: 'center', marginTop: 8 }]}>{connectionHint}</Text>}
+         </View>
+ 
+-        <TouchableOpacity style={styles.headerIconBtn}>
+-          <Ionicons name="person-add" size={24} color={coffee.text} />
++        <TouchableOpacity style={styles.headerIconBtn} onPress={() => setParticipantsOpen(true)} accessibilityLabel="Peserta panggilan">
++          <Ionicons name="people-outline" size={24} color={coffee.text} />
+         </TouchableOpacity>
+       </View>
+ 
+       {/* Right Side Icons (Video Call only) */}
+       {isVideoCall && (
+         <View style={styles.rightSideIcons}>
+-          <TouchableOpacity style={styles.sideBtn}>
++          <TouchableOpacity style={styles.sideBtn} onPress={switchCamera} disabled={cameraBusy || sharingScreen} accessibilityLabel="Ganti kamera">
+             <Ionicons name="camera-reverse" size={22} color={coffee.text} />
+           </TouchableOpacity>
+-          <TouchableOpacity style={styles.sideBtn}>
++          <TouchableOpacity style={styles.sideBtn} onPress={() => { setDisplayFilter(!displayFilter); setConnectionHint("Filter ini hanya mengubah tampilan di perangkat kamu."); }} accessibilityLabel="Filter tampilan lokal">
+             <Ionicons name="color-wand" size={22} color={coffee.text} />
+           </TouchableOpacity>
+         </View>
+       )}
+ 
+       {/* Local Video PIP (Video Call only) */}
+-      {Platform.OS === 'web' && isVideoCall && !isCameraOff && (
++      {Platform.OS === 'web' && isVideoCall && (
+         <View style={styles.localVideoWrapper}>
+           <video
+             ref={myVideoRef as any}
+             autoPlay
+             playsInline
+             muted
+-            style={styles.localVideo as any}
++            style={{ ...styles.localVideo as any, visibility: isCameraOff ? 'hidden' : 'visible' }}
+           />
++          {isCameraOff && <Text style={{ position: 'absolute', top: '40%', alignSelf: 'center', color: coffee.text }}>Kamera mati</Text>}
+         </View>
+       )}
+ 
+       {/* Bottom Floating Pill Controls */}
+       <View style={styles.bottomControlsContainer}>
+         <View style={styles.controlsPill}>
+-          <TouchableOpacity style={styles.controlBtn}>
++          <TouchableOpacity style={styles.controlBtn} onPress={() => setOptionsOpen(true)} accessibilityLabel="Pengaturan panggilan">
+             <Ionicons name="ellipsis-horizontal" size={24} color={coffee.text} />
+           </TouchableOpacity>
+ 
+-          <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo} disabled={!isVideoCall}>
++          <TouchableOpacity style={styles.controlBtn} onPress={toggleVideo} accessibilityLabel={isCameraOff ? "Nyalakan kamera" : "Matikan kamera"} disabled={!isVideoCall || sharingScreen}>
+             <Ionicons
+               name={isCameraOff ? "videocam-off" : "videocam"}
+               size={24}
+@@ -685,11 +773,11 @@ export default function CallScreen() {
+             />
+           </TouchableOpacity>
+ 
+-          <TouchableOpacity style={styles.controlBtn} onPress={() => setIsSpeaker(!isSpeaker)}>
++          <TouchableOpacity style={styles.controlBtn} onPress={selectAudioOutput} accessibilityLabel="Pilih keluaran suara">
+             <Ionicons name={isSpeaker ? "volume-high" : "volume-medium"} size={24} color={coffee.text} />
+           </TouchableOpacity>
+ 
+-          <TouchableOpacity style={styles.controlBtn} onPress={toggleMute}>
++          <TouchableOpacity style={styles.controlBtn} onPress={toggleMute} accessibilityLabel={isMuted ? "Nyalakan mikrofon" : "Matikan mikrofon"}>
+             <Ionicons name={isMuted ? "mic-off" : "mic"} size={24} color={isMuted ? coffee.text : coffee.text} />
+           </TouchableOpacity>
+ 
+@@ -698,6 +786,26 @@ export default function CallScreen() {
+           </TouchableOpacity>
+         </View>
+       </View>
++      <Modal transparent visible={optionsOpen || participantsOpen} animationType="fade" onRequestClose={() => { setOptionsOpen(false); setParticipantsOpen(false); }}>
++        <View style={{ flex: 1, backgroundColor: coffee.overlay, justifyContent: 'center', padding: 24 }}>
++          <ScrollView style={{ flexGrow: 0, maxHeight: '85%', width: '100%', maxWidth: 480, alignSelf: 'center', backgroundColor: coffee.surface, borderRadius: 20 }} contentContainerStyle={{ padding: 24, gap: 18 }}>
++            <Text style={{ color: coffee.text, fontSize: 20, fontWeight: 'bold' }}>{participantsOpen ? 'Peserta panggilan' : 'Pengaturan panggilan'}</Text>
++            {participantsOpen ? <>
++              <Text style={{ color: coffee.text }}>Kamu</Text><Text style={{ color: coffee.text }}>{name || 'Kontak'}</Text>
++              <Text style={{ color: coffee.secondary }}>Panggilan ini mendukung dua orang. Penambahan peserta konferensi belum tersedia.</Text>
++            </> : <>
++              <TouchableOpacity onPress={toggleMute}><Text style={{ color: coffee.text }}>{isMuted ? 'Nyalakan mikrofon' : 'Matikan mikrofon'}</Text></TouchableOpacity>
++              <TouchableOpacity onPress={selectAudioOutput}><Text style={{ color: coffee.text }}>Pilih keluaran suara</Text></TouchableOpacity>
++              {isVideoCall && <>
++                <TouchableOpacity onPress={() => setVideoFit(videoFit === 'contain' ? 'cover' : 'contain')}><Text style={{ color: coffee.text }}>{videoFit === 'contain' ? 'Isi layar (gambar terpotong)' : 'Tampilkan video utuh'}</Text></TouchableOpacity>
++                <TouchableOpacity onPress={shareScreen}><Text style={{ color: coffee.text }}>{sharingScreen ? 'Berhenti berbagi layar' : 'Bagikan layar'}</Text></TouchableOpacity>
++              </>}
++              <Text style={{ color: coffee.secondary }}>Mikrofon: {isMuted ? 'mati' : 'aktif'} • Kamera: {isCameraOff ? 'mati' : 'aktif'}</Text>
++            </>}
++            <TouchableOpacity onPress={() => { setOptionsOpen(false); setParticipantsOpen(false); }}><Text style={{ color: coffee.accent }}>Tutup</Text></TouchableOpacity>
++          </ScrollView>
++        </View>
++      </Modal>
+     </SafeAreaView>
+   );
+ }
+diff --git a/frontend/app/(main)/chat/[id].tsx b/frontend/app/(main)/chat/[id].tsx
+index e9eeffc..1322d32 100644
+--- a/frontend/app/(main)/chat/[id].tsx
++++ b/frontend/app/(main)/chat/[id].tsx
+@@ -1054,7 +1054,7 @@ function PrivateChatRoomScreen() {
+           </>
+         ) : (
+           <>
+-            <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
++            <TouchableOpacity style={styles.backButton} onPress={() => router.replace("/(main)/warkop")}>
+               <Ionicons name="arrow-back" size={22} color={coffee.text} />
+             </TouchableOpacity>
+             <View style={styles.headerAvatar}>
+@@ -1233,10 +1233,20 @@ function PrivateChatRoomScreen() {
+ 
+               <View style={styles.groupStatusRow}>
+                 <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.join_policy === 'approval' ? 'Join disetujui admin' : 'Join terbuka'}</Text></View>
+-                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{Number(groupDetails?.min_bmc_balance || 0) > 0 ? `Min ${groupDetails.min_bmc_balance} BMC` : '0 BMC'}</Text></View>
++                <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{Number(groupDetails?.min_bmc_balance || 0) > 0 ? `Min ${groupDetails.min_bmc_balance} BMC` : 'Tanpa biaya masuk'}</Text></View>
+                 <View style={styles.groupStatusChip}><Text style={styles.groupStatusLabel}>{groupDetails?.only_admins_can_send ? 'Admin only' : 'Semua bisa chat'}</Text></View>
+               </View>
+ 
++              {groupDetails?.is_admin && <TouchableOpacity style={styles.groupPrimaryButton} onPress={() => { setIsGroupInfoVisible(false); router.push({ pathname: '/(main)/contacts', params: { editWarkop: currentRoomId } }); }}><Text style={styles.groupButtonText}>Pengaturan Warkop</Text></TouchableOpacity>}
++              {groupDetails?.created_by !== myUserId && <TouchableOpacity style={styles.groupSecondaryButton} onPress={async () => {
++                if (Platform.OS === 'web' && !window.confirm('Keluar dari Warkop ini?')) return;
++                try {
++                  const token = await getAuthToken();
++                  await axios.delete(`${API_ORIGIN}/api/groups/${currentRoomId}/members/${myUserId}`, { headers: { Authorization: `Bearer ${token}` } });
++                  setIsGroupInfoVisible(false);
++                  router.replace('/(main)/warkop');
++                } catch { alert('Belum bisa keluar dari Warkop. Coba lagi.'); }
++              }}><Text style={styles.groupSecondaryButtonText}>Keluar dari Warkop</Text></TouchableOpacity>}
+               <Text style={styles.groupInfoSectionTitle}>Link Undangan</Text>
+               <View style={styles.groupInviteBox}>
+                 <Text style={styles.groupInviteText} numberOfLines={2}>{groupDetails?.invite_url || 'Memuat link...'}</Text>
+diff --git a/frontend/app/(main)/contacts.tsx b/frontend/app/(main)/contacts.tsx
+index 0346fde..a2803a5 100644
+--- a/frontend/app/(main)/contacts.tsx
++++ b/frontend/app/(main)/contacts.tsx
+@@ -16,7 +16,7 @@ import { profileSlug } from '../../src/utils/profileLink';
+ const API_URL = 'https://api.ngopi.top/api';
+ 
+ export default function ContactsScreen() {
+-  const { openMenu } = useLocalSearchParams<{ openMenu?: string }>();
++  const { openMenu, createWarkop, editWarkop } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string }>();
+   const [loading, setLoading] = useState(true);
+   const [currentUser, setCurrentUser] = useState('');
+   const [currentUsername, setCurrentUsername] = useState('');
+@@ -33,6 +33,8 @@ export default function ContactsScreen() {
+   const [dropdownVisible, setDropdownVisible] = useState(false);
+ 
+   const [isGroupModalVisible, setGroupModalVisible] = useState(false);
++  const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
++  const [memberSearch, setMemberSearch] = useState('');
+   const [groupName, setGroupName] = useState('');
+   const [groupDescription, setGroupDescription] = useState('');
+   const [groupMinBmc, setGroupMinBmc] = useState('0');
+@@ -201,6 +203,8 @@ export default function ContactsScreen() {
+ 
+   const openCreateGroupModal = () => {
+     setEditingGroupId(null);
++    setSelectedMembers([]);
++    setMemberSearch('');
+     setGroupName('');
+     setGroupDescription('');
+     setGroupMinBmc('0');
+@@ -212,6 +216,14 @@ export default function ContactsScreen() {
+     setGroupModalVisible(true);
+   };
+ 
++  useEffect(() => {
++    if (createWarkop === '1') {
++      openCreateGroupModal();
++      setActiveTab('warkop');
++      router.setParams({ createWarkop: '' });
++    }
++  }, [createWarkop]);
++
+   const openEditGroupModal = (group: any) => {
+     setEditingGroupId(group.id);
+     setGroupName(group.name || '');
+@@ -224,6 +236,11 @@ export default function ContactsScreen() {
+     setGroupCallEnabled(group.call_enabled !== false);
+     setGroupModalVisible(true);
+   };
++  useEffect(() => {
++    const group = groups.find(item => item.id === editWarkop);
++    if (group) { openEditGroupModal(group); router.setParams({ editWarkop: '' }); }
++  }, [editWarkop, groups]);
++
+   const openHelpCenter = () => {
+     router.push('/(main)/help-center' as any);
+   };
+@@ -318,28 +335,10 @@ export default function ContactsScreen() {
+ 
+     try {
+       setIsSavingGroup(true);
+-      let token = Platform.OS === 'web' ? localStorage.getItem('token') : await SecureStore.getItemAsync('token');
+-      const minBmcNumber = Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0);
+-      let finalGroupAvatar = groupAvatar;
+-
+-      if (groupAvatar && (groupAvatar.startsWith('blob:') || groupAvatar.startsWith('file:'))) {
+-        const formData = new FormData();
+-        if (Platform.OS === 'web') {
+-          const res = await fetch(groupAvatar);
+-          const blob = await res.blob();
+-          formData.append('file', blob, 'group-avatar.jpg');
+-        } else {
+-          formData.append('file', {
+-            uri: groupAvatar,
+-            name: 'group-avatar.jpg',
+-            type: 'image/jpeg',
+-          } as any);
+-        }
+-        const uploadRes = await axios.post(`${API_URL}/upload`, formData, {
+-          headers: { 'Content-Type': 'multipart/form-data' }
+-        });
+-        finalGroupAvatar = uploadRes.data.url;
+-      }
++      const headers = await getAuthHeaders();
++      if (!headers.Authorization) throw new Error('Silakan masuk kembali.');
++      const minBmcNumber = editingGroupId ? Math.max(0, Number.parseFloat(groupMinBmc || '0') || 0) : 0;
++      const finalGroupAvatar = await uploadProfileAvatar(groupAvatar, null, headers);
+ 
+       const payload = {
+         name: trimmedName,
+@@ -350,9 +349,8 @@ export default function ContactsScreen() {
+         onlyAdminsCanSend: groupOnlyAdminsCanSend,
+         allowMemberInvites: groupAllowMemberInvites,
+         callEnabled: groupCallEnabled,
++        ...(!editingGroupId ? { memberIds: selectedMembers } : {}),
+       };
+-      const headers = { Authorization: `Bearer ${token}` };
+-
+       if (editingGroupId) {
+         const res = await axios.put(`${API_URL}/groups/${editingGroupId}`, payload, { headers });
+         setGroups(prev => prev.map(group => group.id === editingGroupId ? { ...group, ...res.data } : group));
+@@ -374,7 +372,7 @@ export default function ContactsScreen() {
+       setGroupCallEnabled(true);
+     } catch (e: any) {
+       console.error(e);
+-      const errorMsg = e.response?.data?.error || 'Gagal menyimpan warkop';
++      const errorMsg = e.response?.data?.error || e.message || 'Gagal menyimpan warkop';
+       if (Platform.OS === 'web') alert(errorMsg);
+       else Alert.alert('Error', errorMsg);
+     } finally {
+@@ -484,7 +482,7 @@ export default function ContactsScreen() {
+           <View style={styles.contactInfo}>
+             <Text style={styles.contactName}>{item.name}</Text>
+             {item.description && <Text style={styles.contactBio}>{item.description}</Text>}
+-            <Text style={styles.contactUsername}>{Number(item.min_bmc_balance) > 0 ? `Min ${item.min_bmc_balance} BMC` : 'Terbuka - 0 BMC'}</Text>
++            <Text style={styles.contactUsername}>{Number(item.min_bmc_balance) > 0 ? `Min ${item.min_bmc_balance} BMC` : (item.join_policy === 'approval' ? 'Masuk dengan persetujuan admin' : 'Terbuka')}</Text>
+           </View>
+           <View style={styles.groupActions}>
+             {unreadCounts[item.id] > 0 && (
+@@ -600,7 +598,7 @@ export default function ContactsScreen() {
+         </ScrollView>
+       </View>
+ 
+-      {activeTab === 'warkop' && (
++      {(
+         <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
+           <Text style={styles.createGroupBtnText}>+ Buat Warkop Baru</Text>
+         </TouchableOpacity>
+@@ -750,7 +748,7 @@ export default function ContactsScreen() {
+       </Modal>
+ 
+       {/* Create Group Modal */}
+-      <Modal visible={isGroupModalVisible} transparent={true} animationType="fade">
++      <Modal visible={isGroupModalVisible} transparent={true} animationType="fade" onRequestClose={() => setGroupModalVisible(false)}>
+         <View style={styles.modalOverlay}>
+           <View style={[styles.modalContent, styles.groupModalContent]}>
+             <ScrollView showsVerticalScrollIndicator={false}>
+@@ -784,14 +782,17 @@ export default function ContactsScreen() {
+                 onChangeText={setGroupDescription}
+                 multiline
+               />
+-              <TextInput
+-                style={styles.input}
+-                placeholder="Minimum BMC Balance (0 untuk terbuka)"
+-                placeholderTextColor={coffee.muted}
+-                keyboardType="numeric"
+-                value={groupMinBmc}
+-                onChangeText={setGroupMinBmc}
+-              />
++              {!editingGroupId && <View>
++                <Text style={styles.inputLabel}>Pilih anggota ({selectedMembers.length})</Text>
++                <TextInput style={styles.input} placeholder="Cari nama atau username" placeholderTextColor={coffee.muted} value={memberSearch} onChangeText={setMemberSearch} />
++                <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
++                  {contacts.filter(user => user.id !== currentUserId && `${user.display_name} ${user.username}`.toLowerCase().includes(memberSearch.toLowerCase())).map(user => <TouchableOpacity key={user.id} style={{ paddingVertical: 10, flexDirection: 'row', gap: 10 }} onPress={() => setSelectedMembers(previous => previous.includes(user.id) ? previous.filter(id => id !== user.id) : [...previous, user.id])}>
++                    <Ionicons name={selectedMembers.includes(user.id) ? 'checkbox' : 'square-outline'} size={22} color={coffee.accent} />
++                    <Text style={{ color: coffee.text, flex: 1 }}>{user.display_name || user.username} (@{user.username})</Text>
++                  </TouchableOpacity>)}
++                </ScrollView>
++                <Text style={styles.groupHint}>Warkop tampil di direktori. Pilih persetujuan admin untuk membatasi siapa yang bisa bergabung.</Text>
++              </View>}
+ 
+               <Text style={styles.inputLabel}>Cara Join</Text>
+               <View style={styles.segmentRow}>
+@@ -823,16 +824,6 @@ export default function ContactsScreen() {
+                 </TouchableOpacity>
+               </View>
+ 
+-              <View style={styles.settingRow}>
+-                <View style={styles.settingTextWrap}>
+-                  <Text style={styles.settingTitle}>Voice/video call warkop</Text>
+-                  <Text style={styles.groupHint}>Menyiapkan izin fitur call untuk warkop.</Text>
+-                </View>
+-                <TouchableOpacity style={[styles.toggleBtn, groupCallEnabled && styles.toggleBtnActive]} onPress={() => setGroupCallEnabled(!groupCallEnabled)}>
+-                  <View style={[styles.toggleKnob, groupCallEnabled && styles.toggleKnobActive]} />
+-                </TouchableOpacity>
+-              </View>
+-
+               <View style={styles.modalActions}>
+                 <TouchableOpacity onPress={() => { setGroupModalVisible(false); setEditingGroupId(null); }} style={styles.cancelBtn}>
+                   <Text style={styles.cancelBtnText}>Batal</Text>
+diff --git a/frontend/app/(main)/warkop.tsx b/frontend/app/(main)/warkop.tsx
+index 3c84a84..7b50bfc 100644
+--- a/frontend/app/(main)/warkop.tsx
++++ b/frontend/app/(main)/warkop.tsx
+@@ -829,6 +829,9 @@ export default function BambupediaRoom() {
+ 
+         </View>
+         <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
++        <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
++          <Ionicons name="add-circle-outline" size={24} color={coffee.accent} />
++        </TouchableOpacity>
+         <TouchableOpacity
+           style={[styles.headerIconButton, { backgroundColor: coffee.accentWash }]}
+           onPress={() => {
+-- 
+2.51.1
+

@@ -1,0 +1,184 @@
+From f07cffdb5e493eb529db1eea42ca6639f1ffaeee Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 2 Oct 2026 19:07:47 -0700
+Subject: [PATCH] Rename app identity and visible branding to Ngopi
+
+---
+ frontend/app.json                |  6 +++---
+ frontend/app/(main)/_layout.tsx  |  6 +++---
+ frontend/app/(main)/contacts.tsx |  2 +-
+ frontend/app/+html.tsx           |  6 +++---
+ frontend/app/privacy.tsx         |  6 +++---
+ frontend/app/terms.tsx           | 14 +++++++-------
+ 6 files changed, 20 insertions(+), 20 deletions(-)
+
+diff --git a/frontend/app.json b/frontend/app.json
+index bb16eb0..1e0587c 100644
+--- a/frontend/app.json
++++ b/frontend/app.json
+@@ -1,9 +1,9 @@
+ {
+   "expo": {
+-    "name": "frontend",
+-    "slug": "frontend",
++    "name": "Ngopi",
++    "slug": "ngopi",
+     "version": "1.0.0",
+-    "scheme": "bamboochat",
++    "scheme": "ngopi",
+     "orientation": "portrait",
+     "icon": "./assets/icon.png",
+     "userInterfaceStyle": "light",
+diff --git a/frontend/app/(main)/_layout.tsx b/frontend/app/(main)/_layout.tsx
+index 04ed87b..4860427 100644
+--- a/frontend/app/(main)/_layout.tsx
++++ b/frontend/app/(main)/_layout.tsx
+@@ -286,7 +286,7 @@ export default function MainLayout() {
+     const handleNewMessage = (data: any) => {
+       if (currentUserId && data.sender_id !== currentUserId) {
+         const senderName = getSenderName(data);
+-        showNotification('BambooChat', `${senderName} ${describeMessage(data)}`, {
++        showNotification('Ngopi', `${senderName} ${describeMessage(data)}`, {
+           pathname: '/(main)/chat/[id]',
+           params: { id: data.sender_id, name: senderName },
+         }, `message-${data.id}`);
+@@ -348,7 +348,7 @@ export default function MainLayout() {
+       });
+ 
+       if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
+-        const browserNotification = new Notification(data?.isVideo ? 'Video Call BambooChat' : 'Panggilan BambooChat', {
++        const browserNotification = new Notification(data?.isVideo ? 'Video Call Ngopi' : 'Panggilan Ngopi', {
+           body: `${callerName} memanggil kamu. Ketuk untuk jawab.`,
+           tag: callId,
+           requireInteraction: true,
+@@ -559,7 +559,7 @@ export default function MainLayout() {
+         headerTitleStyle: { fontWeight: 'bold' },
+         contentStyle: { backgroundColor: '#0F172A' }
+       }}>
+-        <Stack.Screen name="contacts" options={{ title: 'BambooChat' }} />
++        <Stack.Screen name="contacts" options={{ title: 'Ngopi' }} />
+         <Stack.Screen name="bambupedia" options={{ headerShown: false }} />
+         <Stack.Screen name="alihbahasa" options={{ headerShown: false }} />
+         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
+diff --git a/frontend/app/(main)/contacts.tsx b/frontend/app/(main)/contacts.tsx
+index b54148d..95f71f2 100644
+--- a/frontend/app/(main)/contacts.tsx
++++ b/frontend/app/(main)/contacts.tsx
+@@ -159,7 +159,7 @@ export default function ContactsScreen() {
+ 
+           // Trigger Web Notification jika tab sedang disembunyikan
+           if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+-             new Notification('BambooChat: Pesan Baru', {
++             new Notification('Ngopi: Pesan Baru', {
+                body: 'Anda menerima pesan baru dari kontak Anda.',
+                icon: '/favicon.ico'
+              });
+diff --git a/frontend/app/+html.tsx b/frontend/app/+html.tsx
+index 9de5453..4e72c0b 100644
+--- a/frontend/app/+html.tsx
++++ b/frontend/app/+html.tsx
+@@ -12,20 +12,20 @@ export default function Root({ children }: { children: React.ReactNode }) {
+         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+ 
+-        <title>BaMbooChat</title>
++        <title>Ngopi — Ngobrol Paling Intim</title>
+         <meta name="description" content="Chat aman tanpa nomor HP/email. Bisa voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis." />
+ 
+         {/* Open Graph / Facebook */}
+         <meta property="og:type" content="website" />
+         <meta property="og:url" content="https://www.bamboochat.click/" />
+-        <meta property="og:title" content="BaMbooChat" />
++        <meta property="og:title" content="Ngopi — Ngobrol Paling Intim" />
+         <meta property="og:description" content="Chat aman tanpa nomor HP/email. Bisa voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis." />
+         <meta property="og:image" content="https://www.bamboochat.click/assets/icon.png" />
+ 
+         {/* Twitter */}
+         <meta property="twitter:card" content="summary_large_image" />
+         <meta property="twitter:url" content="https://www.bamboochat.click/" />
+-        <meta property="twitter:title" content="BaMbooChat" />
++        <meta property="twitter:title" content="Ngopi — Ngobrol Paling Intim" />
+         <meta property="twitter:description" content="Chat aman tanpa nomor HP/email. Bisa voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis." />
+         <meta property="twitter:image" content="https://www.bamboochat.click/assets/icon.png" />
+ 
+diff --git a/frontend/app/privacy.tsx b/frontend/app/privacy.tsx
+index b06ad19..98eadfc 100644
+--- a/frontend/app/privacy.tsx
++++ b/frontend/app/privacy.tsx
+@@ -13,18 +13,18 @@ export default function PrivacyPolicyScreen() {
+         <Text style={styles.headerTitle}>Privacy Policy</Text>
+       </View>
+       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+-        <Text style={styles.title}>BambooChat Privacy Policy</Text>
++        <Text style={styles.title}>Ngopi Privacy Policy</Text>
+         <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+         
+         <Text style={styles.sectionTitle}>1. Introduction</Text>
+         <Text style={styles.paragraph}>
+-          Welcome to BambooChat. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
++          Welcome to Ngopi. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
+         </Text>
+ 
+         <Text style={styles.sectionTitle}>2. Information We Collect</Text>
+         <Text style={styles.paragraph}>
+           - <Text style={styles.bold}>Pi Network Information:</Text> We collect your Pi Network username and authentication token when you log in using the Pi Browser.{"\n"}
+-          - <Text style={styles.bold}>Communications:</Text> We store the messages, images, and files you send and receive through BambooChat to provide the messaging service.{"\n"}
++          - <Text style={styles.bold}>Communications:</Text> We store the messages, images, and files you send and receive through Ngopi to provide the messaging service.{"\n"}
+           - <Text style={styles.bold}>Usage Data:</Text> We may collect diagnostic information and usage data to help us improve the app.
+         </Text>
+ 
+diff --git a/frontend/app/terms.tsx b/frontend/app/terms.tsx
+index afc29c2..6f25613 100644
+--- a/frontend/app/terms.tsx
++++ b/frontend/app/terms.tsx
+@@ -13,22 +13,22 @@ export default function TermsOfServiceScreen() {
+         <Text style={styles.headerTitle}>Terms of Service</Text>
+       </View>
+       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
+-        <Text style={styles.title}>BambooChat Terms of Service</Text>
++        <Text style={styles.title}>Ngopi Terms of Service</Text>
+         <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+         
+         <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
+         <Text style={styles.paragraph}>
+-          By accessing or using BambooChat, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use our application. Since BambooChat operates within the Pi Network ecosystem, you must also comply with the Pi Network Terms of Service.
++          By accessing or using Ngopi, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use our application. Since Ngopi operates within the Pi Network ecosystem, you must also comply with the Pi Network Terms of Service.
+         </Text>
+ 
+         <Text style={styles.sectionTitle}>2. Description of Service</Text>
+         <Text style={styles.paragraph}>
+-          BambooChat is a messaging platform designed for the Pi Network community, allowing users to communicate, share media, and interact with other Pioneers.
++          Ngopi is a messaging platform designed for the Pi Network community, allowing users to communicate, share media, and interact with other Pioneers.
+         </Text>
+ 
+         <Text style={styles.sectionTitle}>3. User Conduct</Text>
+         <Text style={styles.paragraph}>
+-          You agree not to use BambooChat to:{"\n"}
++          You agree not to use Ngopi to:{"\n"}
+           - Transmit any content that is unlawful, harmful, threatening, abusive, harassing, defamatory, or otherwise objectionable.{"\n"}
+           - Spam, phish, or defraud other users.{"\n"}
+           - Distribute viruses or any other technologies that may harm the app or its users.
+@@ -36,17 +36,17 @@ export default function TermsOfServiceScreen() {
+ 
+         <Text style={styles.sectionTitle}>4. User Content</Text>
+         <Text style={styles.paragraph}>
+-          You retain all rights to the content you send through BambooChat. However, you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce, and process your content solely for the purpose of providing the service. We reserve the right to remove any content that violates these terms.
++          You retain all rights to the content you send through Ngopi. However, you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce, and process your content solely for the purpose of providing the service. We reserve the right to remove any content that violates these terms.
+         </Text>
+ 
+         <Text style={styles.sectionTitle}>5. Termination</Text>
+         <Text style={styles.paragraph}>
+-          We may suspend or terminate your access to BambooChat at any time, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
++          We may suspend or terminate your access to Ngopi at any time, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
+         </Text>
+ 
+         <Text style={styles.sectionTitle}>6. Changes to Terms</Text>
+         <Text style={styles.paragraph}>
+-          We reserve the right to modify these Terms at any time. We will notify users of any significant changes. Your continued use of BambooChat after such modifications constitutes your acceptance of the new Terms.
++          We reserve the right to modify these Terms at any time. We will notify users of any significant changes. Your continued use of Ngopi after such modifications constitutes your acceptance of the new Terms.
+         </Text>
+       </ScrollView>
+     </View>
+-- 
+2.51.1
+

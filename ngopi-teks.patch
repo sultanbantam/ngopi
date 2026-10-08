@@ -1,0 +1,25 @@
+From 7563f2add03e776fb557df285fbdf985e3d9b082 Mon Sep 17 00:00:00 2001
+From: Codex <codex@openai.com>
+Date: Fri, 2 Oct 2026 19:57:01 -0700
+Subject: [PATCH] Update Ngopi registration subtitle
+
+---
+ frontend/app/(auth)/register.tsx | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/frontend/app/(auth)/register.tsx b/frontend/app/(auth)/register.tsx
+index 0a32917..0a9734c 100644
+--- a/frontend/app/(auth)/register.tsx
++++ b/frontend/app/(auth)/register.tsx
+@@ -92,7 +92,7 @@ export default function RegisterScreen() {
+     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+       <View style={styles.card}>
+         <NgopiBrand />
+-        <Text style={styles.subtitle}>Mulai obrolan dengan akun Ngopi.</Text>
++        <Text style={styles.subtitle}>Mulai obrolan dengan akun unikmu.</Text>
+         
+         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
+ 
+-- 
+2.51.1
+

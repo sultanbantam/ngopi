@@ -28,10 +28,10 @@ const normalizeAttachmentUrl = (url?: string | null) => {
 
 const looksEncrypted = (value?: string | null) => !!value && (value.startsWith('U2FsdGVkX1') || value.startsWith('nacl:v1:'));
 
-const decodeMessageContent = (content: unknown, type: string | undefined, secretKey: string) => {
+const decodeMessageContent = (content: unknown, type: string | undefined, secretKey: string, fallbackKey?: string) => {
   if (typeof content !== 'string' || !content) return '';
   if ((type === 'text' || type === 'document') && looksEncrypted(content)) {
-    return decryptMessage(content, secretKey);
+    return decryptMessage(content, secretKey, fallbackKey);
   }
   return content;
 };
@@ -347,7 +347,7 @@ function PrivateChatRoomScreen() {
           return {
             id: msg.id,
             sender_id: msg.sender_id,
-            content: decodeMessageContent(msg.content, messageType, encryptionSecret),
+            content: decodeMessageContent(msg.content, messageType, encryptionSecret, roomKey),
             isMine: msg.sender_id === myId,
             timestamp: msg.timestamp,
             isRead: msg.is_read,
@@ -379,7 +379,7 @@ function PrivateChatRoomScreen() {
           setMessages(prev => [...prev, {
             id: data.id || Math.random().toString(),
             sender_id: data.sender_id,
-            content: decodeMessageContent(data.content, messageType, encryptionSecret),
+            content: decodeMessageContent(data.content, messageType, encryptionSecret, roomKey),
             isMine: false,
             timestamp: new Date().toISOString(),
             type: messageType,
@@ -420,7 +420,7 @@ function PrivateChatRoomScreen() {
         const handleMessageEdited = (data: any) => {
           setMessages(prev => prev.map(msg => {
             if (msg.id === data.id) {
-              return { ...msg, content: decodeMessageContent(data.content, data.type, encryptionSecret), is_edited: true, sender: data.sender || msg.sender };
+              return { ...msg, content: decodeMessageContent(data.content, data.type, encryptionSecret, roomKey), is_edited: true, sender: data.sender || msg.sender };
             }
             return msg;
           }));
@@ -564,7 +564,7 @@ function PrivateChatRoomScreen() {
         return {
           id: msg.id,
           sender_id: msg.sender_id,
-          content: decodeMessageContent(msg.content, messageType, secretKey),
+          content: decodeMessageContent(msg.content, messageType, secretKey, actualRoomId),
           isMine: msg.sender_id === myUserId,
           timestamp: msg.timestamp,
           isRead: msg.is_read,

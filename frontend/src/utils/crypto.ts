@@ -9,10 +9,11 @@ export const encryptMessage = (message: string, secret: string): string => {
   return CryptoJS.AES.encrypt(message, key).toString();
 };
 
-export const decryptMessage = (ciphertext: string, secret: string): string => {
+export const decryptMessage = (ciphertext: string, secret: string, fallbackSecret?: string): string => {
   try {
     if (ciphertext.startsWith(NACL_MESSAGE_PREFIX)) return decryptWithSharedSecret(ciphertext, secret);
-    const key = getKey(secret);
+    const effectiveSecret = (secret.startsWith(NACL_SECRET_PREFIX) && fallbackSecret) ? fallbackSecret : secret;
+    const key = getKey(effectiveSecret);
     const bytes = CryptoJS.AES.decrypt(ciphertext, key);
     const originalText = bytes.toString(CryptoJS.enc.Utf8);
     return originalText || '*(Pesan tidak bisa didekripsi)*';
