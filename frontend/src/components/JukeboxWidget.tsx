@@ -32,28 +32,97 @@ export interface CatalogSong {
 }
 
 export const SONG_CATALOG: CatalogSong[] = [
-  { title: 'Senja di Kedai Kopi', artist: 'Warkop Indie', genre: 'Lo-Fi Chill', uri: 'synth:lofi', duration: 160 },
-  { title: 'Kopi Dangdut', artist: 'Fahmi Shahab', genre: 'Dangdut Akustik', uri: 'synth:dangdut', duration: 180 },
-  { title: 'Melodi Malam Warung', artist: 'Ngopi Collective', genre: 'Fingerstyle Gitar', uri: 'synth:malam', duration: 210 },
-  { title: 'Begadang', artist: 'Rhoma Irama', genre: 'Dangdut Warkop', uri: 'synth:dangdut', duration: 190 },
-  { title: 'Kopi Hitam Kupu-Kupu', artist: 'Iwan Fals', genre: 'Folk Akustik', uri: 'synth:malam', duration: 200 },
-  { title: 'Akad', artist: 'Payung Teduh', genre: 'Indie Folk', uri: 'synth:lofi', duration: 220 },
-  { title: 'Zona Nyaman', artist: 'Fourtwnty', genre: 'Acoustic Indie', uri: 'synth:lofi', duration: 180 },
-  { title: 'Rumah Singgah', artist: 'Fabio Asher', genre: 'Pop Acoustic', uri: 'synth:malam', duration: 210 },
-  { title: 'Celengan Rindu', artist: 'Fiersa Besari', genre: 'Folk Senja', uri: 'synth:malam', duration: 195 },
-  { title: 'Surat Cinta untuk Starla', artist: 'Virgoun', genre: 'Pop Acoustic', uri: 'synth:malam', duration: 240 },
-  { title: 'Berlayar Tak Bertepian', artist: 'Ella', genre: 'Slow Rock Akustik', uri: 'synth:malam', duration: 230 },
-  { title: 'Cantik', artist: 'Kahitna', genre: 'Jazz Pop', uri: 'synth:lofi', duration: 190 },
-  { title: 'Dan', artist: 'Sheila on 7', genre: 'Pop 90s Akustik', uri: 'synth:dangdut', duration: 215 },
-  { title: 'Menghujam Jantungku', artist: 'Tompi', genre: 'Jazz Akustik', uri: 'synth:lofi', duration: 185 },
-  { title: 'Risalah Hati', artist: 'Dewa 19', genre: 'Pop Lofi', uri: 'synth:lofi', duration: 210 },
-  { title: 'Sempurna', artist: 'Andra and the BackBone', genre: 'Ballad Akustik', uri: 'synth:malam', duration: 225 },
-  { title: 'Ruang Rindu', artist: 'Letto', genre: 'Pop Indie', uri: 'synth:malam', duration: 200 },
-  { title: 'Monokrom', artist: 'Tulus', genre: 'Soul Lofi', uri: 'synth:lofi', duration: 205 },
-  { title: 'Hati-Hati di Jalan', artist: 'Tulus', genre: 'Ballad Akustik', uri: 'synth:malam', duration: 230 },
-  { title: 'Hampa', artist: 'Ari Lasso', genre: 'Slow Pop', uri: 'synth:malam', duration: 220 },
-  { title: 'Kemesraan', artist: 'Iwan Fals & Friends', genre: 'Folk Ballad', uri: 'synth:malam', duration: 250 },
-  { title: 'Bento', artist: 'Iwan Fals', genre: 'Rock Akustik', uri: 'synth:dangdut', duration: 190 },
+  {
+    title: 'Kopi Dangdut',
+    artist: 'Fahmi Shahab (Vokal Original)',
+    genre: 'Dangdut Klasik',
+    uri: 'https://archive.org/download/KopiDangdut/KopiDangdutFahmiSahab.mp3',
+    duration: 238,
+  },
+  {
+    title: 'Begadang',
+    artist: 'Rhoma Irama (Vokal Original)',
+    genre: 'Dangdut Warkop',
+    uri: 'https://archive.org/download/rhoma-irama-begadang/Rhoma%20Irama%20-%20Begadang.mp3',
+    duration: 187,
+  },
+  {
+    title: 'Bento',
+    artist: 'Iwan Fals (Vokal Original)',
+    genre: 'Rock Akustik',
+    uri: 'https://archive.org/download/BentoIwanFals_201903/Bento%20-%20Iwan%20Fals.mp3',
+    duration: 355,
+  },
+  {
+    title: 'Akad',
+    artist: 'Payung Teduh (Vokal Original)',
+    genre: 'Indie Folk',
+    uri: 'https://archive.org/download/01PayungTeduhAkad/01%20Payung%20Teduh%20Akad.mp3',
+    duration: 259,
+  },
+  {
+    title: 'Seberapa Pantas',
+    artist: 'Sheila on 7 (Vokal Original)',
+    genre: 'Pop 90s/2000s',
+    uri: 'https://archive.org/download/sheilaon7seberapapantaslirik/Sheila%20ON7%20-%20Seberapa%20Pantas%20%28lirik%29.mp3',
+    duration: 240,
+  },
+  {
+    title: 'Sahabat Sejati',
+    artist: 'Sheila on 7 (Vokal Original)',
+    genre: 'Pop Akustik',
+    uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Sahabat%20Sejati%20%28Lana%20Nitibaskara%29.mp3',
+    duration: 217,
+  },
+  {
+    title: 'Kemesraan',
+    artist: 'Iwan Fals & Friends (Vokal Original)',
+    genre: 'Folk Ballad',
+    uri: 'https://archive.org/download/kemesraan-iwan-fals/kemesraan%20-%20iwan%20fals.mp3',
+    duration: 313,
+  },
+  {
+    title: 'Sephia',
+    artist: 'Sheila on 7 (Vokal Original)',
+    genre: 'Pop Ballad',
+    uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Sephia.mp3',
+    duration: 295,
+  },
+  {
+    title: 'Yang Terlewatkan',
+    artist: 'Sheila on 7 (Vokal Original)',
+    genre: 'Slow Pop',
+    uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Yang%20Terlewatkan%20%28Album%20Version%29.mp3',
+    duration: 246,
+  },
+  {
+    title: 'Kopi Lambada',
+    artist: 'Denada (Vokal Original)',
+    genre: 'Dangdut Modern',
+    uri: 'https://archive.org/download/KopiDangdut/Denada-KopiLambada.mp3',
+    duration: 326,
+  },
+  {
+    title: 'Kopi Dangdut (Duet)',
+    artist: 'Uut Permatasari & Liza Natalia',
+    genre: 'Dangdut Duet',
+    uri: 'https://archive.org/download/KopiDangdut/UutPermatasariLizaNatalia-KopiDangdutduetMaut.mp3',
+    duration: 221,
+  },
+  {
+    title: 'Senja di Kedai Kopi',
+    artist: 'Warkop Indie',
+    genre: 'Lo-Fi Chill',
+    uri: 'synth:lofi',
+    duration: 160,
+  },
+  {
+    title: 'Melodi Malam Warung',
+    artist: 'Ngopi Collective',
+    genre: 'Fingerstyle Gitar',
+    uri: 'synth:malam',
+    duration: 210,
+  },
 ];
 
 const PRESET_SONGS = SONG_CATALOG;
@@ -120,41 +189,90 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     }
   }, [warungId]);
 
-  // Audio playback on web
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
+  const htmlAudioRef = useRef<any>(null);
 
-    if (playingTrack && isPlaying) {
-      musicSynthesizer.play(playingTrack.track_uri, playingTrack.title);
-    } else {
-      musicSynthesizer.pause();
+  const startPlayingTrack = useCallback((track: Track) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (track.track_uri.startsWith('http')) {
+        musicSynthesizer.pause();
+        try {
+          if (!htmlAudioRef.current) {
+            htmlAudioRef.current = new window.Audio();
+          }
+          const audio = htmlAudioRef.current;
+          if (audio.src !== track.track_uri) {
+            audio.src = track.track_uri;
+            audio.crossOrigin = 'anonymous';
+            audio.load();
+          }
+          audio.play().catch(() => {
+            musicSynthesizer.play('synth:lofi', track.title);
+          });
+          audio.onended = () => {
+            handleVote('skip');
+          };
+          return;
+        } catch {
+          musicSynthesizer.play('synth:lofi', track.title);
+          return;
+        }
+      }
     }
-  }, [playingTrack, isPlaying]);
+    if (htmlAudioRef.current) {
+      try { htmlAudioRef.current.pause(); } catch {}
+    }
+    musicSynthesizer.play(track.track_uri, track.title);
+  }, []);
 
-  // Progress simulation for procedural audio & tracks
+  const stopPlayingTrack = useCallback(() => {
+    if (htmlAudioRef.current) {
+      try { htmlAudioRef.current.pause(); } catch {}
+    }
+    musicSynthesizer.pause();
+  }, []);
+
+  // Audio playback lifecycle
+  useEffect(() => {
+    if (playingTrack && isPlaying) {
+      startPlayingTrack(playingTrack);
+    } else {
+      stopPlayingTrack();
+    }
+  }, [playingTrack, isPlaying, startPlayingTrack, stopPlayingTrack]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (htmlAudioRef.current) {
+        try { htmlAudioRef.current.pause(); } catch {}
+      }
+      musicSynthesizer.pause();
+    };
+  }, []);
+
+  // Progress update for real audio & synth
   useEffect(() => {
     if (!isPlaying) return;
-    const intervalSec = ((playingTrack?.duration || 180) / 100) * 1000;
-    const timer = setInterval(() => {
+    const interval = setInterval(() => {
+      if (htmlAudioRef.current && !htmlAudioRef.current.paused && htmlAudioRef.current.duration) {
+        const pct = Math.floor((htmlAudioRef.current.currentTime / htmlAudioRef.current.duration) * 100);
+        setProgress(Math.min(100, Math.max(0, pct)));
+        return;
+      }
       setProgress(p => {
         if (p >= 100) {
-          handleTrackEnded();
+          handleVote('skip');
           return 0;
         }
         return p + 1;
       });
-    }, intervalSec);
+    }, 1000);
 
-    return () => clearInterval(timer);
-  }, [isPlaying, playingTrack]);
-
-  const handleTrackEnded = () => {
-    handleVote('skip');
-  };
+    return () => clearInterval(interval);
+  }, [isPlaying]);
 
   const togglePlay = () => {
     if (!playingTrack) {
-      // Pick first preset song immediately
       const firstSong = PRESET_SONGS[0];
       const newTrack: Track = {
         id: `local-${Date.now()}`,
@@ -167,15 +285,15 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       };
       setPlayingTrack(newTrack);
       setIsPlaying(true);
-      musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+      startPlayingTrack(newTrack);
       return;
     }
 
     if (isPlaying) {
-      musicSynthesizer.pause();
+      stopPlayingTrack();
       setIsPlaying(false);
     } else {
-      musicSynthesizer.play(playingTrack.track_uri, playingTrack.title);
+      startPlayingTrack(playingTrack);
       setIsPlaying(true);
     }
   };
@@ -190,7 +308,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         setPlayingTrack(next);
         setProgress(0);
         setIsPlaying(true);
-        musicSynthesizer.play(next.track_uri, next.title);
+        startPlayingTrack(next);
       } else {
         const currentIdx = PRESET_SONGS.findIndex(s => s.title === playingTrack.title);
         const nextSong = PRESET_SONGS[(currentIdx + 1) % PRESET_SONGS.length];
@@ -206,7 +324,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         setPlayingTrack(nextTrack);
         setProgress(0);
         setIsPlaying(true);
-        musicSynthesizer.play(nextTrack.track_uri, nextTrack.title);
+        startPlayingTrack(nextTrack);
       }
     } else {
       setVotes(prev => ({
@@ -246,13 +364,11 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     };
 
     if (playNow || !playingTrack) {
-      // Immediately play in client state!
       setPlayingTrack(newTrack);
       setProgress(0);
       setIsPlaying(true);
-      musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+      startPlayingTrack(newTrack);
     } else {
-      // Add to queue
       setQueue(prev => [...prev, newTrack]);
     }
 

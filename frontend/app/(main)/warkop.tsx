@@ -206,6 +206,7 @@ export default function BambupediaRoom() {
   const [userPoints, setUserPoints] = useState<number>(0);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [suasanaExpanded, setSuasanaExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
@@ -216,6 +217,8 @@ export default function BambupediaRoom() {
   const webAudioChunksRef = useRef<Blob[]>([]);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const seenMessageIds = useRef(new Set<string>());
+  const hasWelcomedRef = useRef(false);
+  const askedRiddleIdsRef = useRef<Set<string>>(new Set());
   const activeRiddleRef = useRef<TebakTebakan | null>(null);
   const riddleTimerRef = useRef<any>(null);
   const tipsTimerRef = useRef<any>(null);
@@ -237,6 +240,21 @@ export default function BambupediaRoom() {
 
   const appendMessage = useCallback((message: ChatMessage) => {
     if (!message?.id) return;
+
+    // Drop any promotional links from WarkopBot / BambooBot
+    if (
+      ['WarkopBot', 'BambooBot', 'SISTEM'].includes(message.sender_name) &&
+      (message.content.includes('http://') ||
+       message.content.includes('https://') ||
+       message.content.includes('www.') ||
+       message.content.includes('.click') ||
+       message.content.includes('bamboochain') ||
+       message.content.includes('advipi') ||
+       message.content.includes('aichitect') ||
+       message.content.includes('bamboogame'))
+    ) {
+      return;
+    }
 
     // Check if riddle message
     if (message.content && message.content.includes('[TEBAK-TEBAKAN WARKOP]')) {
@@ -266,15 +284,22 @@ export default function BambupediaRoom() {
   }, [currentUsername, awardPoints]);
 
   const askNewRiddle = useCallback(() => {
-    const randomRiddle = WARKOP_TEBAK_TEBAKAN[Math.floor(Math.random() * WARKOP_TEBAK_TEBAKAN.length)];
+    let candidates = WARKOP_TEBAK_TEBAKAN.filter((r) => !askedRiddleIdsRef.current.has(r.id));
+    if (candidates.length === 0) {
+      askedRiddleIdsRef.current.clear();
+      candidates = WARKOP_TEBAK_TEBAKAN;
+    }
+    const randomRiddle = candidates[Math.floor(Math.random() * candidates.length)];
+    askedRiddleIdsRef.current.add(randomRiddle.id);
     activeRiddleRef.current = randomRiddle;
+
     appendMessage({
       id: `riddle-${Date.now()}`,
       room_id: ROOM_ID,
       room_name: ROOM_NAME,
       type: 'system',
       message_type: 'system',
-      content: `🎯 [TEBAK-TEBAKAN WARKOP]\n${randomRiddle.question}\n\n💡 Petunjuk: ${randomRiddle.hint || 'Ketik tebakanmu di chat!'}\n🎁 Hadiah: +10 Poin Kopi untuk penebak tercepat & benar!`,
+      content: `🎯 [TEBAK-TEBAKAN WARKOP]\n${randomRiddle.question}\n\nKetik jawabanmu langsung di chat! Jawaban benar dapat +10 Poin Kopi ☕!`,
       sender_id: 'warkopbot',
       sender_name: 'WarkopBot',
       created_at: new Date().toISOString(),
@@ -296,7 +321,9 @@ export default function BambupediaRoom() {
         }
       }
 
-      if (userId && username) {
+      // Sapaan sekali saja
+      if (userId && username && !hasWelcomedRef.current) {
+        hasWelcomedRef.current = true;
         setTimeout(() => {
           appendMessage(createLocalWelcomeMessage({
             id: userId,
@@ -375,6 +402,11 @@ export default function BambupediaRoom() {
       };
 
       const handleUserJoined = (payload: UserJoinedPayload) => {
+        const joinId = payload?.user?.id || payload?.message?.sender_id;
+        const joinUsername = payload?.user?.username || payload?.message?.username;
+        if (joinId === currentUserId || (currentUsername && joinUsername === currentUsername)) {
+          return; // Ignore greeting for self
+        }
         if (payload?.message) appendMessage(payload.message);
         else if (payload?.user) appendMessage(createLocalWelcomeMessage(payload.user));
       };
@@ -472,17 +504,39 @@ export default function BambupediaRoom() {
     const query = searchQuery.trim().toLowerCase();
     return messages.filter((message) => {
       const content = message.content || '';
-      // Exclude promotional / old ecosystem links completely
+      const sender = message.sender_name || '';
+
+      // 1. Drop any message from WarkopBot / BambooBot that contains web links or URLs
       if (
-        content.includes('xignalx.click') ||
-        content.includes('whaleofsavu.org') ||
-        content.includes('Aplikasi signal trading') ||
-        content.includes('Whale of Savu')
+        ['WarkopBot', 'BambooBot', 'SISTEM'].includes(sender) &&
+        (content.includes('http://') ||
+         content.includes('https://') ||
+         content.includes('www.') ||
+         content.includes('.click') ||
+         content.includes('.org') ||
+         content.includes('.id'))
       ) {
         return false;
       }
+
+      // 2. Drop any promotional platforms
+      if (
+        content.includes('bamboochain') ||
+        content.includes('advipi') ||
+        content.includes('votiva') ||
+        content.includes('bamboogame') ||
+        content.includes('aichitect') ||
+        content.includes('xignalx') ||
+        content.includes('whaleofsavu') ||
+        content.includes('BaMbooChain') ||
+        content.includes('Whale of Savu') ||
+        content.includes('Aplikasi signal trading')
+      ) {
+        return false;
+      }
+
       if (!query) return true;
-      return `${content} ${message.sender_name || ''}`.toLowerCase().includes(query);
+      return `${content} ${sender}`.toLowerCase().includes(query);
     });
   }, [messages, searchQuery]);
 
@@ -983,78 +1037,88 @@ export default function BambupediaRoom() {
     <View style={styles.container}>
       <View style={[styles.header, width < 600 && styles.headerCompact]}>
         <View style={styles.headerIdentity}>
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => (router.canGoBack() ? router.back() : setDrawerVisible(true))} accessibilityLabel="Kembali">
-          <Ionicons name="arrow-back" size={24} color={coffee.text} />
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => (router.canGoBack() ? router.back() : setDrawerVisible(true))} accessibilityLabel="Kembali">
+            <Ionicons name="arrow-back" size={22} color={coffee.text} />
+          </TouchableOpacity>
 
-        <Image source={require('../../assets/logo.png')} style={{ width: 48, height: 48 }} resizeMode="contain" accessibilityLabel="Warung Kopi" />
+          <Image source={require('../../assets/logo.png')} style={{ width: 36, height: 36 }} resizeMode="contain" accessibilityLabel="Warung Kopi" />
 
-        <TouchableOpacity style={styles.headerTitleArea} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
-          <View style={styles.headerTitleRow}>
-            <Text style={styles.headerTitle} numberOfLines={1}>{ROOM_NAME}</Text>
-            <Ionicons name="chevron-down" size={17} color={coffee.secondary} />
-          </View>
-          <Text style={styles.headerSubtitle} numberOfLines={1}>{roomSummaryLabel} - {socketConnected ? 'Live' : 'Menghubungkan'}</Text>
-        </TouchableOpacity>
-
+          <TouchableOpacity style={styles.headerTitleArea} onPress={() => setDrawerVisible(true)} activeOpacity={0.85}>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle} numberOfLines={1}>{ROOM_NAME}</Text>
+              <Ionicons name="chevron-down" size={15} color={coffee.secondary} />
+            </View>
+            <Text style={styles.headerSubtitle} numberOfLines={1}>{roomSummaryLabel} • {socketConnected ? 'Live' : 'Menghubungkan'}</Text>
+          </TouchableOpacity>
         </View>
-        <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
-        <TouchableOpacity
-          style={styles.pointsBadgeHeader}
-          onPress={() => setDrawerVisible(true)}
-          accessibilityLabel={`Poin Kopi: ${userPoints}`}
-        >
-          <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
-        </TouchableOpacity>
 
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
-          <Ionicons name="add-circle-outline" size={24} color={coffee.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.headerIconButton, { backgroundColor: coffee.accentWash }]}
-          onPress={() => {
-            if (Platform.OS === 'web') {
-              window.location.assign('/alihbahasa');
-            } else {
-              router.push('/(main)/alihbahasa' as any);
-            }
-          }}
-          accessibilityLabel="Alih Bahasa Live Meeting"
-        >
-          <Ionicons name="mic" size={20} color={coffee.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Cari pesan">
-          <Ionicons name="search" size={22} color={coffee.text} />
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Menu Warung Kopi">
-          <Ionicons name="ellipsis-vertical" size={22} color={coffee.text} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={() => router.push({ pathname: '/(main)/contacts', params: { openMenu: '1' } })}
-          accessibilityLabel="Pengaturan akun"
-        >
-          <Ionicons name="settings-outline" size={22} color={coffee.text} />
-        </TouchableOpacity>
+        <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
+          <TouchableOpacity
+            style={styles.pointsBadgeHeader}
+            onPress={() => setDrawerVisible(true)}
+            accessibilityLabel={`Poin Kopi: ${userPoints}`}
+          >
+            <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
+            <Ionicons name="add-circle-outline" size={22} color={coffee.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: coffee.accentWash }]}
+            onPress={() => {
+              if (Platform.OS === 'web') {
+                window.location.assign('/alihbahasa');
+              } else {
+                router.push('/(main)/alihbahasa' as any);
+              }
+            }}
+            accessibilityLabel="Alih Bahasa Live Meeting"
+          >
+            <Ionicons name="mic" size={18} color={coffee.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Cari pesan">
+            <Ionicons name="search" size={20} color={coffee.text} />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.headerIconButton} onPress={() => setDrawerVisible(true)} accessibilityLabel="Menu Warung Kopi">
+            <Ionicons name="ellipsis-vertical" size={20} color={coffee.text} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => router.push({ pathname: '/(main)/contacts', params: { openMenu: '1' } })}
+            accessibilityLabel="Pengaturan akun"
+          >
+            <Ionicons name="settings-outline" size={20} color={coffee.text} />
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* SPRINT 1: Suasana Warkop (Ambient Sound & Jukebox Warung) */}
+      {/* SPRINT 1: Suasana Warkop (Compact & Collapsible for maximum chat space) */}
       <ErrorBoundary name="SuasanaWarkop">
-        <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: coffee.surface, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={{ fontSize: 14 }}>☕</Text>
-              <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 }}>SUASANA WARKOP</Text>
-            </View>
+        <View style={styles.suasanaBarWrapper}>
+          <View style={styles.suasanaCompactHeader}>
+            <TouchableOpacity
+              style={styles.suasanaToggleBtn}
+              onPress={() => setSuasanaExpanded((prev) => !prev)}
+              accessibilityLabel="Buka / Tutup Musik Jukebox"
+            >
+              <Text style={{ fontSize: 13 }}>☕</Text>
+              <Text style={styles.suasanaToggleTitle}>SUASANA WARKOP</Text>
+              <Ionicons name={suasanaExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={coffee.accent} />
+            </TouchableOpacity>
+
             <AmbientPlayer />
           </View>
-          <JukeboxWidget warungId={ROOM_ID} />
+
+          {suasanaExpanded && (
+            <View style={{ paddingTop: 4 }}>
+              <JukeboxWidget warungId={ROOM_ID} />
+            </View>
+          )}
         </View>
       </ErrorBoundary>
 
       <KeyboardAvoidingView style={styles.chatArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-
         <FlatList
           ref={flatListRef}
           data={visibleMessages}
@@ -1095,69 +1159,72 @@ export default function BambupediaRoom() {
             </View>
           )}
 
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.roundAction} onPress={pickDocument} accessibilityLabel="Attachment">
-              <Ionicons name="attach" size={24} color={coffee.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.roundAction} onPress={pickImage} accessibilityLabel="Kamera atau gambar">
-              <Ionicons name="camera" size={23} color={coffee.secondary} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.roundAction, showEmojiPicker && { backgroundColor: coffee.button }]}
-              onPress={() => setShowEmojiPicker((prev) => !prev)}
-              accessibilityLabel="Buka pilihan emoji"
-            >
-              <Ionicons name="happy-outline" size={23} color={showEmojiPicker ? coffee.buttonText : coffee.secondary} />
-            </TouchableOpacity>
-            
-            {/* FITUR-03: Quick 1-tap Warkop Emoji Reactions */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-              {WARKOP_EMOJIS.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  style={[styles.roundAction, { width: 36, height: 36, borderRadius: 18, backgroundColor: coffee.inset }]}
-                  onPress={() => setInputText((prev) => `${prev} ${emoji}`.trim())}
-                  accessibilityLabel={`Reaksi ${emoji}`}
-                >
-                  <Text style={{ fontSize: 16 }}>{emoji}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Expanded Emoji Panel */}
+          {/* Quick Emoji Selection if opened */}
           {showEmojiPicker && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 10, backgroundColor: coffee.inset, borderRadius: 12, marginBottom: 10 }}>
-              {EMOJI_LIST.map((emoji) => (
-                <TouchableOpacity
-                  key={emoji}
-                  style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: coffee.surface, alignItems: 'center', justifyContent: 'center' }}
-                  onPress={() => setInputText((prev) => `${prev} ${emoji}`.trim())}
-                  accessibilityLabel={`Pilih ${emoji}`}
-                >
-                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
+            <View style={styles.emojiPickerContainer}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={styles.emojiSectionTitle}>Pilih Emoji</Text>
+                <TouchableOpacity onPress={() => setShowEmojiPicker(false)}>
+                  <Ionicons name="close" size={16} color={coffee.secondary} />
                 </TouchableOpacity>
-              ))}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {EMOJI_LIST.map((emoji) => (
+                  <TouchableOpacity
+                    key={emoji}
+                    style={styles.emojiBtn}
+                    onPress={() => setInputText((prev) => `${prev} ${emoji}`.trim())}
+                  >
+                    <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
           )}
 
-          <View style={styles.inputBar}>
+          {/* Modern Unified Single-Row Input Bar */}
+          <View style={styles.inputBarRow}>
+            <TouchableOpacity style={styles.inlineActionBtn} onPress={pickDocument} accessibilityLabel="Kirim file">
+              <Ionicons name="attach" size={20} color={coffee.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.inlineActionBtn} onPress={pickImage} accessibilityLabel="Kirim gambar">
+              <Ionicons name="camera-outline" size={20} color={coffee.secondary} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.inlineActionBtn, showEmojiPicker && { backgroundColor: coffee.button }]}
+              onPress={() => setShowEmojiPicker((prev) => !prev)}
+              accessibilityLabel="Buka pilihan emoji"
+            >
+              <Ionicons name="happy-outline" size={20} color={showEmojiPicker ? coffee.buttonText : coffee.secondary} />
+            </TouchableOpacity>
+
             <TextInput
-              style={styles.textInput}
+              style={styles.textInputCompact}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Type an encrypted message..."
+              placeholder="Ketik pesan di Warung Kopi..."
               placeholderTextColor={coffee.muted}
               multiline
               maxLength={1000}
               onSubmitEditing={Platform.OS === 'web' ? sendMessage : undefined}
               blurOnSubmit={false}
             />
-            <TouchableOpacity style={[styles.voiceButton, isRecording && styles.recordingButton]} onPress={toggleRecording} accessibilityLabel={isRecording ? 'Stop voice message' : 'Voice message'}>
-              <Ionicons name={isRecording ? 'stop' : 'mic'} size={21} color={coffee.buttonText} />
+
+            <TouchableOpacity
+              style={[styles.voiceBtnCompact, isRecording && styles.recordingButton]}
+              onPress={toggleRecording}
+              accessibilityLabel={isRecording ? 'Stop voice note' : 'Voice note'}
+            >
+              <Ionicons name={isRecording ? 'stop' : 'mic'} size={18} color={coffee.buttonText} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.sendButton, !hasDraft && styles.sendButtonDisabled]} onPress={sendMessage} disabled={!hasDraft} accessibilityLabel="Kirim pesan">
-              <Ionicons name="send" size={21} color={coffee.buttonText} />
+
+            <TouchableOpacity
+              style={[styles.sendBtnCompact, !hasDraft && styles.sendBtnDisabled]}
+              onPress={sendMessage}
+              disabled={!hasDraft}
+              accessibilityLabel="Kirim pesan"
+            >
+              <Ionicons name="send" size={17} color={coffee.buttonText} />
             </TouchableOpacity>
           </View>
         </View>
@@ -1171,29 +1238,64 @@ export default function BambupediaRoom() {
 const styles = StyleSheet.create({
   container: { flex: 1, width: '100%', minWidth: 0, overflow: 'hidden', backgroundColor: coffee.background },
   header: {
-    minHeight: 84,
+    minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: coffee.surface,
     borderBottomWidth: 1,
     borderBottomColor: coffee.border,
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 8,
     gap: 10,
     zIndex: 5,
   },
   headerCompact: { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
   headerIdentity: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, minWidth: 0 },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerActionsCompact: { justifyContent: 'flex-end' },
-  headerIconButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 20 },
+  headerIconButton: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18 },
   headerTitleArea: { flex: 1, minWidth: 0 },
   headerTitleRow: { flexDirection: 'row', alignItems: 'center', minWidth: 0 },
-  headerTitle: { color: coffee.text, fontSize: 20, fontWeight: '800', marginRight: 4, flexShrink: 1 },
-  headerSubtitle: { color: coffee.secondary, fontSize: 12, marginTop: 3 },
+  headerTitle: { color: coffee.text, fontSize: 18, fontWeight: '800', marginRight: 4, flexShrink: 1 },
+  headerSubtitle: { color: coffee.secondary, fontSize: 11, marginTop: 1 },
   chatArea: { flex: 1, minHeight: 0 },
+  suasanaBarWrapper: {
+    backgroundColor: coffee.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.border,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+  },
+  suasanaCompactHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 36,
+  },
+  suasanaToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: coffee.raised,
+  },
+  suasanaToggleTitle: {
+    color: coffee.accent,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
   messageList: { flex: 1, minHeight: 0, backgroundColor: coffee.background },
-  messageListContent: { paddingHorizontal: 14, paddingVertical: 16, gap: 10 },
+  messageListContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+  },
   messageRow: { width: '100%', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'flex-start' },
   messageRowOwn: { justifyContent: 'flex-end' },
   messageBubble: { maxWidth: '78%', borderRadius: 18, paddingHorizontal: 13, paddingVertical: 9, minWidth: 72 },
@@ -1214,25 +1316,83 @@ const styles = StyleSheet.create({
   tipLabel: { color: coffee.accent },
   systemText: { color: coffee.text, fontSize: 14, lineHeight: 21 },
   ecosystemTitle: { color: coffee.text, fontSize: 15, fontWeight: '900', marginBottom: 4 },
-  composerWrap: { backgroundColor: coffee.surface, borderTopWidth: 1, borderTopColor: coffee.border, paddingHorizontal: 14, paddingTop: 10, paddingBottom: Platform.OS === 'ios' ? 20 : 12 },
-  quickActions: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
-  roundAction: { width: 46, height: 46, borderRadius: 23, backgroundColor: coffee.raised, alignItems: 'center', justifyContent: 'center' },
-  inputBar: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
-  textInput: {
+  composerWrap: {
+    backgroundColor: coffee.surface,
+    borderTopWidth: 1,
+    borderTopColor: coffee.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 8,
+    maxWidth: 960,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  emojiPickerContainer: {
+    backgroundColor: coffee.raised,
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: coffee.border,
+  },
+  emojiSectionTitle: {
+    color: coffee.secondary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  emojiBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: coffee.surface,
+  },
+  inputBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inlineActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: coffee.raised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textInputCompact: {
     flex: 1,
-    minHeight: 52,
-    maxHeight: 130,
-    borderRadius: 22,
+    minHeight: 40,
+    maxHeight: 110,
+    borderRadius: 20,
     backgroundColor: coffee.background,
     color: coffee.text,
-    paddingHorizontal: 18,
-    paddingVertical: 14,
-    fontSize: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    fontSize: 15,
     outlineStyle: 'none' as any,
   },
-  voiceButton: { width: 52, height: 52, borderRadius: 22, backgroundColor: coffee.button, alignItems: 'center', justifyContent: 'center' },
-  sendButton: { width: 52, height: 52, borderRadius: 22, backgroundColor: coffee.button, alignItems: 'center', justifyContent: 'center' },
-  sendButtonDisabled: { backgroundColor: coffee.border, opacity: 0.62 },
+  voiceBtnCompact: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: coffee.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnCompact: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: coffee.button,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendBtnDisabled: {
+    backgroundColor: coffee.border,
+    opacity: 0.5,
+  },
   recordingButton: { backgroundColor: coffee.dangerButton },
   mentionBox: { backgroundColor: coffee.surface, borderWidth: 1, borderColor: coffee.highlight, borderRadius: 8, marginBottom: 10, overflow: 'hidden' },
   mentionItem: { minHeight: 46, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: coffee.raised },

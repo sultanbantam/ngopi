@@ -30,58 +30,6 @@ const BUILDING_ICON = '\uD83C\uDFD7\uFE0F';
 const CHART_ICON = '\uD83D\uDCC8';
 const WHALE_ICON = '\uD83D\uDC0B';
 
-type EcosystemInfoPlatform = {
-  icon: string;
-  name: string;
-  url: string;
-  description: string;
-};
-
-const ECOSYSTEM_INFO_PLATFORMS: EcosystemInfoPlatform[] = [
-  {
-    icon: LEAF_ICON,
-    name: 'BaMbooChain ID',
-    url: 'https://www.bamboochain.id',
-    description: 'BambooChain adalah super app ekonomi hijau yang menghubungkan pengetahuan, teknologi, pasar, komunitas, dan pendanaan dalam satu ekosistem bambu terintegrasi. Melalui BambooChain, petani, peneliti, pelaku usaha, pemerintah, komunitas, dan masyarakat dapat belajar, berkolaborasi, mengelola proyek, memperdagangkan produk, serta membangun solusi berkelanjutan untuk lingkungan dan ekonomi masa depan.',
-  },
-  {
-    icon: ROBOT_ICON,
-    name: 'AdViPI',
-    url: 'https://www.advipi.click',
-    description: 'Platform AI yang membantu membuat iklan gambar dan video pendek secara otomatis. Cukup masukkan informasi produk atau layanan, AdViPI akan menghasilkan copywriting, desain visual, dan konten promosi siap tayang untuk media sosial, marketplace, dan ekosistem Pi Network.',
-  },
-  {
-    icon: BALLOT_ICON,
-    name: 'VotiVa',
-    url: 'https://www.votiva.click',
-    description: 'Platform AI Election Intelligence yang membantu kandidat, partai politik, dan tim kampanye mengelola pemilih, relawan, analisis sentimen, peta geospasial, serta komunikasi digital dalam satu dashboard cerdas untuk mendukung strategi pemenangan yang lebih tepat, cepat, dan berbasis data.',
-  },
-  {
-    icon: GAME_ICON,
-    name: 'BambooGame',
-    url: 'https://www.bamboogame.click',
-    description: 'Permainan konstruksi bambu 3D yang mengajak pemain menyusun profil dan panel Modular BlockBamboo menjadi berbagai desain bangunan secara kreatif, edukatif, dan menyenangkan.',
-  },
-  {
-    icon: BUILDING_ICON,
-    name: 'AIchitect',
-    url: 'https://www.aichitect.click',
-    description: 'Platform cerdas untuk planner, arsitek, engineer, dan tim manajemen proyek dalam merencanakan, merancang, menghitung, serta mengendalikan proyek secara terintegrasi. Didukung teknologi AI, AIchitect membantu mempercepat kolaborasi, meningkatkan akurasi, dan menghasilkan keputusan proyek yang lebih efektif dari tahap konsep hingga pelaksanaan.',
-  },
-  {
-    icon: CHART_ICON,
-    name: 'XignalX',
-    url: 'https://www.xignalx.click',
-    description: 'Aplikasi signal trading crypto dan saham yang membantu pengguna membaca peluang pasar melalui analisis data, indikator teknikal, dan notifikasi sinyal secara cepat. Dengan XignalX, pengguna dapat memantau tren, menemukan momentum beli atau jual, serta mengambil keputusan trading dengan lebih terukur.',
-  },
-  {
-    icon: WHALE_ICON,
-    name: 'Whale of Savu',
-    url: 'https://www.whaleofsavu.org',
-    description: 'Platform digital ekowisata dan konservasi laut yang menghubungkan wisatawan dengan pengalaman melihat paus hidup di Laut Sawu, menjelajahi Pulau Lembata, serta mendukung pelestarian alam dan pemberdayaan masyarakat lokal melalui teknologi, AI, dan Web3.',
-  },
-];
-
 const FEATURE_TIPS = [
   `⚙️ Pengaturan Akun: Anda dapat mengubah nama tampilan (display name), foto avatar, dan bio dengan mengetuk ikon roda gigi (⚙️) di pojok kanan atas, lalu pilih "Pengaturan Profil".`,
   `🔒 Kebijakan Privasi (E2EE): Seluruh pesan pribadi di Ngopi dilindungi enkripsi ujung-ke-ujung (End-to-End Encryption). Kunci rahasia tersimpan di perangkat Anda dan server Ngopi tidak dapat membaca pesan Anda.`,
@@ -277,7 +225,7 @@ const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', 
 
 
 const formatRiddleMessage = (riddle: TebakTebakan) =>
-  `🎲 [GAME WARKOP] Tebak-tebakan Seru!\n❓ Pertanyaan: ${riddle.question}\n${riddle.hint ? `💡 Petunjuk: ${riddle.hint}\n` : ''}\nKetik jawabanmu langsung di chat ini! Jawaban benar dapat +10 Poin Kopi ☕!`;
+  `🎯 [TEBAK-TEBAKAN WARKOP]\n${riddle.question}\n\nKetik jawabanmu langsung di chat! Jawaban benar dapat +10 Poin Kopi ☕!`;
 
 export const emitWarkopRiddle = (io: Server) => {
   if (WARKOP_TEBAK_TEBAKAN.length === 0) return;
