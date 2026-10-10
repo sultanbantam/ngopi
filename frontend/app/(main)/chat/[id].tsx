@@ -533,7 +533,7 @@ function PrivateChatRoomScreen() {
         content: decodeMessageContent(m.rawContent || m.content, m.type, newSecret, actualRoomId),
       })));
 
-      const socket = socketService.getSocket();
+      const socket = typeof socketService?.getSocket === 'function' ? socketService.getSocket() : socketService?.socket;
       if (socket) {
         socket.emit('keys:renegotiate', {
           target_user_id: roomId,

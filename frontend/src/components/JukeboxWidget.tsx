@@ -57,7 +57,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   useEffect(() => {
     loadNowPlaying();
 
-    const socket = socketService.getSocket();
+    const socket = typeof socketService?.getSocket === 'function' ? socketService.getSocket() : socketService?.socket;
     if (socket) {
       const handleTrackChanged = (track: Track) => {
         setPlayingTrack(track);

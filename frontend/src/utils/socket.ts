@@ -92,6 +92,10 @@ class SocketService {
     return this.socket;
   }
 
+  public getSocket(): Socket | null {
+    return this.socket;
+  }
+
   public disconnect() {
     if (this.socket) {
       this.socket.disconnect();

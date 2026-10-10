@@ -28,6 +28,7 @@ import { getMimeType } from '../../src/utils/fileHelpers';
 import { AmbientPlayer } from '../../src/components/AmbientPlayer';
 import { JukeboxWidget } from '../../src/components/JukeboxWidget';
 import { EmptyState } from '../../src/components/EmptyState';
+import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -881,16 +882,18 @@ export default function BambupediaRoom() {
       </View>
 
       {/* SPRINT 1: Suasana Warkop (Ambient Sound & Jukebox Warung) */}
-      <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: coffee.surface, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={{ fontSize: 14 }}>☕</Text>
-            <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 }}>SUASANA WARKOP</Text>
+      <ErrorBoundary name="SuasanaWarkop">
+        <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: coffee.surface, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ fontSize: 14 }}>☕</Text>
+              <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 }}>SUASANA WARKOP</Text>
+            </View>
+            <AmbientPlayer />
           </View>
-          <AmbientPlayer />
+          <JukeboxWidget warungId={ROOM_ID} />
         </View>
-        <JukeboxWidget warungId={ROOM_ID} />
-      </View>
+      </ErrorBoundary>
 
       <KeyboardAvoidingView style={styles.chatArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
