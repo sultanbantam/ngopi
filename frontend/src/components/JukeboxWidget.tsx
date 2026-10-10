@@ -23,11 +23,40 @@ interface JukeboxWidgetProps {
 
 import { musicSynthesizer } from '../utils/musicSynthesizer';
 
-const PRESET_SONGS = [
-  { title: 'Senja di Kedai Kopi', artist: 'Warkop Indie', uri: 'synth:lofi', duration: 160 },
-  { title: 'Kopi Dangdut', artist: 'Fahmi Shahab', uri: 'synth:dangdut', duration: 180 },
-  { title: 'Melodi Malam Warung', artist: 'Ngopi Collective', uri: 'synth:malam', duration: 210 },
+export interface CatalogSong {
+  title: string;
+  artist: string;
+  genre: string;
+  uri: string;
+  duration: number;
+}
+
+export const SONG_CATALOG: CatalogSong[] = [
+  { title: 'Senja di Kedai Kopi', artist: 'Warkop Indie', genre: 'Lo-Fi Chill', uri: 'synth:lofi', duration: 160 },
+  { title: 'Kopi Dangdut', artist: 'Fahmi Shahab', genre: 'Dangdut Akustik', uri: 'synth:dangdut', duration: 180 },
+  { title: 'Melodi Malam Warung', artist: 'Ngopi Collective', genre: 'Fingerstyle Gitar', uri: 'synth:malam', duration: 210 },
+  { title: 'Begadang', artist: 'Rhoma Irama', genre: 'Dangdut Warkop', uri: 'synth:dangdut', duration: 190 },
+  { title: 'Kopi Hitam Kupu-Kupu', artist: 'Iwan Fals', genre: 'Folk Akustik', uri: 'synth:malam', duration: 200 },
+  { title: 'Akad', artist: 'Payung Teduh', genre: 'Indie Folk', uri: 'synth:lofi', duration: 220 },
+  { title: 'Zona Nyaman', artist: 'Fourtwnty', genre: 'Acoustic Indie', uri: 'synth:lofi', duration: 180 },
+  { title: 'Rumah Singgah', artist: 'Fabio Asher', genre: 'Pop Acoustic', uri: 'synth:malam', duration: 210 },
+  { title: 'Celengan Rindu', artist: 'Fiersa Besari', genre: 'Folk Senja', uri: 'synth:malam', duration: 195 },
+  { title: 'Surat Cinta untuk Starla', artist: 'Virgoun', genre: 'Pop Acoustic', uri: 'synth:malam', duration: 240 },
+  { title: 'Berlayar Tak Bertepian', artist: 'Ella', genre: 'Slow Rock Akustik', uri: 'synth:malam', duration: 230 },
+  { title: 'Cantik', artist: 'Kahitna', genre: 'Jazz Pop', uri: 'synth:lofi', duration: 190 },
+  { title: 'Dan', artist: 'Sheila on 7', genre: 'Pop 90s Akustik', uri: 'synth:dangdut', duration: 215 },
+  { title: 'Menghujam Jantungku', artist: 'Tompi', genre: 'Jazz Akustik', uri: 'synth:lofi', duration: 185 },
+  { title: 'Risalah Hati', artist: 'Dewa 19', genre: 'Pop Lofi', uri: 'synth:lofi', duration: 210 },
+  { title: 'Sempurna', artist: 'Andra and the BackBone', genre: 'Ballad Akustik', uri: 'synth:malam', duration: 225 },
+  { title: 'Ruang Rindu', artist: 'Letto', genre: 'Pop Indie', uri: 'synth:malam', duration: 200 },
+  { title: 'Monokrom', artist: 'Tulus', genre: 'Soul Lofi', uri: 'synth:lofi', duration: 205 },
+  { title: 'Hati-Hati di Jalan', artist: 'Tulus', genre: 'Ballad Akustik', uri: 'synth:malam', duration: 230 },
+  { title: 'Hampa', artist: 'Ari Lasso', genre: 'Slow Pop', uri: 'synth:malam', duration: 220 },
+  { title: 'Kemesraan', artist: 'Iwan Fals & Friends', genre: 'Folk Ballad', uri: 'synth:malam', duration: 250 },
+  { title: 'Bento', artist: 'Iwan Fals', genre: 'Rock Akustik', uri: 'synth:dangdut', duration: 190 },
 ];
+
+const PRESET_SONGS = SONG_CATALOG;
 
 export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   const [playingTrack, setPlayingTrack] = useState<Track | null>(null);
@@ -37,9 +66,20 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   const [progress, setProgress] = useState(0); // 0 - 100
   const [modalVisible, setModalVisible] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [searchSongQuery, setSearchSongQuery] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newArtist, setNewArtist] = useState('');
   const [newUri, setNewUri] = useState('');
+
+  const filteredCatalog = React.useMemo(() => {
+    if (!searchSongQuery.trim()) return SONG_CATALOG;
+    const q = searchSongQuery.toLowerCase().trim();
+    return SONG_CATALOG.filter(s =>
+      s.title.toLowerCase().includes(q) ||
+      s.artist.toLowerCase().includes(q) ||
+      s.genre.toLowerCase().includes(q)
+    );
+  }, [searchSongQuery]);
 
   const loadNowPlaying = async () => {
     try {
@@ -187,7 +227,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     } catch {}
   };
 
-  const handleAddTrack = async (trackData?: { title: string; artist: string; uri: string; duration: number }) => {
+  const handleAddTrack = async (trackData?: { title: string; artist: string; uri: string; duration: number }, playNow: boolean = false) => {
     const title = trackData?.title || newTitle;
     const artist = trackData?.artist || newArtist;
     const uri = trackData?.uri || newUri;
@@ -202,16 +242,22 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       track_uri: uri,
       duration,
       added_by: 'Kamu',
-      is_playing: true,
+      is_playing: playNow || !playingTrack,
     };
 
-    // Immediately play in client state!
-    setPlayingTrack(newTrack);
-    setProgress(0);
-    setIsPlaying(true);
-    musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+    if (playNow || !playingTrack) {
+      // Immediately play in client state!
+      setPlayingTrack(newTrack);
+      setProgress(0);
+      setIsPlaying(true);
+      musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+    } else {
+      // Add to queue
+      setQueue(prev => [...prev, newTrack]);
+    }
 
     setAddModalVisible(false);
+    setSearchSongQuery('');
     setNewTitle('');
     setNewArtist('');
     setNewUri('');
@@ -223,6 +269,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         artist,
         track_uri: uri,
         duration,
+        play_now: playNow,
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -351,30 +398,82 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       {/* Add Track Modal */}
       <Modal transparent visible={addModalVisible} animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Pilih Lagu untuk Warkop</Text>
+              <View>
+                <Text style={styles.modalTitle}>Pilih Lagu untuk Warkop</Text>
+                <Text style={{ fontSize: 11, color: coffee.muted, marginTop: 2 }}>
+                  Cari lagu favorit atau masukkan audio sendiri
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setAddModalVisible(false)} style={{ padding: 4 }}>
                 <Ionicons name="close" size={20} color={coffee.text} />
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.presetHeader}>Lagu Pilihan Warkop:</Text>
-            <View style={{ gap: 8, marginBottom: 16 }}>
-              {PRESET_SONGS.map((song, i) => (
-                <TouchableOpacity
-                  key={i}
-                  style={styles.presetItem}
-                  onPress={() => handleAddTrack(song)}
-                >
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.presetTitle}>{song.title}</Text>
-                    <Text style={styles.presetArtist}>{song.artist}</Text>
-                  </View>
-                  <Text style={styles.addBadge}>+ Putar</Text>
+            {/* Kotak Pencarian Lagu */}
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={16} color={coffee.muted} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Cari lagu, artis, atau genre..."
+                placeholderTextColor={coffee.muted}
+                value={searchSongQuery}
+                onChangeText={setSearchSongQuery}
+                autoCorrect={false}
+              />
+              {searchSongQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchSongQuery('')} style={{ padding: 4 }}>
+                  <Ionicons name="close-circle" size={16} color={coffee.muted} />
                 </TouchableOpacity>
-              ))}
+              )}
             </View>
+
+            <Text style={styles.presetHeader}>
+              Lagu Pilihan Warkop ({filteredCatalog.length}):
+            </Text>
+
+            <ScrollView style={{ maxHeight: 220, marginBottom: 14 }}>
+              {filteredCatalog.length === 0 ? (
+                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 24, marginBottom: 6 }}>🔍</Text>
+                  <Text style={styles.emptyQueueText}>
+                    Tidak ditemukan lagu "{searchSongQuery}"
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {filteredCatalog.map((song, i) => (
+                    <View key={i} style={styles.songCatalogItem}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={styles.presetTitle} numberOfLines={1}>{song.title}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={styles.presetArtist} numberOfLines={1}>{song.artist}</Text>
+                          <View style={styles.genreBadge}>
+                            <Text style={styles.genreText}>{song.genre}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <TouchableOpacity
+                          style={styles.playNowBtn}
+                          onPress={() => handleAddTrack(song, true)}
+                        >
+                          <Ionicons name="play" size={11} color="#171411" />
+                          <Text style={styles.playNowText}>Putar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.addQueueBtn}
+                          onPress={() => handleAddTrack(song, false)}
+                        >
+                          <Text style={styles.addQueueText}>+ Antrian</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </ScrollView>
 
             <Text style={styles.presetHeader}>Atau Masukkan Audio Sendiri:</Text>
             <TextInput
@@ -399,13 +498,22 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
               onChangeText={setNewUri}
             />
 
-            <TouchableOpacity
-              style={[styles.primaryBtn, (!newTitle || !newUri) && { opacity: 0.5 }]}
-              onPress={() => handleAddTrack()}
-              disabled={!newTitle || !newUri}
-            >
-              <Text style={styles.primaryBtnText}>Masukkan ke Antrian 🎵</Text>
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { flex: 1, backgroundColor: coffee.raised }, (!newTitle || !newUri) && { opacity: 0.5 }]}
+                onPress={() => handleAddTrack(undefined, false)}
+                disabled={!newTitle || !newUri}
+              >
+                <Text style={[styles.primaryBtnText, { color: coffee.text, fontSize: 13 }]}>+ Antrian</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { flex: 1.3 }, (!newTitle || !newUri) && { opacity: 0.5 }]}
+                onPress={() => handleAddTrack(undefined, true)}
+                disabled={!newTitle || !newUri}
+              >
+                <Text style={[styles.primaryBtnText, { fontSize: 13 }]}>▶ Putar Sekarang</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -631,5 +739,70 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: coffee.text,
     marginBottom: 10,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: coffee.inset,
+    borderWidth: 1,
+    borderColor: coffee.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: coffee.text,
+    padding: 0,
+  },
+  songCatalogItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 10,
+    backgroundColor: coffee.inset,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: coffee.border,
+  },
+  genreBadge: {
+    backgroundColor: coffee.raised,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  genreText: {
+    fontSize: 9,
+    color: coffee.accent,
+    fontWeight: '700',
+  },
+  playNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: coffee.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  playNowText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#171411',
+  },
+  addQueueBtn: {
+    backgroundColor: coffee.raised,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: coffee.border,
+  },
+  addQueueText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: coffee.text,
   },
 });

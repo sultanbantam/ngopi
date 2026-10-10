@@ -29,6 +29,8 @@ import { AmbientPlayer } from '../../src/components/AmbientPlayer';
 import { JukeboxWidget } from '../../src/components/JukeboxWidget';
 import { EmptyState } from '../../src/components/EmptyState';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
+import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan';
+import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -201,6 +203,7 @@ export default function BambupediaRoom() {
   const [inputText, setInputText] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
+  const [userPoints, setUserPoints] = useState<number>(0);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -213,9 +216,46 @@ export default function BambupediaRoom() {
   const webAudioChunksRef = useRef<Blob[]>([]);
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const seenMessageIds = useRef(new Set<string>());
+  const activeRiddleRef = useRef<TebakTebakan | null>(null);
+  const riddleTimerRef = useRef<any>(null);
+  const tipsTimerRef = useRef<any>(null);
+
+  const awardPoints = useCallback(async (amount: number = 10) => {
+    setUserPoints((prev) => {
+      const updated = prev + amount;
+      if (currentUsername) {
+        const key = `ngopi_points_${currentUsername}`;
+        if (Platform.OS === 'web') {
+          localStorage.setItem(key, updated.toString());
+        } else {
+          SecureStore.setItemAsync(key, updated.toString());
+        }
+      }
+      return updated;
+    });
+  }, [currentUsername]);
 
   const appendMessage = useCallback((message: ChatMessage) => {
     if (!message?.id) return;
+
+    // Check if riddle message
+    if (message.content && message.content.includes('[TEBAK-TEBAKAN WARKOP]')) {
+      const match = WARKOP_TEBAK_TEBAKAN.find((r) => message.content.includes(r.question));
+      if (match) {
+        activeRiddleRef.current = match;
+      }
+    }
+
+    // Check if congratulations message for current user
+    if (
+      message.content &&
+      message.content.includes('SELAMAT! @') &&
+      currentUsername &&
+      message.content.includes(`@${currentUsername}`)
+    ) {
+      awardPoints(10);
+      activeRiddleRef.current = null;
+    }
 
     setMessages((previous) => {
       if (seenMessageIds.current.has(message.id)) return previous;
@@ -223,7 +263,23 @@ export default function BambupediaRoom() {
       const next = [...previous, message];
       return next.length > 240 ? next.slice(next.length - 240) : next;
     });
-  }, []);
+  }, [currentUsername, awardPoints]);
+
+  const askNewRiddle = useCallback(() => {
+    const randomRiddle = WARKOP_TEBAK_TEBAKAN[Math.floor(Math.random() * WARKOP_TEBAK_TEBAKAN.length)];
+    activeRiddleRef.current = randomRiddle;
+    appendMessage({
+      id: `riddle-${Date.now()}`,
+      room_id: ROOM_ID,
+      room_name: ROOM_NAME,
+      type: 'system',
+      message_type: 'system',
+      content: `🎯 [TEBAK-TEBAKAN WARKOP]\n${randomRiddle.question}\n\n💡 Petunjuk: ${randomRiddle.hint || 'Ketik tebakanmu di chat!'}\n🎁 Hadiah: +10 Poin Kopi untuk penebak tercepat & benar!`,
+      sender_id: 'warkopbot',
+      sender_name: 'WarkopBot',
+      created_at: new Date().toISOString(),
+    });
+  }, [appendMessage]);
 
   useEffect(() => {
     const loadCurrentUser = async () => {
@@ -231,6 +287,14 @@ export default function BambupediaRoom() {
       const username = await SecureStore.getItemAsync('username');
       setCurrentUserId(userId);
       setCurrentUsername(username);
+
+      if (username) {
+        const key = `ngopi_points_${username}`;
+        const storedPoints = Platform.OS === 'web' ? localStorage.getItem(key) : await SecureStore.getItemAsync(key);
+        if (storedPoints) {
+          setUserPoints(parseInt(storedPoints, 10) || 0);
+        }
+      }
 
       if (userId && username) {
         setTimeout(() => {
@@ -356,6 +420,37 @@ export default function BambupediaRoom() {
     return () => clearTimeout(timer);
   }, [messages.length]);
 
+  useEffect(() => {
+    // Launch first riddle after 3 seconds if none active
+    const initRiddle = setTimeout(() => {
+      if (!activeRiddleRef.current) askNewRiddle();
+    }, 3000);
+
+    // Rotate rich educational tips every 75 seconds
+    let tipIdx = 0;
+    const tipsTimer = setInterval(() => {
+      const tip = FEATURE_TIPS[tipIdx % FEATURE_TIPS.length];
+      tipIdx++;
+      appendMessage({
+        id: `tip-cycle-${Date.now()}`,
+        room_id: ROOM_ID,
+        room_name: ROOM_NAME,
+        type: 'tip',
+        message_type: 'system',
+        content: `💡 Tips: ${tip.title}\n${tip.content}`,
+        sender_id: 'system',
+        sender_name: 'SISTEM',
+        created_at: new Date().toISOString(),
+      });
+    }, 75000);
+
+    return () => {
+      clearTimeout(initRiddle);
+      clearInterval(tipsTimer);
+      if (riddleTimerRef.current) clearTimeout(riddleTimerRef.current);
+    };
+  }, [askNewRiddle, appendMessage]);
+
   const sortedMembers = members;
   const onlineCount = memberSummary.online;
   const roomSummaryLabel = memberSummary.label;
@@ -375,8 +470,20 @@ export default function BambupediaRoom() {
 
   const visibleMessages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return messages;
-    return messages.filter((message) => `${message.content || ''} ${message.sender_name || ''}`.toLowerCase().includes(query));
+    return messages.filter((message) => {
+      const content = message.content || '';
+      // Exclude promotional / old ecosystem links completely
+      if (
+        content.includes('xignalx.click') ||
+        content.includes('whaleofsavu.org') ||
+        content.includes('Aplikasi signal trading') ||
+        content.includes('Whale of Savu')
+      ) {
+        return false;
+      }
+      if (!query) return true;
+      return `${content} ${message.sender_name || ''}`.toLowerCase().includes(query);
+    });
   }, [messages, searchQuery]);
 
   const visibleMembers = useMemo(() => {
@@ -395,6 +502,37 @@ export default function BambupediaRoom() {
   const sendMessage = () => {
     const content = inputText.trim();
     if (!content) return;
+
+    // Check if answering active tebak-tebakan
+    if (activeRiddleRef.current) {
+      const cleanAnswer = content.toLowerCase().trim().replace(/^[!/.]/, '');
+      const riddle = activeRiddleRef.current;
+      const isCorrect =
+        cleanAnswer === riddle.answer.toLowerCase() ||
+        riddle.synonyms.some((syn) => cleanAnswer.includes(syn.toLowerCase()) || syn.toLowerCase().includes(cleanAnswer));
+
+      if (isCorrect) {
+        awardPoints(10);
+        const winner = currentUsername || 'Kamu';
+        const winMsg: ChatMessage = {
+          id: `riddle-win-${Date.now()}`,
+          room_id: ROOM_ID,
+          room_name: ROOM_NAME,
+          type: 'system',
+          message_type: 'system',
+          content: `🎉 SELAMAT! @${winner} berhasil menebak dengan benar!\nJawaban: "${riddle.answer}" ☕\n+10 Poin Kopi berhasil dicatat di username @${winner}!`,
+          sender_id: 'warkopbot',
+          sender_name: 'WarkopBot',
+          created_at: new Date().toISOString(),
+        };
+        appendMessage(winMsg);
+        sendSocketMessage({ content: winMsg.content, message_type: 'system' });
+        activeRiddleRef.current = null;
+        if (riddleTimerRef.current) clearTimeout(riddleTimerRef.current);
+        riddleTimerRef.current = setTimeout(askNewRiddle, 45000);
+      }
+    }
+
     sendSocketMessage({ content, message_type: 'text' });
     setInputText('');
   };
@@ -812,6 +950,18 @@ export default function BambupediaRoom() {
           </View>
 
           <View style={styles.drawerSection}>
+            <Text style={styles.drawerSectionTitle}>Poin Kopi Tebak-Tebakan</Text>
+            <View style={styles.pointsCard}>
+              <Text style={{ fontSize: 26 }}>☕</Text>
+              <View style={{ flex: 1, marginLeft: 10 }}>
+                <Text style={styles.pointsValue}>{userPoints} Poin Kopi</Text>
+                <Text style={styles.pointsSub}>Tercatat di @{activeUsername || 'kamu'}</Text>
+                <Text style={styles.pointsHint}>Jawab benar tebak-tebakan warkop untuk +10 poin!</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Pengaturan Room</Text>
             <View style={styles.infoRow}>
               <Ionicons name={socketConnected ? 'radio-button-on' : 'radio-button-off'} size={17} color={socketConnected ? coffee.success : coffee.warning} />
@@ -821,7 +971,7 @@ export default function BambupediaRoom() {
 
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Informasi Room</Text>
-            <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem WARKOP untuk sapaan, tanya jawab, dan koordinasi lintas platform.</Text>
+            <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem WARKOP untuk santai, tebak-tebakan lucu, mendengarkan musik, dan obrolan bebas tekanan.</Text>
           </View>
           </ScrollView>
         </View>
@@ -849,6 +999,14 @@ export default function BambupediaRoom() {
 
         </View>
         <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
+        <TouchableOpacity
+          style={styles.pointsBadgeHeader}
+          onPress={() => setDrawerVisible(true)}
+          accessibilityLabel={`Poin Kopi: ${userPoints}`}
+        >
+          <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
           <Ionicons name="add-circle-outline" size={24} color={coffee.accent} />
         </TouchableOpacity>
@@ -1137,6 +1295,47 @@ const styles = StyleSheet.create({
   audioText: { color: coffee.text, fontSize: 14, fontWeight: '700' },
   documentAttachment: { minHeight: 42, flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 8, backgroundColor: coffee.overlay, paddingHorizontal: 10, marginBottom: 5 },
   documentName: { color: coffee.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  pointsBadgeHeader: {
+    backgroundColor: coffee.raised,
+    borderWidth: 1,
+    borderColor: coffee.accent,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 14,
+    marginRight: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pointsBadgeText: {
+    color: coffee.accent,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  pointsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: coffee.raised,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: coffee.border,
+    padding: 12,
+  },
+  pointsValue: {
+    color: coffee.accent,
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  pointsSub: {
+    color: coffee.text,
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  pointsHint: {
+    color: coffee.muted,
+    fontSize: 11,
+    marginTop: 2,
+  },
 });
 
 

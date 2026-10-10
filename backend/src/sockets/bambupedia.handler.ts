@@ -1,6 +1,7 @@
 import { Server, Socket } from 'socket.io';
 import { answerQuestion, getPlatformDirectoryMessage, getPlatformInfoText } from '../services/ai.service';
 import { prisma } from '../utils/prisma';
+import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../data/tebakTebakan';
 
 const BAMBUPEDIA_ROOM = 'bambupedia-room';
 const BAMBUPEDIA_ROOM_NAME = 'Rumpun Bambupedia';
@@ -82,16 +83,21 @@ const ECOSYSTEM_INFO_PLATFORMS: EcosystemInfoPlatform[] = [
 ];
 
 const FEATURE_TIPS = [
-  `${LOCK_ICON} Keamanan: Ngopi di Warkop mendukung percakapan terenkripsi untuk pesan pribadi. Tetap gunakan akun sendiri dan jangan bagikan kode login kepada orang lain.`,
-  `${BAMBOO_ICON} Cara mulai: setelah login, buka Kontak untuk private message atau masuk ke Rumpun Bambupedia untuk ngobrol bersama komunitas.`,
-  `${PEOPLE_ICON} Cara buat rumpun/grup: buka Kontak, pilih tab Rumpun, lalu tekan Buat Rumpun. Biaya minimum bisa dibuat 0 BMC untuk grup terbuka.`,
-  `${GEM_ICON} Pengaturan rumpun: admin bisa mengatur nama, avatar, deskripsi, biaya join BMC, approval anggota, undangan, dan daftar anggota.`,
-  `${PEOPLE_ICON} Admin rumpun dapat menambahkan anggota, menyetujui permintaan join, dan membagikan link undangan ke media sosial lain.`,
-  `${SMILE_ICON} Mention teman dengan format @username. Saat mengetik @, pilih nama dari suggestion agar user yang dituju mudah melihat sapaanmu.`,
-  `${PAPERCLIP_ICON} Kirim file dari tombol attachment. Gambar bisa dibuka langsung, sedangkan dokumen dapat dibuka atau diunduh dari menu file.`,
-  `${PHONE_ICON} Voice call dan video call tersedia dari chat pribadi. Pastikan izin microphone dan kamera browser sudah aktif.`,
-  `${BELL_ICON} Aktifkan notifikasi browser agar pesan pribadi, mention, file, panggilan, dan sapaan penting tidak terlewat.`,
-  `${PIN_ICON} Pin pesan penting di chat pribadi supaya informasi utama mudah ditemukan lagi.`,
+  `⚙️ Pengaturan Akun: Anda dapat mengubah nama tampilan (display name), foto avatar, dan bio dengan mengetuk ikon roda gigi (⚙️) di pojok kanan atas, lalu pilih "Pengaturan Profil".`,
+  `🔒 Kebijakan Privasi (E2EE): Seluruh pesan pribadi di Ngopi dilindungi enkripsi ujung-ke-ujung (End-to-End Encryption). Kunci rahasia tersimpan di perangkat Anda dan server Ngopi tidak dapat membaca pesan Anda.`,
+  `📜 Syarat & Ketentuan Warkop: Warkop adalah ruang publik yang santai, bersahabat, dan inklusif. Dilarang melakukan spam, pelecehan, atau menyebarkan konten berbahaya demi menjaga kenyamanan bersama.`,
+  `🔄 Muat Ulang Kunci: Jika pesan pribadi bertuliskan "Gagal mendekripsi" setelah berganti HP/perangkat, ketuk tombol "🔄 Muat Ulang Kunci" di atas ruang chat untuk menyinkronkan kembali kunci aman.`,
+  `☕ Suasana Warkop: Dengarkan suara gerimis hujan, obrolan kafe, deburan ombak, atau jangkrik malam dengan mengetuk menu "Suasana Warkop" di atas tanpa perlu unduh file apapun.`,
+  `🎵 Jukebox Warung: Cari dan putar lagu favorit Anda atau masukkan ke antrian musik warung bersama teman nongkrong di Jukebox Warkop.`,
+  `🎲 Game Tebak-tebakan: Ikuti tebak-tebakan seru dari WarkopBot di chat room! Tebak dengan benar untuk mendapatkan +10 Poin Kopi ☕ yang tercatat di akunmu.`,
+  `☕ Reaksi Emoji Kopi: Ketuk emoji warkop cepat (☕, 🍵, 🚬, 🎵, 🍜, 🌙) di samping kolom pesan atau ketuk tombol 😊 untuk membuka puluhan pilihan emoji populer lainnya.`,
+  `📎 Kirim Berkas & Gambar: Kirim foto dan dokumen kerja secara aman dari tombol attachment (📎 dan 📷). Gambar dan dokumen dapat langsung dibuka atau diunduh.`,
+  `🎙️ Pesan Suara (Voice Message): Tahan tombol mikrofon untuk merekam dan mengirimkan pesan suara hangat kepada teman warkop.`,
+  `👥 Kontak & Komunitas: Buka menu Kontak untuk memulai obrolan pribadi atau membuat Rumpun komunitas baru secara bebas.`,
+  `✓ Tanda Centang Terbaca: Centang satu (✓) menandakan pesan terkirim ke server, dan centang ganda (✓✓) menandakan pesan telah dibaca oleh teman bicara.`,
+  `🔍 Pencarian Pesan: Gunakan ikon pencarian (🔍) di atas layar untuk menemukan pesan teks, nama teman, atau percakapan lama dengan cepat.`,
+  `🌙 Mode Malam Nyaman: Tema kopi gelap dirancang khusus agar mata tetap nyaman dan santai saat mengobrol hingga larut malam.`,
+  `💡 Bantuan & Panduan: Anda dapat membaca detail Kebijakan Privasi di /privacy dan Syarat Ketentuan di /terms kapan saja dari menu drawer.`,
 ];
 
 type BambupediaUser = {
@@ -138,10 +144,12 @@ type BambupediaMessage = {
 const bambupediaSessions = new Map<string, { member: BambupediaMember; socketIds: Set<string> }>();
 let tipIndex = 0;
 let tipsInterval: ReturnType<typeof setInterval> | null = null;
-let ecosystemInfoIndex = 0;
-let ecosystemInfoInitialTimeout: ReturnType<typeof setTimeout> | null = null;
-let ecosystemInfoInterval: ReturnType<typeof setInterval> | null = null;
-let lastEcosystemInfoMessage: BambupediaMessage | null = null;
+let currentRiddleIndex = 0;
+let currentRiddle: TebakTebakan | null = null;
+let riddleAnswered = false;
+let riddleTimeout: ReturnType<typeof setTimeout> | null = null;
+let riddleInterval: ReturnType<typeof setInterval> | null = null;
+const userPoints = new Map<string, number>();
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -268,38 +276,44 @@ const createSystemMessage = (prefix: string, type: 'system' | 'tip' | 'pinned', 
 };
 
 
-const formatEcosystemInfoMessage = (platform: EcosystemInfoPlatform) => `${platform.icon} ${platform.name}\n${LINK_ICON} ${platform.url}\n${platform.description}`;
+const formatRiddleMessage = (riddle: TebakTebakan) =>
+  `🎲 [GAME WARKOP] Tebak-tebakan Seru!\n❓ Pertanyaan: ${riddle.question}\n${riddle.hint ? `💡 Petunjuk: ${riddle.hint}\n` : ''}\nKetik jawabanmu langsung di chat ini! Jawaban benar dapat +10 Poin Kopi ☕!`;
 
-const emitEcosystemInfoMessage = (io: Server) => {
-  const platform = ECOSYSTEM_INFO_PLATFORMS[ecosystemInfoIndex % ECOSYSTEM_INFO_PLATFORMS.length] || ECOSYSTEM_INFO_PLATFORMS[0];
-  if (!platform) return;
+export const emitWarkopRiddle = (io: Server) => {
+  if (WARKOP_TEBAK_TEBAKAN.length === 0) return;
+  const riddle = WARKOP_TEBAK_TEBAKAN[currentRiddleIndex % WARKOP_TEBAK_TEBAKAN.length];
+  currentRiddleIndex = (currentRiddleIndex + 1) % WARKOP_TEBAK_TEBAKAN.length;
+  currentRiddle = riddle;
+  riddleAnswered = false;
 
-  ecosystemInfoIndex = (ecosystemInfoIndex + 1) % ECOSYSTEM_INFO_PLATFORMS.length;
-  const message = createSystemMessage('sys-ecosystem', 'system', formatEcosystemInfoMessage(platform), 'WarkopBot');
-  lastEcosystemInfoMessage = message;
+  const message = createSystemMessage('sys-tebak', 'system', formatRiddleMessage(riddle), 'WarkopBot');
   io.to(BAMBUPEDIA_ROOM).emit('system_message', message);
   io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', message);
-  console.log(`[Bambupedia] ecosystem info sent: ${platform.name}`);
+  console.log(`[WarkopGame] Riddle broadcasted: ${riddle.question}`);
 };
 
 export const startBambupediaEcosystemInfo = (io: Server) => {
-  if (ecosystemInfoInitialTimeout || ecosystemInfoInterval) return;
+  if (riddleTimeout || riddleInterval) return;
 
-  ecosystemInfoInitialTimeout = setTimeout(() => {
-    emitEcosystemInfoMessage(io);
-    ecosystemInfoInitialTimeout = null;
-    ecosystemInfoInterval = setInterval(() => emitEcosystemInfoMessage(io), ECOSYSTEM_INFO_INTERVAL_MS);
-  }, ECOSYSTEM_INFO_INITIAL_DELAY_MS);
+  riddleTimeout = setTimeout(() => {
+    emitWarkopRiddle(io);
+    riddleTimeout = null;
+    riddleInterval = setInterval(() => {
+      if (bambupediaSessions.size > 0 && !riddleAnswered) {
+        emitWarkopRiddle(io);
+      }
+    }, 2.5 * 60 * 1000);
+  }, 10 * 1000);
 };
 
 export const stopBambupediaEcosystemInfo = () => {
-  if (ecosystemInfoInitialTimeout) {
-    clearTimeout(ecosystemInfoInitialTimeout);
-    ecosystemInfoInitialTimeout = null;
+  if (riddleTimeout) {
+    clearTimeout(riddleTimeout);
+    riddleTimeout = null;
   }
-  if (ecosystemInfoInterval) {
-    clearInterval(ecosystemInfoInterval);
-    ecosystemInfoInterval = null;
+  if (riddleInterval) {
+    clearInterval(riddleInterval);
+    riddleInterval = null;
   }
 };
 const looksLikePlatformQuestion = (content: string) => {
@@ -350,8 +364,8 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
 
   void emitBambupediaMembers(io);
 
-  if (lastEcosystemInfoMessage) {
-    socket.emit('bambupedia_message', lastEcosystemInfoMessage);
+  if (currentRiddle && !riddleAnswered) {
+    socket.emit('bambupedia_message', createSystemMessage('sys-tebak', 'system', formatRiddleMessage(currentRiddle), 'WarkopBot'));
   }
 
   if (isFirstJoin) {
@@ -391,6 +405,61 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
     void notifyMentionedUsers(io, message, member.id);
 
     if (messageType !== 'text') return;
+
+    const cleanUserText = trimmed.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    // Command /tebak or /game
+    if (cleanUserText === '/tebak' || cleanUserText === '!tebak' || cleanUserText === '/game') {
+      if (currentRiddle) {
+        const msg = createSystemMessage('sys-tebak', 'system', formatRiddleMessage(currentRiddle), 'WarkopBot');
+        io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', msg);
+      } else {
+        emitWarkopRiddle(io);
+      }
+      return;
+    }
+
+    // Command /poin or /skor
+    if (cleanUserText === '/poin' || cleanUserText === '!poin' || cleanUserText === '/skor') {
+      const pts = userPoints.get(member.username) || 0;
+      const msg = createSystemMessage('sys-poin', 'system', `⭐ Poin Kopi @${member.username}: ${pts} Poin ☕\nJawab tebak-tebakan dari WarkopBot untuk menambah poinmu!`, 'WarkopBot');
+      io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', msg);
+      return;
+    }
+
+    // Check answer for active riddle
+    if (currentRiddle && !riddleAnswered) {
+      const isMatch = currentRiddle.synonyms.some(synonym => {
+        const cleanSyn = synonym.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+        return cleanUserText === cleanSyn || cleanUserText.includes(cleanSyn);
+      });
+
+      if (isMatch) {
+        riddleAnswered = true;
+        const currentPts = userPoints.get(member.username) || 0;
+        const newPts = currentPts + 10;
+        userPoints.set(member.username, newPts);
+
+        const winMsg = createSystemMessage(
+          'sys-tebak-win',
+          'system',
+          `🎉 SELAMAT @${member.username}! Jawaban kamu BENAR!\n✅ Jawaban: ${currentRiddle.answer}\n⭐ Kamu mendapatkan +10 Poin Kopi ☕! (Total Poin Kamu: ${newPts} Poin)\n\nNantikan tebak-tebakan berikutnya sebentar lagi!`
+        );
+        io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', winMsg);
+
+        io.to(BAMBUPEDIA_ROOM).emit('warkop_user_points', {
+          username: member.username,
+          points: newPts,
+        });
+
+        setTimeout(() => {
+          if (bambupediaSessions.size > 0) {
+            emitWarkopRiddle(io);
+          }
+        }, 20 * 1000);
+        return;
+      }
+    }
 
     try {
       const botContent = await resolveBotResponse(content);
