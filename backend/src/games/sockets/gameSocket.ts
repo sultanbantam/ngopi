@@ -1,6 +1,7 @@
 import { Namespace, Server, Socket } from 'socket.io';
 import { TableManager } from '../TableManager';
 import { prisma } from '../../utils/prisma';
+import { PointsManager } from '../../utils/pointsManager';
 
 export const setupGameSocket = (io: Server) => {
   const gamesNamespace: Namespace = io.of('/games');
@@ -47,6 +48,31 @@ export const setupGameSocket = (io: Server) => {
   };
 
   // Bot AI automated execution
+  const notifyGameFinished = (tableId: string, results: any) => {
+    const table = TableManager.getTable(tableId);
+    const awardedMap: Record<string, number> = {};
+
+    if (results?.winners && Array.isArray(results.winners)) {
+      for (const winnerId of results.winners) {
+        const player = table?.players?.find((p) => p.user_id === winnerId);
+        if (player && !player.is_bot) {
+          const newPts = PointsManager.addPoints(player.username, 50);
+          PointsManager.addPoints(player.user_id, 50);
+          awardedMap[player.user_id] = newPts;
+        }
+      }
+    }
+
+    gamesNamespace.to(`table:${tableId}`).emit('game:finished', {
+      tableId,
+      results: {
+        ...results,
+        pointsAwarded: 50,
+        playerPoints: awardedMap,
+      },
+    });
+  };
+
   const triggerBotTurnIfNeeded = (tableId: string) => {
     const botActionData = TableManager.getBotAction(tableId);
     if (!botActionData) return;
@@ -68,10 +94,7 @@ export const setupGameSocket = (io: Server) => {
         broadcastGameState(tableId);
 
         if (result.finished && result.results) {
-          gamesNamespace.to(`table:${tableId}`).emit('game:finished', {
-            tableId,
-            results: result.results,
-          });
+          notifyGameFinished(tableId, result.results);
         }
       }
     }, 1300);
@@ -195,14 +218,17 @@ export const setupGameSocket = (io: Server) => {
         broadcastGameState(data.tableId);
 
         if (res.finished && res.results) {
-          gamesNamespace.to(`table:${data.tableId}`).emit('game:finished', {
-            tableId: data.tableId,
-            results: res.results,
-          });
+          notifyGameFinished(data.tableId, res.results);
         }
       } else {
         if (typeof callback === 'function') callback({ success: false, error: res.error });
       }
+    });
+
+    // Get Points
+    socket.on('game:get_points', (callback) => {
+      const pts = PointsManager.getPoints(username) || PointsManager.getPoints(userId);
+      if (typeof callback === 'function') callback({ success: true, points: pts });
     });
 
     // Spectate Table

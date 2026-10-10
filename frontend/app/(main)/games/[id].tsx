@@ -151,7 +151,11 @@ export default function GameTableScreen() {
       const headers = await getAuthHeaders();
       const res = await axios.get(`${API_URL}/games/tables/${tableId}/state`, {
         params: { spectator: isSpectator ? 'true' : 'false' },
-        headers,
+        headers: {
+          ...headers,
+          'x-user-id': currentUserId,
+          'x-user-name': currentUsername,
+        },
       });
       if (res.data?.success) {
         setTable(res.data.table);
@@ -404,22 +408,7 @@ export default function GameTableScreen() {
     );
   };
 
-  // Player Action: Leave Table
-  const handleLeaveTable = () => {
-    Alert.alert('Keluar Meja', 'Apakah Anda yakin ingin meninggalkan meja ini?', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Keluar',
-        style: 'destructive',
-        onPress: () => {
-          if (socketRef.current && tableId) {
-            socketRef.current.emit('table:leave', { tableId });
-          }
-          router.back();
-        },
-      },
-    ]);
-  };
+
 
   // Play Card Action
   const handleCardPress = (card: [number, number]) => {
@@ -502,6 +491,61 @@ export default function GameTableScreen() {
     if (!chatInput.trim() || !socketRef.current || !tableId) return;
     socketRef.current.emit('game:chat', { tableId, message: chatInput.trim() });
     setChatInput('');
+  };
+
+  // Leave Table (Back button)
+  const handleLeaveTable = () => {
+    const doLeave = () => {
+      if (socketRef.current && tableId) {
+        socketRef.current.emit('table:leave', { tableId });
+      }
+      try {
+        axios.post(
+          `${API_URL}/games/tables/${tableId}/leave`,
+          {},
+          {
+            headers: {
+              'x-user-id': currentUserId,
+              'x-user-name': currentUsername,
+            },
+          }
+        ).catch(() => {});
+      } catch (_) {}
+
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined' && window.history && window.history.length > 1) {
+          router.back();
+        } else {
+          router.replace('/(main)/games' as any);
+        }
+      } else {
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(main)/games' as any);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined') {
+        const confirmed = window.confirm('Tinggalkan meja ini?');
+        if (confirmed) {
+          doLeave();
+        }
+      } else {
+        doLeave();
+      }
+    } else {
+      Alert.alert(
+        'Tinggalkan Meja',
+        'Apakah Anda yakin ingin meninggalkan meja ini?',
+        [
+          { text: 'Batal', style: 'cancel' },
+          { text: 'Tinggalkan', style: 'destructive', onPress: doLeave },
+        ]
+      );
+    }
   };
 
   if (loading || !table) {
@@ -1039,6 +1083,32 @@ export default function GameTableScreen() {
             <Text style={[styles.modalSub, { textAlign: 'center', marginTop: 4 }]}>
               {gameResult?.summary || 'Pertandingan selesai.'}
             </Text>
+
+            {/* Winner Points Banner */}
+            {gameResult?.winners?.includes(currentUserId) && (
+              <View
+                style={{
+                  backgroundColor: 'rgba(212, 163, 115, 0.2)',
+                  borderColor: coffee.accent,
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  padding: 12,
+                  marginTop: 12,
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ color: coffee.accent, fontSize: 16, fontWeight: '800' }}>
+                  🎉 SELAMAT! ANDA MENANG!
+                </Text>
+                <Text style={{ color: coffee.text, fontSize: 13, fontWeight: '700' }}>
+                  ⭐ +50 Poin Kopi Warkop telah dikumpulkan!
+                </Text>
+                <Text style={{ color: coffee.secondary, fontSize: 11 }}>
+                  Poin Anda tersimpan permanen dan tidak akan hilang.
+                </Text>
+              </View>
+            )}
 
             {gameResult?.scores && (
               <View style={styles.scoresListContainer}>

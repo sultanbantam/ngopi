@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { answerQuestion, getPlatformDirectoryMessage, getPlatformInfoText } from '../services/ai.service';
 import { prisma } from '../utils/prisma';
 import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../data/tebakTebakan';
+import { PointsManager } from '../utils/pointsManager';
 import fs from 'fs';
 import path from 'path';
 
@@ -91,34 +92,6 @@ type BambupediaMessage = {
   created_at: string;
 };
 
-const POINTS_FILE = path.join(__dirname, '../../uploads/warkop_points.json');
-
-const loadPersistedPoints = (): Map<string, number> => {
-  const map = new Map<string, number>();
-  try {
-    if (fs.existsSync(POINTS_FILE)) {
-      const data = JSON.parse(fs.readFileSync(POINTS_FILE, 'utf-8'));
-      for (const [k, v] of Object.entries(data)) {
-        if (typeof v === 'number') map.set(k, v);
-      }
-    }
-  } catch (e) {
-    console.warn('Failed to load warkop points:', e);
-  }
-  return map;
-};
-
-const savePersistedPoints = (map: Map<string, number>) => {
-  try {
-    const dir = path.dirname(POINTS_FILE);
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    const obj = Object.fromEntries(map);
-    fs.writeFileSync(POINTS_FILE, JSON.stringify(obj, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn('Failed to save warkop points:', e);
-  }
-};
-
 const bambupediaSessions = new Map<string, { member: BambupediaMember; socketIds: Set<string> }>();
 let tipIndex = 0;
 let tipsInterval: ReturnType<typeof setInterval> | null = null;
@@ -129,7 +102,6 @@ let fastestWinner: string | null = null;
 let winnerAnsweredAt = 0;
 let riddleTimeout: ReturnType<typeof setTimeout> | null = null;
 let riddleInterval: ReturnType<typeof setInterval> | null = null;
-const userPoints = loadPersistedPoints();
 
 const makeId = (prefix: string) => `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -350,7 +322,7 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
   // Send persisted points to joining user
   socket.emit('warkop_user_points', {
     username: member.username,
-    points: userPoints.get(member.username) || 0,
+    points: PointsManager.getPoints(member.username),
   });
 
   if (currentRiddle && !riddleAnswered) {
@@ -434,10 +406,7 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
           fastestWinner = member.username;
           winnerAnsweredAt = Date.now();
 
-          const currentPts = userPoints.get(member.username) || 0;
-          const newPts = currentPts + 10;
-          userPoints.set(member.username, newPts);
-          savePersistedPoints(userPoints);
+          const newPts = PointsManager.addPoints(member.username, 10);
 
           const winMsg = createSystemMessage(
             'sys-tebak-win',
@@ -490,7 +459,7 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
   socket.on('request_warkop_points', () => {
     socket.emit('warkop_user_points', {
       username: member.username,
-      points: userPoints.get(member.username) || 0,
+      points: PointsManager.getPoints(member.username),
     });
   });
 

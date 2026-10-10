@@ -164,12 +164,34 @@ export class TableManager {
         : user.id;
 
     // Check if player is already seated
-    const existingPlayer = active.data.players.find((p) => p.user_id === finalUserId || p.username === user.username);
+    const existingPlayer = active.data.players.find((p) => p.user_id === finalUserId);
     if (existingPlayer) {
       return { success: true, table: this.sanitizeTableData(active.data) };
     }
 
+    // If table is full, check if a bot can yield its seat to a real human player
     if (active.data.players.length >= active.data.max_players) {
+      const botIdx = active.data.players.findIndex((p) => p.is_bot);
+      if (botIdx !== -1) {
+        const replacedBot = active.data.players.splice(botIdx, 1)[0];
+        const newPlayer: GamePlayerInfo = {
+          id: makeId('p'),
+          user_id: finalUserId,
+          username: user.username,
+          display_name: user.display_name,
+          avatar_url: user.avatar_url ?? null,
+          seat_number: replacedBot.seat_number,
+          is_ready: false,
+          is_active: true,
+          is_bot: false,
+        };
+        active.data.players.push(newPlayer);
+        // If current host is absent, appoint this human player as host
+        if (!active.data.players.some((p) => p.user_id === active.data.host_id && !p.is_bot)) {
+          active.data.host_id = finalUserId;
+        }
+        return { success: true, table: this.sanitizeTableData(active.data) };
+      }
       return { success: false, error: 'Meja sudah penuh.' };
     }
 
@@ -193,6 +215,12 @@ export class TableManager {
     };
 
     active.data.players.push(newPlayer);
+
+    // If host is absent, appoint seated human player as host
+    if (!active.data.players.some((p) => p.user_id === active.data.host_id && !p.is_bot)) {
+      active.data.host_id = finalUserId;
+    }
+
     return { success: true, table: this.sanitizeTableData(active.data) };
   }
 

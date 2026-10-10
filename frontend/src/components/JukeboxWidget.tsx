@@ -215,7 +215,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   };
 
   const playRadioStation = (station: RadioStation) => {
-    const streamUri = station.streamUrl;
+    const streamUri = station.proxyUrl || station.streamUrl;
     const radioTrack: Track = {
       id: `radio-${station.id}`,
       title: station.name,
@@ -229,7 +229,6 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     setPlayingTrack(radioTrack);
     setProgress(100);
     setIsPlaying(true);
-    startPlayingTrack(radioTrack);
     setAddModalVisible(false);
   };
 
@@ -273,8 +272,11 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   }, [warungId]);
 
   const htmlAudioRef = useRef<any>(null);
+  const currentAudioUriRef = useRef<string>('');
 
   const startPlayingTrack = useCallback((track: Track) => {
+    if (!track?.track_uri) return;
+
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       if (track.track_uri.startsWith('http')) {
         musicSynthesizer.pause();
@@ -283,29 +285,39 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
             htmlAudioRef.current = new window.Audio();
           }
           const audio = htmlAudioRef.current;
+
+          // If already playing this exact track without being paused, avoid reloading
+          if (currentAudioUriRef.current === track.track_uri && !audio.paused) {
+            return;
+          }
+
+          currentAudioUriRef.current = track.track_uri;
           audio.src = track.track_uri;
           audio.load();
-          audio.play().catch((err: any) => {
-            console.warn('Playback direct error, trying proxy if radio:', err);
-            if (track.added_by === 'Radio Warkop') {
-              const proxyUri = `https://api.ngopi.top/api/jukebox/radio/stream?url=${encodeURIComponent(track.track_uri)}`;
-              audio.src = proxyUri;
-              audio.load();
-              audio.play().catch((pErr: any) => console.warn('Radio proxy also failed', pErr));
-            } else {
-              musicSynthesizer.play('synth:lofi', track.title);
-            }
-          });
+          const playPromise = audio.play();
+          if (playPromise !== undefined) {
+            playPromise.catch((err: any) => {
+              if (err?.name === 'AbortError') return;
+              console.warn('Playback direct error, trying proxy if radio:', err);
+              if (track.added_by === 'Radio Warkop' || track.track_uri.includes('stream')) {
+                const proxyUri = `https://api.ngopi.top/api/jukebox/radio/stream?url=${encodeURIComponent(track.track_uri)}`;
+                currentAudioUriRef.current = proxyUri;
+                audio.src = proxyUri;
+                audio.load();
+                audio.play().catch((pErr: any) => {
+                  if (pErr?.name !== 'AbortError') console.warn('Radio proxy also failed', pErr);
+                });
+              }
+            });
+          }
           audio.onended = () => {
             if (track.added_by !== 'Radio Warkop') {
               handleVote('skip');
             }
           };
           return;
-        } catch {
-          if (track.added_by !== 'Radio Warkop') {
-            musicSynthesizer.play('synth:lofi', track.title);
-          }
+        } catch (e) {
+          console.warn('Audio element error:', e);
           return;
         }
       }
@@ -313,6 +325,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     if (htmlAudioRef.current) {
       try { htmlAudioRef.current.pause(); } catch {}
     }
+    currentAudioUriRef.current = track.track_uri;
     musicSynthesizer.play(track.track_uri, track.title);
   }, []);
 
@@ -320,6 +333,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     if (htmlAudioRef.current) {
       try { htmlAudioRef.current.pause(); } catch {}
     }
+    currentAudioUriRef.current = '';
     musicSynthesizer.pause();
   }, []);
 
@@ -459,7 +473,6 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       setPlayingTrack(newTrack);
       setProgress(0);
       setIsPlaying(true);
-      startPlayingTrack(newTrack);
     } else {
       setQueue(prev => [...prev, newTrack]);
     }

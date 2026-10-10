@@ -238,7 +238,12 @@ export default function GamesLobbyScreen() {
         });
       }
     } catch (err: any) {
-      Alert.alert('Gagal Gabung', err?.response?.data?.error || 'Gagal masuk ke meja.');
+      const errMsg = err?.response?.data?.error || 'Gagal masuk ke meja.';
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.alert(errMsg);
+      } else {
+        Alert.alert('Gagal Gabung', errMsg);
+      }
     }
   };
 
@@ -252,7 +257,9 @@ export default function GamesLobbyScreen() {
 
   const renderTableCard = ({ item }: { item: GameTable }) => {
     const isPlaying = item.status === 'playing';
-    const isFull = item.players.length >= item.max_players;
+    const humanCount = item.players.filter((p) => !p.is_bot).length;
+    const hasBots = item.players.some((p) => p.is_bot);
+    const isFull = humanCount >= item.max_players;
     const isHost = item.host_id === currentUserId;
 
     return (
@@ -326,7 +333,7 @@ export default function GamesLobbyScreen() {
             >
               <Ionicons name="enter-outline" size={16} color={coffee.buttonText} />
               <Text style={styles.joinBtnText}>
-                {isHost ? 'Masuk Kembali' : 'Gabung Kursi'}
+                {isHost ? 'Masuk Kembali' : hasBots && item.players.length >= item.max_players ? 'Gabung Kursi (Ganti Bot)' : 'Gabung Kursi'}
               </Text>
             </TouchableOpacity>
           )}
@@ -350,7 +357,21 @@ export default function GamesLobbyScreen() {
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (Platform.OS === 'web') {
+              if (typeof window !== 'undefined' && window.history && window.history.length > 1) {
+                router.back();
+              } else {
+                router.replace('/(main)/warkop' as any);
+              }
+            } else {
+              if (router.canGoBack()) {
+                router.back();
+              } else {
+                router.replace('/(main)/warkop' as any);
+              }
+            }
+          }}
           accessibilityLabel="Kembali"
         >
           <Ionicons name="arrow-back" size={22} color={coffee.text} />

@@ -1,6 +1,7 @@
 import { Request, Response, Router } from 'express';
 import { TableManager } from '../games/TableManager';
 import { GameType } from '../games/engine/types';
+import { PointsManager } from '../utils/pointsManager';
 import jwt from 'jsonwebtoken';
 
 const router = Router();
@@ -35,8 +36,8 @@ const getUserFromReq = (req: Request) => {
   }
 
   // Fallback for casual guest or development token
-  const guestId = (req.headers['x-user-id'] as string) || (req.query.userId as string) || 'guest_user';
-  const guestName = (req.headers['x-user-name'] as string) || (req.query.username as string) || 'Ngopikawan';
+  const guestId = (req.headers['x-user-id'] as string) || (req.body?.userId as string) || (req.query.userId as string) || 'guest_user';
+  const guestName = (req.headers['x-user-name'] as string) || (req.body?.username as string) || (req.query.username as string) || 'Ngopikawan';
   return {
     id: String(guestId),
     username: String(guestName),
@@ -44,6 +45,13 @@ const getUserFromReq = (req: Request) => {
     avatar_url: null,
   };
 };
+
+// GET /api/games/points
+router.get('/points', (req: Request, res: Response) => {
+  const user = getUserFromReq(req);
+  const points = PointsManager.getPoints(user.username) || PointsManager.getPoints(user.id);
+  res.status(200).json({ success: true, points, username: user.username });
+});
 
 // GET /api/games/tables
 router.get('/tables', (req: Request, res: Response) => {
