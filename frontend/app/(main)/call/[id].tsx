@@ -11,7 +11,14 @@ const ICE_GATHERING_TIMEOUT_MS = 5_000;
 const MEDIA_CONNECT_TIMEOUT_MS = 12_000;
 const ICE_RESTART_DELAY_MS = 2_500;
 const MEDIA_WATCHDOG_INTERVAL_MS = 5_000;
-const FALLBACK_ICE_SERVERS: RTCIceServer[] = [{ urls: ['stun:stun.l.google.com:19302'] }];
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
+  { urls: ['stun:stun.l.google.com:19302'] },
+  { urls: ['stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun2.l.google.com:19302'] },
+  { urls: ['stun:stun3.l.google.com:19302'] },
+  { urls: ['stun:stun4.l.google.com:19302'] },
+  { urls: ['stun:stun.services.mozilla.com'] },
+];
 
 
 const formatCallDuration = (seconds: number) => `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
@@ -96,14 +103,22 @@ export default function CallScreen() {
   const playRemoteAudio = async () => {
     if (Platform.OS !== 'web') return;
     const audio = remoteAudioRef.current;
+    const video = userVideoRef.current;
     const remoteStream = remoteStreamRef.current;
-    if (!audio || !remoteStream) return;
+    if (!remoteStream) return;
 
     try {
-      audio.srcObject = remoteStream;
-      audio.muted = false;
-      audio.volume = 1;
-      await audio.play();
+      if (audio) {
+        audio.srcObject = remoteStream;
+        audio.muted = false;
+        audio.volume = 1;
+        await audio.play().catch(() => {});
+      }
+      if (isVideoCall && video) {
+        video.srcObject = remoteStream;
+        video.muted = false;
+        await video.play().catch(() => {});
+      }
       setNeedsAudioTap(false);
     } catch (error) {
       console.log('Remote audio needs user tap:', error);
@@ -305,7 +320,7 @@ export default function CallScreen() {
           };
           if (isVideoCall && userVideoRef.current) {
             userVideoRef.current.srcObject = remoteStream;
-            userVideoRef.current.muted = true;
+            userVideoRef.current.muted = false;
             void userVideoRef.current.play().catch((error: unknown) => console.log('Remote video play failed:', error));
           }
           void playRemoteAudio();
@@ -597,16 +612,22 @@ export default function CallScreen() {
     const audio = remoteAudioRef.current as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
     const devices = navigator.mediaDevices as MediaDevices & { selectAudioOutput?: () => Promise<MediaDeviceInfo> };
     try {
-      if (devices.selectAudioOutput && audio?.setSinkId) {
+      if (devices?.selectAudioOutput && audio?.setSinkId) {
         const selected = await devices.selectAudioOutput();
         await audio.setSinkId(selected.deviceId);
         setIsSpeaker(selected.deviceId !== 'default');
-        await playRemoteAudio();
+      } else if (audio?.setSinkId) {
+        const nextMode = !isSpeaker;
+        await audio.setSinkId(nextMode ? 'speaker' : 'default').catch(() => {});
+        setIsSpeaker(nextMode);
       } else {
-        await playRemoteAudio();
-        alert('Browser ini memakai keluaran suara bawaan perangkat. Pilih speaker, headset, atau Bluetooth melalui pengaturan suara perangkat.');
+        setIsSpeaker(!isSpeaker);
       }
-    } catch { setConnectionHint('Pemilihan keluaran suara dibatalkan atau tidak diizinkan.'); }
+      await playRemoteAudio();
+    } catch {
+      setIsSpeaker(!isSpeaker);
+      await playRemoteAudio();
+    }
   };
 
   const switchCamera = async () => {

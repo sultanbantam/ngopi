@@ -7,7 +7,14 @@ import { prisma } from '../utils/prisma';
 import crypto from 'crypto';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
-const DEFAULT_ICE_SERVERS = [{ urls: ['stun:stun.l.google.com:19302'] }];
+const DEFAULT_ICE_SERVERS = [
+  { urls: ['stun:stun.l.google.com:19302'] },
+  { urls: ['stun:stun1.l.google.com:19302'] },
+  { urls: ['stun:stun2.l.google.com:19302'] },
+  { urls: ['stun:stun3.l.google.com:19302'] },
+  { urls: ['stun:stun4.l.google.com:19302'] },
+  { urls: ['stun:stun.services.mozilla.com'] },
+];
 
 const createIceServers = (userId: string) => {
   const sharedSecret = process.env.TURN_SHARED_SECRET;
@@ -170,10 +177,10 @@ export const setupSocket = (io: Server) => {
       if (!callId || !recipientId) return;
       const dedupeKey = `${user.id}:${recipientId}:${callId}`;
       const now = Date.now();
-      if (now - (recentCallEvents.get(dedupeKey) || 0) < 60_000) return;
+      if (now - (recentCallEvents.get(dedupeKey) || 0) < 3_000) return;
       recentCallEvents.set(dedupeKey, now);
       if (recentCallEvents.size > 1_000) {
-        recentCallEvents.forEach((createdAt, key) => { if (now - createdAt > 60_000) recentCallEvents.delete(key); });
+        recentCallEvents.forEach((createdAt, key) => { if (now - createdAt > 10_000) recentCallEvents.delete(key); });
       }
       // Emits to the recipient's personal room
       socket.to(recipientId).emit('call_incoming', {

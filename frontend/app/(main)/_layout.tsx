@@ -166,41 +166,71 @@ export default function MainLayout() {
   };
   const startCallAlert = () => {
     if (Platform.OS !== 'web' || callAlertMode === 'silent') return () => {};
+
+    if (callAlertMode === 'vibrate' || callAlertMode === 'ringtone') {
+      try {
+        navigator.vibrate?.([450, 250, 450, 600]);
+      } catch {}
+    }
+    const vibrationInterval = setInterval(() => {
+      try {
+        navigator.vibrate?.([450, 250, 450, 600]);
+      } catch {}
+    }, CALL_RING_REPEAT_MS);
+
     if (callAlertMode === 'vibrate') {
-      navigator.vibrate?.([450, 250, 450, 600]);
-      const vibrationInterval = setInterval(() => navigator.vibrate?.([450, 250, 450, 600]), CALL_RING_REPEAT_MS);
-      return () => { clearInterval(vibrationInterval); navigator.vibrate?.(0); };
-    }
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const notes = [659, 784, 988];
-      const oscillators: OscillatorNode[] = [];
-      for (let cycleMs = 0; cycleMs < CALL_RING_DURATION_MS; cycleMs += CALL_RING_REPEAT_MS) {
-        notes.forEach((frequency, index) => {
-          const oscillator = audioCtx.createOscillator();
-          const gainNode = audioCtx.createGain();
-          const startsAt = audioCtx.currentTime + (cycleMs / 1000) + index * 0.18;
-          oscillator.type = index === 1 ? 'triangle' : 'sine';
-          oscillator.frequency.setValueAtTime(frequency, startsAt);
-          gainNode.gain.setValueAtTime(0.0001, startsAt);
-          gainNode.gain.exponentialRampToValueAtTime(0.35, startsAt + 0.03);
-          gainNode.gain.exponentialRampToValueAtTime(0.0001, startsAt + 0.28);
-          oscillator.connect(gainNode);
-          gainNode.connect(audioCtx.destination);
-          oscillator.start(startsAt);
-          oscillator.stop(startsAt + 0.3);
-          oscillators.push(oscillator);
-        });
-      }
-      void audioCtx.resume();
       return () => {
-        oscillators.forEach((oscillator) => { try { oscillator.stop(); } catch { /* already stopped */ } });
-        void audioCtx.close();
+        clearInterval(vibrationInterval);
+        try { navigator.vibrate?.(0); } catch {}
       };
-    } catch (error) {
-      console.log('Call alert audio error:', error);
-      return () => {};
     }
+
+    let isAlerting = true;
+    let audioCtx: AudioContext | null = null;
+    let ringInterval: ReturnType<typeof setInterval> | null = null;
+
+    const playOneRingCycle = () => {
+      if (!isAlerting) return;
+      try {
+        if (!audioCtx || audioCtx.state === 'closed') {
+          audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') {
+          void audioCtx.resume();
+        }
+        const notes = [659, 784, 988];
+        notes.forEach((freq, idx) => {
+          if (!audioCtx || audioCtx.state === 'closed') return;
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          const now = audioCtx.currentTime + idx * 0.18;
+          osc.type = idx === 1 ? 'triangle' : 'sine';
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(0.0001, now);
+          gain.gain.exponentialRampToValueAtTime(0.35, now + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now);
+          osc.stop(now + 0.3);
+        });
+      } catch (err) {
+        console.log('Ring audio cycle error:', err);
+      }
+    };
+
+    playOneRingCycle();
+    ringInterval = setInterval(playOneRingCycle, CALL_RING_REPEAT_MS);
+
+    return () => {
+      isAlerting = false;
+      clearInterval(vibrationInterval);
+      if (ringInterval) clearInterval(ringInterval);
+      try { navigator.vibrate?.(0); } catch {}
+      if (audioCtx && audioCtx.state !== 'closed') {
+        try { void audioCtx.close(); } catch {}
+      }
+    };
   };
 
   const showNotification = (title: string, body: string, target?: AppNotification['target'], notificationId?: string) => {
@@ -264,6 +294,9 @@ export default function MainLayout() {
       pending.browserNotification?.close();
       if (Platform.OS === 'web') navigator.vibrate?.(0);
       delete pendingCallsRef.current[callId];
+      setTimeout(() => {
+        handledCallIdsRef.current.delete(callId);
+      }, 4000);
       setActiveIncomingCall((prev) => (prev?.callId === callId ? null : prev));
 
       if (missed) {
