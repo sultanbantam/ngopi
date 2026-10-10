@@ -159,8 +159,10 @@ export class CaturGame extends BaseGame {
 
   public getResults(): GameResult {
     const winner = this.state.winnerId || this.players[0]!.user_id;
+    const losers = this.players.filter((p) => p.user_id !== winner).map((p) => p.user_id);
     return {
       winners: [winner],
+      losers,
       scores: {
         [this.state.whitePlayerId]: winner === this.state.whitePlayerId ? 1 : 0,
         [this.state.blackPlayerId]: winner === this.state.blackPlayerId ? 1 : 0,

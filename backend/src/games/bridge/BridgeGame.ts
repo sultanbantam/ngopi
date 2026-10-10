@@ -118,8 +118,10 @@ export class BridgeGame extends BaseGame {
 
   public getResults(): GameResult {
     const winner = this.state.winnerId || this.players[0]!.user_id;
+    const losers = this.players.filter((p) => p.user_id !== winner).map((p) => p.user_id);
     return {
       winners: [winner],
+      losers,
       scores: this.state.tricksWon,
       summary: `Pemenang Bridge: ${this.players.find((p) => p.user_id === winner)?.display_name || 'Pemain'} (${this.state.tricksWon[winner]} Trick)!`,
     };
