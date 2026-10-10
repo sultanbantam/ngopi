@@ -49,6 +49,31 @@ const EMOJI_LIST = [
 ];
 const NoTranslateText = Text as any;
 
+export function sanitizeWarkopText(text: string): string {
+  if (!text) return text;
+  return text
+    .replace(/rumpun\s*\/\s*grup/gi, 'warkop')
+    .replace(/grup\s*\/\s*rumpun/gi, 'warkop')
+    .replace(/Rumpun\s+Bambupedia/gi, 'Warung Kopi')
+    .replace(/Rumpun\s+bambupedia/gi, 'Warung Kopi')
+    .replace(/Admin\s+rumpun/gi, 'Admin warkop')
+    .replace(/admin\s+rumpun/gi, 'admin warkop')
+    .replace(/Pengaturan\s+rumpun/gi, 'Pengaturan warkop')
+    .replace(/pengaturan\s+rumpun/gi, 'pengaturan warkop')
+    .replace(/Buat\s+Rumpun/gi, 'Buat Warkop')
+    .replace(/buat\s+rumpun/gi, 'buat warkop')
+    .replace(/tab\s+Rumpun/gi, 'tab Warkop')
+    .replace(/tab\s+rumpun/gi, 'tab warkop')
+    .replace(/Info\s+Rumpun/gi, 'Info Warkop')
+    .replace(/info\s+rumpun/gi, 'info warkop')
+    .replace(/rumpun/gi, 'warkop')
+    .replace(/Rumpun/g, 'Warkop')
+    .replace(/🎋/g, '☕')
+    .replace(/BambooCS/g, 'NgopiCS')
+    .replace(/BambooBot/g, 'WarkopBot')
+    .replace(/BambooChat/g, 'Ngopi di Warkop');
+}
+
 type MessageType = 'text' | 'audio' | 'image' | 'file' | 'document' | 'system';
 
 interface Member {
@@ -218,28 +243,19 @@ export default function BambupediaRoom() {
   const flatListRef = useRef<FlatList<ChatMessage>>(null);
   const seenMessageIds = useRef(new Set<string>());
   const hasWelcomedRef = useRef(false);
-  const askedRiddleIdsRef = useRef<Set<string>>(new Set());
-  const activeRiddleRef = useRef<TebakTebakan | null>(null);
-  const riddleTimerRef = useRef<any>(null);
-  const tipsTimerRef = useRef<any>(null);
+  const currentUsernameRef = useRef<string | null>(null);
+  currentUsernameRef.current = currentUsername;
 
-  const awardPoints = useCallback(async (amount: number = 10) => {
-    setUserPoints((prev) => {
-      const updated = prev + amount;
-      if (currentUsername) {
-        const key = `ngopi_points_${currentUsername}`;
-        if (Platform.OS === 'web') {
-          localStorage.setItem(key, updated.toString());
-        } else {
-          SecureStore.setItemAsync(key, updated.toString());
-        }
-      }
-      return updated;
-    });
-  }, [currentUsername]);
+  const appendMessage = useCallback((rawMessage: ChatMessage) => {
+    if (!rawMessage?.id) return;
 
-  const appendMessage = useCallback((message: ChatMessage) => {
-    if (!message?.id) return;
+    const content = sanitizeWarkopText(rawMessage.content || '');
+    const messageText = sanitizeWarkopText(rawMessage.message_text || rawMessage.content || '');
+    const message: ChatMessage = {
+      ...rawMessage,
+      content,
+      message_text: messageText,
+    };
 
     // Drop any promotional links from WarkopBot / BambooBot
     if (
@@ -256,55 +272,13 @@ export default function BambupediaRoom() {
       return;
     }
 
-    // Check if riddle message
-    if (message.content && message.content.includes('[TEBAK-TEBAKAN WARKOP]')) {
-      const match = WARKOP_TEBAK_TEBAKAN.find((r) => message.content.includes(r.question));
-      if (match) {
-        activeRiddleRef.current = match;
-      }
-    }
-
-    // Check if congratulations message for current user
-    if (
-      message.content &&
-      message.content.includes('SELAMAT! @') &&
-      currentUsername &&
-      message.content.includes(`@${currentUsername}`)
-    ) {
-      awardPoints(10);
-      activeRiddleRef.current = null;
-    }
-
     setMessages((previous) => {
       if (seenMessageIds.current.has(message.id)) return previous;
       seenMessageIds.current.add(message.id);
       const next = [...previous, message];
       return next.length > 240 ? next.slice(next.length - 240) : next;
     });
-  }, [currentUsername, awardPoints]);
-
-  const askNewRiddle = useCallback(() => {
-    let candidates = WARKOP_TEBAK_TEBAKAN.filter((r) => !askedRiddleIdsRef.current.has(r.id));
-    if (candidates.length === 0) {
-      askedRiddleIdsRef.current.clear();
-      candidates = WARKOP_TEBAK_TEBAKAN;
-    }
-    const randomRiddle = candidates[Math.floor(Math.random() * candidates.length)];
-    askedRiddleIdsRef.current.add(randomRiddle.id);
-    activeRiddleRef.current = randomRiddle;
-
-    appendMessage({
-      id: `riddle-${Date.now()}`,
-      room_id: ROOM_ID,
-      room_name: ROOM_NAME,
-      type: 'system',
-      message_type: 'system',
-      content: `🎯 [TEBAK-TEBAKAN WARKOP]\n${randomRiddle.question}\n\nKetik jawabanmu langsung di chat! Jawaban benar dapat +10 Poin Kopi ☕!`,
-      sender_id: 'warkopbot',
-      sender_name: 'WarkopBot',
-      created_at: new Date().toISOString(),
-    });
-  }, [appendMessage]);
+  }, []);
 
   useEffect(() => {
     const loadCurrentUser = async () => {
@@ -348,9 +322,25 @@ export default function BambupediaRoom() {
       const handleConnect = () => {
         setSocketConnected(true);
         socket.emit('request_bambupedia_members');
+        socket.emit('request_warkop_points');
       };
 
       const handleDisconnect = () => setSocketConnected(false);
+
+      const handlePointsUpdate = (data: { username: string; points: number }) => {
+        if (!data?.username) return;
+        const currentUName = currentUsernameRef.current;
+        if (currentUName && data.username.toLowerCase() === currentUName.toLowerCase()) {
+          const validated = Number(data.points) || 0;
+          setUserPoints(validated);
+          const key = `ngopi_points_${currentUName}`;
+          if (Platform.OS === 'web') {
+            localStorage.setItem(key, validated.toString());
+          } else {
+            SecureStore.setItemAsync(key, validated.toString());
+          }
+        }
+      };
 
       const handleMembers = (memberList: Member[]) => {
         if (!Array.isArray(memberList)) return;
@@ -385,20 +375,24 @@ export default function BambupediaRoom() {
 
       const handleTip = (payload: ChatMessage | string) => {
         if (typeof payload === 'string') {
+          const cleanText = sanitizeWarkopText(payload);
           appendMessage({
             id: `sys-tip-${Date.now()}`,
             room_id: ROOM_ID,
             room_name: ROOM_NAME,
             type: 'tip',
             message_type: 'system',
-            content: `${TIP_ICON} Tips Fitur: ${payload}`,
+            content: `${TIP_ICON} Tips Fitur: ${cleanText}`,
             sender_id: 'system',
             sender_name: 'SISTEM',
             created_at: new Date().toISOString(),
           });
           return;
         }
-        appendMessage(payload);
+        appendMessage({
+          ...payload,
+          content: sanitizeWarkopText(payload.content || ''),
+        });
       };
 
       const handleUserJoined = (payload: UserJoinedPayload) => {
@@ -419,6 +413,7 @@ export default function BambupediaRoom() {
       socket.on('system_message', appendMessage);
       socket.on('bambupedia_system_tip', handleTip);
       socket.on('bambupedia_user_joined', handleUserJoined);
+      socket.on('warkop_user_points', handlePointsUpdate);
 
       removeSocketListeners = () => {
         socket.off('connect', handleConnect);
@@ -429,10 +424,12 @@ export default function BambupediaRoom() {
         socket.off('system_message', appendMessage);
         socket.off('bambupedia_system_tip', handleTip);
         socket.off('bambupedia_user_joined', handleUserJoined);
+        socket.off('warkop_user_points', handlePointsUpdate);
       };
 
       setSocketConnected(socket.connected);
       socket.emit('request_bambupedia_members');
+      socket.emit('request_warkop_points');
     };
 
     setupSocket();
@@ -453,12 +450,7 @@ export default function BambupediaRoom() {
   }, [messages.length]);
 
   useEffect(() => {
-    // Launch first riddle after 3 seconds if none active
-    const initRiddle = setTimeout(() => {
-      if (!activeRiddleRef.current) askNewRiddle();
-    }, 3000);
-
-    // Rotate rich educational tips every 75 seconds
+    // Rotate rich educational tips every 90 seconds
     let tipIdx = 0;
     const tipsTimer = setInterval(() => {
       const tip = FEATURE_TIPS[tipIdx % FEATURE_TIPS.length];
@@ -474,14 +466,12 @@ export default function BambupediaRoom() {
         sender_name: 'SISTEM',
         created_at: new Date().toISOString(),
       });
-    }, 75000);
+    }, 90000);
 
     return () => {
-      clearTimeout(initRiddle);
       clearInterval(tipsTimer);
-      if (riddleTimerRef.current) clearTimeout(riddleTimerRef.current);
     };
-  }, [askNewRiddle, appendMessage]);
+  }, [appendMessage]);
 
   const sortedMembers = members;
   const onlineCount = memberSummary.online;
@@ -556,36 +546,6 @@ export default function BambupediaRoom() {
   const sendMessage = () => {
     const content = inputText.trim();
     if (!content) return;
-
-    // Check if answering active tebak-tebakan
-    if (activeRiddleRef.current) {
-      const cleanAnswer = content.toLowerCase().trim().replace(/^[!/.]/, '');
-      const riddle = activeRiddleRef.current;
-      const isCorrect =
-        cleanAnswer === riddle.answer.toLowerCase() ||
-        riddle.synonyms.some((syn) => cleanAnswer.includes(syn.toLowerCase()) || syn.toLowerCase().includes(cleanAnswer));
-
-      if (isCorrect) {
-        awardPoints(10);
-        const winner = currentUsername || 'Kamu';
-        const winMsg: ChatMessage = {
-          id: `riddle-win-${Date.now()}`,
-          room_id: ROOM_ID,
-          room_name: ROOM_NAME,
-          type: 'system',
-          message_type: 'system',
-          content: `🎉 SELAMAT! @${winner} berhasil menebak dengan benar!\nJawaban: "${riddle.answer}" ☕\n+10 Poin Kopi berhasil dicatat di username @${winner}!`,
-          sender_id: 'warkopbot',
-          sender_name: 'WarkopBot',
-          created_at: new Date().toISOString(),
-        };
-        appendMessage(winMsg);
-        sendSocketMessage({ content: winMsg.content, message_type: 'system' });
-        activeRiddleRef.current = null;
-        if (riddleTimerRef.current) clearTimeout(riddleTimerRef.current);
-        riddleTimerRef.current = setTimeout(askNewRiddle, 45000);
-      }
-    }
 
     sendSocketMessage({ content, message_type: 'text' });
     setInputText('');
@@ -812,7 +772,7 @@ export default function BambupediaRoom() {
     );
   };
   const renderSystemContent = (message: ChatMessage) => {
-    const content = (message.content || '').replace(/Rumpun Bambupedia/gi, ROOM_NAME).replace(/🎋/g, '☕').replace(/BambooCS/g, 'NgopiCS').replace(/BambooBot/g, 'WarkopBot').replace(/BambooChat/g, 'Ngopi di Warkop');
+    const content = sanitizeWarkopText(message.content || '');
     if (['WarkopBot', 'BambooBot'].includes(message.sender_name)) {
       const [headline = '', ...bodyLines] = content.split('\n');
       return (
@@ -906,7 +866,7 @@ export default function BambupediaRoom() {
       );
     }
 
-    const displayContent = item.message_text || item.content || '';
+    const displayContent = sanitizeWarkopText(item.message_text || item.content || '');
     const hasMediaOnly = (item.message_type || 'text') === 'image' || (item.message_type || 'text') === 'audio';
     return (
       <View style={[styles.messageRow, isOwn && styles.messageRowOwn]}>

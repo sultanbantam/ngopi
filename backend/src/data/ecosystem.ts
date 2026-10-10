@@ -35,7 +35,7 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
       },
       {
         question: 'Apa itu BMC?',
-        answer: 'BMC adalah token utilitas ekosistem Bambu yang digunakan untuk akses fitur, token gating rumpun, reward, dan aktivitas komunitas sesuai kebijakan platform.',
+        answer: 'BMC adalah token utilitas ekosistem Bambu yang digunakan untuk akses fitur, token gating warkop, reward, dan aktivitas komunitas sesuai kebijakan platform.',
         keywords: ['bmc', 'token', 'utilitas', 'reward', 'gating'],
       },
       {
@@ -64,9 +64,9 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
         keywords: ['pulih', 'recovery', 'lupa', 'akun', 'wallet'],
       },
       {
-        question: 'Apa fungsi token gated group?',
-        answer: 'Token gated group membatasi akses rumpun berdasarkan minimum saldo BMC pada wallet pengguna, sehingga komunitas eksklusif dapat dikelola otomatis.',
-        keywords: ['token gated', 'rumpun', 'grup', 'akses', 'minimum saldo'],
+        question: 'Apa fungsi token gated warkop?',
+        answer: 'Token gated warkop membatasi akses warkop berdasarkan minimum saldo BMC pada wallet pengguna, sehingga komunitas eksklusif dapat dikelola otomatis.',
+        keywords: ['token gated', 'warkop', 'grup', 'akses', 'minimum saldo'],
       },
       {
         question: 'Ke mana melapor masalah transaksi Bamboochain?',
@@ -381,16 +381,16 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
     description: 'Platform komunikasi komunitas ekosistem Bambu untuk Bambupedia, pesan privat, berbagi dokumen, reaksi, serta voice call dan video call.',
     website_url: 'https://bamboochat.click',
     icon: 'BC',
-    aliases: ['bamboochat', 'bamboo chat', 'bmc chat', 'bambupedia', 'rumpun bambupedia', 'chat'],
+    aliases: ['bamboochat', 'bamboo chat', 'bmc chat', 'bambupedia', 'warung kopi', 'warkop', 'chat'],
     faqs: [
       {
         question: 'Tutorial cepat: bagaimana mulai menggunakan BambooChat?',
-        answer: '1. Buka https://bamboochat.click.\n2. Pilih Sign Up, buat username minimal 3 karakter dan password minimal 8 karakter, lalu konfirmasi password.\n3. Login dengan akun tersebut. Sesi akan tetap tersimpan sampai Anda memilih keluar.\n4. Setelah masuk, Anda berada di Rumpun Bambupedia untuk membaca informasi dan berdiskusi.\n5. Buka Kontak untuk memilih pengguna atau rumpun.\n6. Di chat, Anda dapat mengirim pesan, gambar, dokumen, voice message, dan reaksi.\n7. Gunakan ikon telepon atau kamera untuk voice call dan video call; izinkan mikrofon/kamera saat diminta.\n8. Buka Pusat Bantuan untuk membaca FAQ, bertanya kepada NgopiCS AI, atau membuat tiket.',
+        answer: '1. Buka https://bamboochat.click.\n2. Pilih Sign Up, buat username minimal 3 karakter dan password minimal 8 karakter, lalu konfirmasi password.\n3. Login dengan akun tersebut. Sesi akan tetap tersimpan sampai Anda memilih keluar.\n4. Setelah masuk, Anda berada di Warung Kopi untuk membaca informasi dan berdiskusi.\n5. Buka Kontak untuk memilih pengguna atau warkop.\n6. Di chat, Anda dapat mengirim pesan, gambar, dokumen, voice message, dan reaksi.\n7. Gunakan ikon telepon atau kamera untuk voice call dan video call; izinkan mikrofon/kamera saat diminta.\n8. Buka Pusat Bantuan untuk membaca FAQ, bertanya kepada NgopiCS AI, atau membuat tiket.',
         keywords: ['tutorial', 'panduan', 'mulai', 'cara menggunakan', 'pemula', 'langkah'],
       },
       {
         question: 'Apa itu BambooChat?',
-        answer: 'BambooChat adalah platform komunikasi ekosistem Bambu. Fitur utamanya meliputi Rumpun Bambupedia, pesan privat, rumpun komunitas, lampiran, voice message, reaksi, notifikasi, voice call, video call, WarkopBot, dan Pusat Bantuan NgopiCS.',
+        answer: 'BambooChat adalah platform komunikasi ekosistem Bambu. Fitur utamanya meliputi Warung Kopi, pesan privat, warkop komunitas, lampiran, voice message, reaksi, notifikasi, voice call, video call, WarkopBot, dan Pusat Bantuan NgopiCS.',
         keywords: ['apa itu', 'bamboochat', 'fitur', 'fungsi', 'komunikasi'],
       },
       {
@@ -404,9 +404,9 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
         keywords: ['login ulang', 'sesi', 'refresh token', 'offline', 'tetap login'],
       },
       {
-        question: 'Apa fungsi Rumpun Bambupedia?',
-        answer: 'Rumpun Bambupedia adalah ruang komunitas publik untuk informasi ekosistem Bambu, diskusi, sapaan, mention pengguna, dan jawaban WarkopBot. Tautan resmi yang dibagikan WarkopBot dapat langsung diketuk.',
-        keywords: ['bambupedia', 'rumpun', 'room', 'komunitas', 'tautan'],
+        question: 'Apa fungsi Warung Kopi?',
+        answer: 'Warung Kopi adalah ruang komunitas publik untuk informasi ekosistem Bambu, diskusi, sapaan, mention pengguna, dan jawaban WarkopBot. Tautan resmi yang dibagikan WarkopBot dapat langsung diketuk.',
+        keywords: ['bambupedia', 'warkop', 'warung kopi', 'room', 'komunitas', 'tautan'],
       },
       {
         question: 'Bagaimana menggunakan WarkopBot di Bambupedia?',
@@ -439,9 +439,9 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
         keywords: ['notifikasi disimpan', 'duplikat', 'pesan', 'dokumen', 'reaksi', 'misscall'],
       },
       {
-        question: 'Bagaimana membuat atau bergabung dengan rumpun?',
-        answer: 'Buka menu Kontak untuk melihat rumpun yang tersedia atau membuat rumpun baru. Rumpun dapat memakai kebijakan terbuka, persetujuan admin, atau persyaratan minimum saldo BMC. Pastikan alamat wallet publik sudah terhubung jika rumpun menggunakan token gating.',
-        keywords: ['rumpun', 'grup', 'buat grup', 'bergabung', 'approval', 'bmc', 'token gating'],
+        question: 'Bagaimana membuat atau bergabung dengan warkop?',
+        answer: 'Buka menu Kontak untuk melihat warkop yang tersedia atau membuat warkop baru. Warkop dapat memakai kebijakan terbuka, persetujuan admin, atau persyaratan minimum saldo BMC. Pastikan alamat wallet publik sudah terhubung jika warkop menggunakan token gating.',
+        keywords: ['warkop', 'grup', 'buat warkop', 'bergabung', 'approval', 'bmc', 'token gating'],
       },
       {
         question: 'Bagaimana menjaga keamanan akun BambooChat?',
@@ -450,7 +450,7 @@ export const ECOSYSTEM_PLATFORMS: EcosystemPlatformSeed[] = [
       },
       {
         question: 'Mengapa status saya menjadi offline?',
-        answer: 'Status offline muncul ketika aplikasi ditutup, koneksi internet terputus, atau socket tidak tersambung. Akun dan keanggotaan rumpun tidak hilang. Saat aplikasi dibuka dan jaringan kembali normal, status akan diperbarui menjadi online.',
+        answer: 'Status offline muncul ketika aplikasi ditutup, koneksi internet terputus, atau socket tidak tersambung. Akun dan keanggotaan warkop tidak hilang. Saat aplikasi dibuka dan jaringan kembali normal, status akan diperbarui menjadi online.',
         keywords: ['offline', 'status', 'socket', 'jaringan', 'room tetap'],
       },
       {

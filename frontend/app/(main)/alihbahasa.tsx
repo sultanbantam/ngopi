@@ -100,11 +100,11 @@ export default function AlihBahasaScreen() {
   const isRecognitionRunningRef = useRef(false);
   const isRestartingRef = useRef(false);
   const sessionStartTimeRef = useRef<number>(0);
-  const watchdogTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const watchdogTimerRef = useRef<any>(null);
+  const restartTimeoutRef = useRef<any>(null);
+  const timerRef = useRef<any>(null);
   const recognitionRef = useRef<any>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const silenceTimerRef = useRef<any>(null);
   const pendingSpeechRef = useRef<string>('');
   const lastCommittedSentenceRef = useRef<string>('');
   const scrollViewRef = useRef<ScrollView | null>(null);

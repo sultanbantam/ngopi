@@ -33,7 +33,7 @@ const getActiveGroupMember = async (groupId: string, userId: string) => {
 
 const emitGroupAccessError = (socket: Socket, member: any) => {
   if (!member) {
-    socket.emit('error', { message: 'Anda belum menjadi anggota rumpun ini. Silakan join dulu.' });
+    socket.emit('error', { message: 'Anda belum menjadi anggota warkop ini. Silakan join dulu.' });
     return true;
   }
   if (member.status === 'pending') {
@@ -41,7 +41,7 @@ const emitGroupAccessError = (socket: Socket, member: any) => {
     return true;
   }
   if (member.status !== 'active') {
-    socket.emit('error', { message: 'Akses rumpun tidak aktif.' });
+    socket.emit('error', { message: 'Akses warkop tidak aktif.' });
     return true;
   }
   return false;
@@ -55,7 +55,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
 
       const allowed = await checkTokenGate(user.id, roomId);
       if (!allowed) {
-        socket.emit('error', { message: 'Saldo BMC belum memenuhi syarat untuk masuk rumpun ini.' });
+        socket.emit('error', { message: 'Saldo BMC belum memenuhi syarat untuk masuk warkop ini.' });
         return;
       }
     }
@@ -73,7 +73,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         if (emitGroupAccessError(socket, member)) return;
         const isAdmin = member?.role === 'admin' || group.created_by === user.id;
         if (group.only_admins_can_send && !isAdmin) {
-          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di rumpun ini.' });
+          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di warkop ini.' });
           return;
         }
       }
@@ -224,7 +224,7 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
         if (emitGroupAccessError(socket, member)) return;
         const isAdmin = member?.role === 'admin' || group.created_by === user.id;
         if (group.only_admins_can_send && !isAdmin) {
-          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di rumpun ini.' });
+          socket.emit('error', { message: 'Hanya admin yang dapat mengirim pesan di warkop ini.' });
           return;
         }
       }
