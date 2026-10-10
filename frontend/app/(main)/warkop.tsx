@@ -37,6 +37,13 @@ const TIP_ICON = '\uD83D\uDCA1';
 const SYSTEM_ICON = '\uD83E\uDD16';
 const WAVE_ICON = '\uD83D\uDC4B';
 const SMILE = '\uD83D\uDE0A';
+const WARKOP_EMOJIS = ['☕', '🍵', '🚬', '🎵', '🍜', '🌙'];
+const EMOJI_LIST = [
+  '☕', '🍵', '🚬', '🍜', '🎵', '🌙',
+  '😊', '😂', '🤣', '😍', '😎', '😋',
+  '👍', '🙏', '🔥', '❤️', '👏', '🙌',
+  '🤝', '🎉', '💡', '⭐', '👀', '💯'
+];
 const NoTranslateText = Text as any;
 
 type MessageType = 'text' | 'audio' | 'image' | 'file' | 'document' | 'system';
@@ -199,6 +206,7 @@ export default function BambupediaRoom() {
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [memberSummary, setMemberSummary] = useState({ online: 0, total: 0, label: 'Memuat anggota' });
   const webMediaRecorderRef = useRef<any>(null);
   const webAudioChunksRef = useRef<Blob[]>([]);
@@ -933,10 +941,17 @@ export default function BambupediaRoom() {
             <TouchableOpacity style={styles.roundAction} onPress={pickImage} accessibilityLabel="Kamera atau gambar">
               <Ionicons name="camera" size={23} color={coffee.secondary} />
             </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roundAction, showEmojiPicker && { backgroundColor: coffee.button }]}
+              onPress={() => setShowEmojiPicker((prev) => !prev)}
+              accessibilityLabel="Buka pilihan emoji"
+            >
+              <Ionicons name="happy-outline" size={23} color={showEmojiPicker ? coffee.buttonText : coffee.secondary} />
+            </TouchableOpacity>
             
-            {/* FITUR-03: Quick Warkop Emoji Reactions */}
-            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flex: 1, overflow: 'hidden' }}>
-              {['☕', '🍵', '🚬', '🎵', '🍜', '🌙'].map((emoji) => (
+            {/* FITUR-03: Quick 1-tap Warkop Emoji Reactions */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+              {WARKOP_EMOJIS.map((emoji) => (
                 <TouchableOpacity
                   key={emoji}
                   style={[styles.roundAction, { width: 36, height: 36, borderRadius: 18, backgroundColor: coffee.inset }]}
@@ -946,8 +961,24 @@ export default function BambupediaRoom() {
                   <Text style={{ fontSize: 16 }}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
-            </View>
+            </ScrollView>
           </View>
+
+          {/* Expanded Emoji Panel */}
+          {showEmojiPicker && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 10, backgroundColor: coffee.inset, borderRadius: 12, marginBottom: 10 }}>
+              {EMOJI_LIST.map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: coffee.surface, alignItems: 'center', justifyContent: 'center' }}
+                  onPress={() => setInputText((prev) => `${prev} ${emoji}`.trim())}
+                  accessibilityLabel={`Pilih ${emoji}`}
+                >
+                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
           <View style={styles.inputBar}>
             <TextInput
