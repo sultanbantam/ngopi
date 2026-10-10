@@ -59,7 +59,8 @@ router.get('/radio/stream', async (req: Request, res: Response): Promise<void> =
       },
     });
 
-    res.setHeader('Content-Type', streamRes.headers['content-type'] || 'audio/mpeg');
+    const contentType = streamRes.headers['content-type'] ? String(streamRes.headers['content-type']) : 'audio/mpeg';
+    res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'no-cache, no-store');
 
