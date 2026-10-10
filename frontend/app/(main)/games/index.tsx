@@ -216,8 +216,18 @@ export default function GamesLobbyScreen() {
       const headers = await getAuthHeaders();
       const res = await axios.post(
         `${API_URL}/games/tables/${tableId}/join`,
-        { password: pwd },
-        { headers }
+        {
+          password: pwd,
+          userId: currentUserId,
+          username: currentUsername,
+        },
+        {
+          headers: {
+            ...headers,
+            'x-user-id': currentUserId,
+            'x-user-name': currentUsername,
+          },
+        }
       );
 
       if (res.data?.success) {

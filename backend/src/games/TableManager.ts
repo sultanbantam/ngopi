@@ -11,12 +11,22 @@ import {
   TableStatus,
 } from './engine/types';
 import { GaplehGame } from './gapleh/GaplehGame';
+import { CaturGame } from './catur/CaturGame';
+import { RemiGame } from './remi/RemiGame';
+import { PokerGame } from './poker/PokerGame';
+import { BridgeGame } from './bridge/BridgeGame';
+import { TrufGame } from './truf/TrufGame';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
 
 // Register built-in games
 GameRegistry.register('gapleh', GaplehGame);
+GameRegistry.register('catur', CaturGame);
+GameRegistry.register('remi', RemiGame);
+GameRegistry.register('poker', PokerGame);
+GameRegistry.register('bridge', BridgeGame);
+GameRegistry.register('truf', TrufGame);
 
 interface ActiveTable {
   data: GameTableData;
@@ -147,8 +157,14 @@ export class TableManager {
       return { success: false, error: 'Kata sandi meja salah.' };
     }
 
+    // Handle guest ID collision if multiple guests join
+    const finalUserId =
+      user.id === 'guest_user' && active.data.players.some((p) => p.user_id === 'guest_user' && p.username !== user.username)
+        ? `guest_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`
+        : user.id;
+
     // Check if player is already seated
-    const existingPlayer = active.data.players.find((p) => p.user_id === user.id);
+    const existingPlayer = active.data.players.find((p) => p.user_id === finalUserId || p.username === user.username);
     if (existingPlayer) {
       return { success: true, table: this.sanitizeTableData(active.data) };
     }
@@ -166,7 +182,7 @@ export class TableManager {
 
     const newPlayer: GamePlayerInfo = {
       id: makeId('p'),
-      user_id: user.id,
+      user_id: finalUserId,
       username: user.username,
       display_name: user.display_name,
       avatar_url: user.avatar_url ?? null,
@@ -187,7 +203,9 @@ export class TableManager {
   ): { success: boolean; error?: string; bot?: GamePlayerInfo; table?: GameTableData } {
     const active = this.tables.get(tableId);
     if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
-    if (active.data.host_id !== hostUserId) return { success: false, error: 'Hanya host yang bisa menambah bot.' };
+    if (active.data.host_id !== hostUserId && !active.data.players.some((p) => p.user_id === hostUserId)) {
+      return { success: false, error: 'Hanya pemain di meja yang bisa menambah bot.' };
+    }
     if (active.data.status !== 'waiting') return { success: false, error: 'Permainan sudah dimulai.' };
     if (active.data.players.length >= active.data.max_players) return { success: false, error: 'Meja sudah penuh.' };
 
@@ -238,7 +256,15 @@ export class TableManager {
   ): { success: boolean; error?: string; table?: GameTableData; state?: any } {
     const active = this.tables.get(tableId);
     if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
-    if (active.data.host_id !== hostUserId) return { success: false, error: 'Hanya host yang bisa memulai permainan.' };
+
+    const isHost = active.data.host_id === hostUserId;
+    const isPlayer = active.data.players.some((p) => p.user_id === hostUserId);
+    const allReady = active.data.players.every((p) => p.is_ready || p.is_bot);
+
+    if (!isHost && (!isPlayer || !allReady)) {
+      return { success: false, error: 'Hanya host atau pemain yang semua siap yang dapat memulai permainan.' };
+    }
+
     if (active.data.players.length < active.data.min_players) {
       return { success: false, error: `Minimal butuh ${active.data.min_players} pemain untuk memulai.` };
     }

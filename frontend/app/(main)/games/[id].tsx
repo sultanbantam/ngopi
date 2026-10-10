@@ -26,6 +26,79 @@ const API_URL = 'https://api.ngopi.top/api';
 
 const QUICK_EMOTES = ['☕', '👏', '😂', '🔥', '💩', '😎'];
 
+const SUIT_META: Record<string, { symbol: string; color: string; label: string }> = {
+  spades: { symbol: '♠', color: '#111827', label: 'Sekop' },
+  hearts: { symbol: '♥', color: '#dc2626', label: 'Hati' },
+  diamonds: { symbol: '♦', color: '#dc2626', label: 'Wajik' },
+  clubs: { symbol: '♣', color: '#111827', label: 'Keriting' },
+};
+
+const CHESS_UNICODE: Record<string, string> = {
+  wK: '♔', wQ: '♕', wR: '♖', wB: '♗', wN: '♘', wP: '♙',
+  bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟',
+};
+
+function PlayingCardTile({
+  card,
+  onPress,
+  disabled,
+  highlight,
+  size = 'normal',
+}: {
+  card: { suit: string; rank: string };
+  onPress?: () => void;
+  disabled?: boolean;
+  highlight?: boolean;
+  size?: 'normal' | 'small' | 'large';
+}) {
+  const meta = SUIT_META[card?.suit] || { symbol: '♠', color: '#111827', label: '' };
+  const isLarge = size === 'large';
+  const isSmall = size === 'small';
+
+  const width = isLarge ? 56 : isSmall ? 36 : 46;
+  const height = isLarge ? 80 : isSmall ? 52 : 66;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      disabled={disabled || !onPress}
+      onPress={onPress}
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: '#fffdfa',
+          borderRadius: 6,
+          padding: 4,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          borderWidth: highlight ? 2 : 1,
+          borderColor: highlight ? coffee.accent : '#d4bda4',
+          shadowColor: '#000',
+          shadowOpacity: 0.15,
+          shadowRadius: 3,
+          elevation: 2,
+        },
+        disabled && { opacity: 0.7 },
+      ]}
+    >
+      <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-start' }}>
+        <Text style={{ fontSize: isLarge ? 13 : isSmall ? 9 : 11, fontWeight: 'bold', color: meta.color }}>
+          {card?.rank}
+        </Text>
+      </View>
+      <Text style={{ fontSize: isLarge ? 24 : isSmall ? 15 : 18, color: meta.color, marginTop: -2 }}>
+        {meta.symbol}
+      </Text>
+      <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <Text style={{ fontSize: isLarge ? 11 : isSmall ? 8 : 9, color: meta.color }}>
+          {meta.symbol}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 export default function GameTableScreen() {
   const { id: tableId, spectate } = useLocalSearchParams<{ id: string; spectate?: string }>();
   const { width } = useWindowDimensions();
@@ -36,6 +109,7 @@ export default function GameTableScreen() {
   const [table, setTable] = useState<any>(null);
   const [gameState, setGameState] = useState<any>(null);
   const [isSpectator, setIsSpectator] = useState<boolean>(spectate === '1');
+  const [selectedChessSquare, setSelectedChessSquare] = useState<{ row: number; col: number } | null>(null);
 
   // Socket
   const socketRef = useRef<Socket | null>(null);
@@ -123,6 +197,15 @@ export default function GameTableScreen() {
       if (data?.table) setTable(data.table);
     });
 
+    socket.on('table:player_joined', (data: { player: any; table: any }) => {
+      if (data?.table) setTable(data.table);
+    });
+
+    socket.on('game:started', (data: { table: any }) => {
+      if (data?.table) setTable(data.table);
+      fetchTableState();
+    });
+
     socket.on('game:state_update', (data: { tableId: string; state: any }) => {
       if (data?.state) {
         setGameState(data.state);
@@ -130,9 +213,9 @@ export default function GameTableScreen() {
           setGameResult({
             winners: [data.state.winnerId],
             scores: data.state.scores,
-            summary: data.state.deadlock
+            summary: data.state.summary || (data.state.deadlock
               ? 'Gaple Buntu! Pemenang ditentukan oleh sisa kartu dengan poin terkecil.'
-              : 'Permainan Selesai!',
+              : 'Permainan Selesai!'),
           });
           setResultModalVisible(true);
         }
@@ -167,22 +250,38 @@ export default function GameTableScreen() {
     };
   }, [tableId, currentUserId, currentUsername, fetchTableState]);
 
-  // Host Action: Add Bot
+  // Action: Take seat
+  const handleTakeSeat = () => {
+    if (!socketRef.current || !tableId) return;
+    socketRef.current.emit('table:join', { tableId }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal Duduk', res?.error || 'Tidak dapat mengambil kursi.');
+      } else if (res.table) {
+        setTable(res.table);
+      }
+    });
+  };
+
+  // Action: Add Bot
   const handleAddBot = () => {
     if (!socketRef.current || !tableId) return;
     socketRef.current.emit('table:add_bot', { tableId }, (res: any) => {
       if (!res?.success) {
         Alert.alert('Gagal', res?.error || 'Gagal menambahkan bot.');
+      } else if (res.table) {
+        setTable(res.table);
       }
     });
   };
 
-  // Host Action: Start Game
+  // Action: Start Game
   const handleStartGame = () => {
     if (!socketRef.current || !tableId) return;
     socketRef.current.emit('table:start', { tableId }, (res: any) => {
       if (!res?.success) {
         Alert.alert('Gagal Mulai', res?.error || 'Gagal memulai permainan.');
+      } else if (res.table) {
+        setTable(res.table);
       }
     });
   };
@@ -197,6 +296,112 @@ export default function GameTableScreen() {
         Alert.alert('Perhatian', res?.error || 'Gagal mengubah status siap.');
       }
     });
+  };
+
+  // Chess Action: Move Piece
+  const handleChessSquarePress = (row: number, col: number) => {
+    if (!isMyTurn) {
+      Alert.alert('Perhatian', 'Bukan giliran Anda!');
+      return;
+    }
+    const piece = gameState?.board?.[row]?.[col];
+    const myColor = gameState?.whitePlayerId === currentUserId ? 'w' : 'b';
+
+    if (!selectedChessSquare) {
+      if (piece && piece.startsWith(myColor)) {
+        setSelectedChessSquare({ row, col });
+      }
+    } else {
+      if (piece && piece.startsWith(myColor)) {
+        setSelectedChessSquare({ row, col });
+        return;
+      }
+      const fromRow = selectedChessSquare.row;
+      const fromCol = selectedChessSquare.col;
+      setSelectedChessSquare(null);
+      if (socketRef.current && tableId) {
+        socketRef.current.emit(
+          'game:action',
+          {
+            tableId,
+            action: 'move',
+            payload: { fromRow, fromCol, toRow: row, toCol: col },
+          },
+          (res: any) => {
+            if (!res?.success) {
+              Alert.alert('Langkah Gagal', res?.error || 'Langkah bidak tidak sah.');
+            }
+          }
+        );
+      }
+    }
+  };
+
+  // Card Action: Remi Discard or Trick Play
+  const handlePlayCardAction = (card: any) => {
+    if (!isMyTurn) {
+      Alert.alert('Perhatian', 'Bukan giliran Anda!');
+      return;
+    }
+    if (!socketRef.current || !tableId) return;
+
+    if (table.game_type === 'remi') {
+      socketRef.current.emit(
+        'game:action',
+        {
+          tableId,
+          action: 'discard',
+          payload: { suit: card.suit, rank: card.rank },
+        },
+        (res: any) => {
+          if (!res?.success) Alert.alert('Gagal', res?.error || 'Gagal membuang kartu.');
+        }
+      );
+    } else if (table.game_type === 'bridge' || table.game_type === 'truf') {
+      socketRef.current.emit(
+        'game:action',
+        {
+          tableId,
+          action: 'play',
+          payload: { suit: card.suit, rank: card.rank },
+        },
+        (res: any) => {
+          if (!res?.success) Alert.alert('Gagal', res?.error || 'Gagal memainkan kartu.');
+        }
+      );
+    }
+  };
+
+  // Remi Action: Draw from deck or discard
+  const handleRemiDraw = (source: 'deck' | 'discard') => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action: 'draw',
+        payload: { source },
+      },
+      (res: any) => {
+        if (!res?.success) Alert.alert('Gagal', res?.error || 'Gagal mengambil kartu.');
+      }
+    );
+  };
+
+  // Poker Action: Check, Bet, Fold
+  const handlePokerAction = (action: 'check' | 'bet' | 'fold') => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action,
+        payload: action === 'bet' ? { amount: 10 } : {},
+      },
+      (res: any) => {
+        if (!res?.success) Alert.alert('Gagal', res?.error || 'Aksi poker gagal.');
+      }
+    );
   };
 
   // Player Action: Leave Table
@@ -312,7 +517,10 @@ export default function GameTableScreen() {
   const isPlaying = table.status === 'playing';
   const myPlayer = table.players?.find((p: any) => p.user_id === currentUserId);
   const isMyTurn = isPlaying && gameState?.currentTurn === currentUserId;
-  const myHand: Array<[number, number]> = gameState?.myHand || [];
+  const allReady = table.players?.length >= table.min_players && table.players?.every((p: any) => p.is_ready || p.is_bot);
+  const canStart = (isHost && table.players?.length >= table.min_players) || (Boolean(myPlayer) && allReady);
+  const myHand: Array<[number, number]> = table.game_type === 'gapleh' && Array.isArray(gameState?.myHand) ? gameState.myHand : [];
+  const myCards: Array<any> = table.game_type !== 'gapleh' && Array.isArray(gameState?.myHand) ? gameState.myHand : [];
   const validMoves = gameState?.validMoves || [];
 
   return (
@@ -328,7 +536,7 @@ export default function GameTableScreen() {
             {table.name}
           </Text>
           <Text style={styles.headerSub}>
-            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi
+            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi • {table.game_type?.toUpperCase()}
           </Text>
         </View>
 
@@ -365,32 +573,32 @@ export default function GameTableScreen() {
           <Text style={styles.waitingText}>
             {table.players?.length < table.min_players
               ? `Menunggu minimal ${table.min_players} pemain untuk mulai.`
-              : 'Semua pemain sudah siap. Host dapat memulai pertandingan!'}
+              : allReady
+              ? 'Semua pemain sudah siap! Siapapun pemain dapat memulai pertandingan.'
+              : isHost
+              ? 'Menunggu pemain lain menandai siap...'
+              : 'Silakan tandai siap agar pertandingan dapat dimulai.'}
           </Text>
 
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-            {isHost && table.players?.length < table.max_players && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {/* If spectator / not seated, show Duduk button */}
+            {!myPlayer && table.players?.length < table.max_players && (
+              <TouchableOpacity style={styles.startBtn} onPress={handleTakeSeat}>
+                <Ionicons name="enter-outline" size={16} color={coffee.buttonText} />
+                <Text style={styles.startBtnText}>🪑 Ambil Kursi Meja Ini</Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Add Bot button for any seated player or host */}
+            {(isHost || Boolean(myPlayer)) && table.players?.length < table.max_players && (
               <TouchableOpacity style={styles.addBotBtn} onPress={handleAddBot}>
                 <Ionicons name="hardware-chip-outline" size={16} color={coffee.accent} />
                 <Text style={styles.addBotBtnText}>+ Tambah Bot</Text>
               </TouchableOpacity>
             )}
 
-            {isHost && (
-              <TouchableOpacity
-                style={[
-                  styles.startBtn,
-                  table.players?.length < table.min_players && { opacity: 0.5 },
-                ]}
-                onPress={handleStartGame}
-                disabled={table.players?.length < table.min_players}
-              >
-                <Ionicons name="play" size={16} color={coffee.buttonText} />
-                <Text style={styles.startBtnText}>Mulai Main 🁫</Text>
-              </TouchableOpacity>
-            )}
-
-            {!isHost && myPlayer && (
+            {/* Ready button for seated non-host (or host) */}
+            {myPlayer && (
               <TouchableOpacity
                 style={[styles.readyBtn, myPlayer.is_ready && styles.readyBtnActive]}
                 onPress={handleToggleReady}
@@ -410,6 +618,17 @@ export default function GameTableScreen() {
                 </Text>
               </TouchableOpacity>
             )}
+
+            {/* Start Game button - visible to Host OR to ANY seated player when all are ready! */}
+            {canStart && (
+              <TouchableOpacity
+                style={styles.startBtn}
+                onPress={handleStartGame}
+              >
+                <Ionicons name="play" size={16} color={coffee.buttonText} />
+                <Text style={styles.startBtnText}>Mulai Main 🎮</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       )}
@@ -420,7 +639,7 @@ export default function GameTableScreen() {
           const isTurn = isPlaying && gameState?.currentTurn === player.user_id;
           const isMe = player.user_id === currentUserId;
           const cardCount = isMe
-            ? myHand.length
+            ? (table.game_type === 'gapleh' ? myHand.length : myCards.length)
             : gameState?.opponents?.[player.user_id]?.cardCount ?? 7;
 
           return (
@@ -439,72 +658,215 @@ export default function GameTableScreen() {
                 </Text>
               </View>
               <Text style={styles.seatName} numberOfLines={1}>
-                {player.display_name} {isMe ? '(Anda)' : ''}
+                {player.display_name} {isMe ? '(Anda)' : ''} {player.user_id === table.host_id ? '👑' : ''}
               </Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={styles.cardCountText}>
-                  {player.is_bot ? '🤖 Bot' : '🁫'} {isPlaying ? `${cardCount} kartu` : player.is_ready ? 'Siap' : 'Menunggu'}
+                  {player.is_bot ? '🤖 Bot' : table.game_type === 'gapleh' ? '🁫' : '🃏'} {isPlaying ? (table.game_type === 'catur' ? (gameState?.whitePlayerId === player.user_id ? 'Putih ⚪' : 'Hitam ⚫') : `${cardCount} kartu`) : player.is_ready ? 'Siap' : 'Menunggu'}
                 </Text>
               </View>
               {isTurn && <Text style={styles.turnIndicatorBadge}>Gilirannya</Text>}
             </View>
           );
         })}
+
+        {/* Empty seat slots */}
+        {!isPlaying && Array.from({ length: Math.max(0, table.max_players - (table.players?.length || 0)) }).map((_, emptyIdx) => (
+          <TouchableOpacity
+            key={`empty_${emptyIdx}`}
+            style={[styles.playerSeatCard, { borderStyle: 'dashed', borderColor: coffee.border, borderWidth: 1 }]}
+            onPress={handleTakeSeat}
+            disabled={Boolean(myPlayer)}
+          >
+            <View style={[styles.seatAvatar, { backgroundColor: 'transparent', borderWidth: 1, borderColor: coffee.border, borderStyle: 'dashed' }]}>
+              <Text style={{ fontSize: 16, color: coffee.muted }}>＋</Text>
+            </View>
+            <Text style={[styles.seatName, { color: coffee.muted }]}>Kosong</Text>
+            <Text style={{ fontSize: 10, color: myPlayer ? coffee.muted : coffee.accent, fontWeight: 'bold' }}>
+              {myPlayer ? 'Tersedia' : '+ Duduk'}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Area Meja Permainan Warkop (Oval Felt Coffee Table) */}
       <View style={styles.tableArenaWrapper}>
         <View style={styles.tableFelt}>
-          {isPlaying && gameState?.board ? (
-            <View style={styles.boardContainer}>
-              {/* Left End Open Pip Indicator */}
-              {gameState.board.leftEnd !== null && (
-                <View style={styles.endPipBadge}>
-                  <Text style={styles.endPipLabel}>KIRI</Text>
-                  <Text style={styles.endPipValue}>{gameState.board.leftEnd}</Text>
-                </View>
-              )}
-
-              {/* Scrollable Domino Chain */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.dominoChainScroll}
-              >
-                {gameState.board.placedCards.length === 0 ? (
-                  <View style={styles.emptyBoardNotice}>
-                    <Text style={styles.emptyBoardText}>
-                      {isMyTurn
-                        ? 'Giliran Anda membuka kartu pertama di meja!'
-                        : 'Menunggu pembukaan kartu pertama...'}
-                    </Text>
+          {isPlaying ? (
+            table.game_type === 'gapleh' && gameState?.board ? (
+              <View style={styles.boardContainer}>
+                {/* Left End Open Pip Indicator */}
+                {gameState.board.leftEnd !== null && (
+                  <View style={styles.endPipBadge}>
+                    <Text style={styles.endPipLabel}>KIRI</Text>
+                    <Text style={styles.endPipValue}>{gameState.board.leftEnd}</Text>
                   </View>
-                ) : (
-                  gameState.board.placedCards.map((pc: any, idx: number) => (
-                    <DominoTile
-                      key={idx}
-                      card={pc.card}
-                      horizontal={pc.rotation === 90}
-                      size="medium"
-                    />
-                  ))
                 )}
-              </ScrollView>
 
-              {/* Right End Open Pip Indicator */}
-              {gameState.board.rightEnd !== null && (
-                <View style={styles.endPipBadge}>
-                  <Text style={styles.endPipLabel}>KANAN</Text>
-                  <Text style={styles.endPipValue}>{gameState.board.rightEnd}</Text>
+                {/* Scrollable Domino Chain */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dominoChainScroll}
+                >
+                  {gameState.board.placedCards.length === 0 ? (
+                    <View style={styles.emptyBoardNotice}>
+                      <Text style={styles.emptyBoardText}>
+                        {isMyTurn
+                          ? 'Giliran Anda membuka kartu pertama di meja!'
+                          : 'Menunggu pembukaan kartu pertama...'}
+                      </Text>
+                    </View>
+                  ) : (
+                    gameState.board.placedCards.map((pc: any, idx: number) => (
+                      <DominoTile
+                        key={idx}
+                        card={pc.card}
+                        horizontal={pc.rotation === 90}
+                        size="medium"
+                      />
+                    ))
+                  )}
+                </ScrollView>
+
+                {/* Right End Open Pip Indicator */}
+                {gameState.board.rightEnd !== null && (
+                  <View style={styles.endPipBadge}>
+                    <Text style={styles.endPipLabel}>KANAN</Text>
+                    <Text style={styles.endPipValue}>{gameState.board.rightEnd}</Text>
+                  </View>
+                )}
+              </View>
+            ) : table.game_type === 'catur' && gameState?.board ? (
+              /* Catur 8x8 Board */
+              <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                <View style={{ width: 280, height: 280, borderWidth: 2, borderColor: '#5c3d24', borderRadius: 6, overflow: 'hidden' }}>
+                  {gameState.board.map((rowList: any[], rIdx: number) => (
+                    <View key={rIdx} style={{ flexDirection: 'row', flex: 1 }}>
+                      {rowList.map((piece: string | null, cIdx: number) => {
+                        const isDark = (rIdx + cIdx) % 2 === 1;
+                        const isSelected = selectedChessSquare?.row === rIdx && selectedChessSquare?.col === cIdx;
+                        const pieceSymbol = piece ? CHESS_UNICODE[piece] || piece : null;
+                        const isPieceWhite = piece?.startsWith('w');
+
+                        return (
+                          <TouchableOpacity
+                            key={cIdx}
+                            activeOpacity={0.7}
+                            onPress={() => handleChessSquarePress(rIdx, cIdx)}
+                            style={{
+                              flex: 1,
+                              backgroundColor: isSelected ? '#fef08a' : isDark ? '#b88b4a' : '#f5e6cc',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                            }}
+                          >
+                            {pieceSymbol && (
+                              <Text
+                                style={{
+                                  fontSize: 22,
+                                  color: isPieceWhite ? '#ffffff' : '#171411',
+                                  textShadowColor: isPieceWhite ? '#000000' : '#ffffff',
+                                  textShadowOffset: { width: 0.5, height: 0.5 },
+                                  textShadowRadius: 1,
+                                }}
+                              >
+                                {pieceSymbol}
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ))}
                 </View>
-              )}
-            </View>
+                <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 6, fontWeight: '600' }}>
+                  {isMyTurn ? 'Pilih bidak Anda lalu pilih kotak tujuan' : 'Menunggu langkah lawan...'}
+                </Text>
+              </View>
+            ) : table.game_type === 'remi' ? (
+              /* Remi Draw Deck and Discard Pile */
+              <View style={{ alignItems: 'center', gap: 12, paddingVertical: 10 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+                  <TouchableOpacity
+                    style={{ alignItems: 'center' }}
+                    onPress={() => handleRemiDraw('deck')}
+                    disabled={!isMyTurn || gameState?.turnPhase !== 'draw'}
+                  >
+                    <View style={{ width: 48, height: 68, backgroundColor: '#2c1e14', borderRadius: 6, borderWidth: 1, borderColor: coffee.border, justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 22, color: coffee.accent }}>🂠</Text>
+                      <Text style={{ fontSize: 10, color: coffee.muted, marginTop: 2 }}>{gameState?.deckRemaining ?? 40}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: coffee.text, marginTop: 4 }}>Ambil Tumpukan</Text>
+                  </TouchableOpacity>
+
+                  {gameState?.discardTop ? (
+                    <TouchableOpacity
+                      style={{ alignItems: 'center' }}
+                      onPress={() => handleRemiDraw('discard')}
+                      disabled={!isMyTurn || gameState?.turnPhase !== 'draw'}
+                    >
+                      <PlayingCardTile card={gameState.discardTop} />
+                      <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 4 }}>Ambil Buangan</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ width: 48, height: 68, borderRadius: 6, borderWidth: 1, borderColor: coffee.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 10, color: coffee.muted }}>Kosong</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={{ fontSize: 11, color: coffee.muted }}>
+                  {gameState?.turnPhase === 'draw' ? 'Fase Ambil Kartu' : 'Fase Buang 1 Kartu dari Tangan'}
+                </Text>
+              </View>
+            ) : table.game_type === 'poker' ? (
+              /* Texas Hold'em Community Cards and Pot */
+              <View style={{ alignItems: 'center', gap: 8, paddingVertical: 10 }}>
+                <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: coffee.accent }}>
+                  <Text style={{ color: coffee.accent, fontWeight: 'bold', fontSize: 12 }}>
+                    💰 Pot: {gameState?.pot || 0} Koin ({gameState?.stage?.toUpperCase() || 'PRE-FLOP'})
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6, minHeight: 68, alignItems: 'center' }}>
+                  {gameState?.communityCards && gameState.communityCards.length > 0 ? (
+                    gameState.communityCards.map((c: any, i: number) => (
+                      <PlayingCardTile key={i} card={c} />
+                    ))
+                  ) : (
+                    <Text style={{ fontSize: 12, color: coffee.muted }}>Kartu Meja (Community) Belum Dibuka</Text>
+                  )}
+                </View>
+              </View>
+            ) : (
+              /* Bridge & Truf Current Trick and Trump */
+              <View style={{ alignItems: 'center', gap: 8, paddingVertical: 10 }}>
+                <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: coffee.border }}>
+                  <Text style={{ color: coffee.accent, fontWeight: 'bold', fontSize: 12 }}>
+                    🃏 Truf: {gameState?.trumpSuit ? SUIT_META[gameState.trumpSuit]?.symbol + ' ' + SUIT_META[gameState.trumpSuit]?.label : 'Tidak Ada'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, minHeight: 68, alignItems: 'center', justifyContent: 'center' }}>
+                  {gameState?.currentTrick && gameState.currentTrick.length > 0 ? (
+                    gameState.currentTrick.map((tr: any, i: number) => (
+                      <View key={i} style={{ alignItems: 'center' }}>
+                        <PlayingCardTile card={tr.card} />
+                        <Text style={{ fontSize: 9, color: coffee.muted, marginTop: 2 }}>Pemain {i + 1}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={{ fontSize: 12, color: coffee.muted }}>Menunggu trik dibuka...</Text>
+                  )}
+                </View>
+              </View>
+            )
           ) : (
             <View style={styles.idleTablePlaceholder}>
-              <Text style={{ fontSize: 38, marginBottom: 8 }}>☕🁫</Text>
-              <Text style={styles.idleTableTitle}>Meja Siap Digelar</Text>
+              <Text style={{ fontSize: 38, marginBottom: 8 }}>
+                {table.game_type === 'catur' ? '♟️♞' : table.game_type === 'gapleh' ? '☕🁫' : '☕🃏'}
+              </Text>
+              <Text style={styles.idleTableTitle}>Meja {table.game_type?.toUpperCase()} Siap Digelar</Text>
               <Text style={styles.idleTableSub}>
-                Tarik kursi warkop, nikmati kopi hangat, dan bersiap kocok domino!
+                Tarik kursi warkop, nikmati kopi hangat, dan bersiap mulai bertanding!
               </Text>
             </View>
           )}
@@ -522,8 +884,8 @@ export default function GameTableScreen() {
           ))}
         </ScrollView>
 
-        {/* Pass Button if user has turn but no valid cards */}
-        {isMyTurn && (
+        {/* Multi-game turn action buttons */}
+        {isMyTurn && table.game_type === 'gapleh' && (
           <TouchableOpacity
             style={[styles.passBtn, !gameState?.canPass && styles.passBtnDisabled]}
             onPress={handlePass}
@@ -533,6 +895,38 @@ export default function GameTableScreen() {
             <Text style={styles.passBtnText}>Lewat (Pass)</Text>
           </TouchableOpacity>
         )}
+
+        {isMyTurn && table.game_type === 'poker' && (
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TouchableOpacity style={styles.passBtn} onPress={() => handlePokerAction('check')}>
+              <Text style={styles.passBtnText}>Check</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.passBtn, { backgroundColor: coffee.accent }]} onPress={() => handlePokerAction('bet')}>
+              <Text style={[styles.passBtnText, { color: '#171411', fontWeight: 'bold' }]}>Bet 10 🪙</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]} onPress={() => handlePokerAction('fold')}>
+              <Text style={styles.passBtnText}>Fold ❌</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isMyTurn && table.game_type === 'catur' && (
+          <TouchableOpacity
+            style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]}
+            onPress={() => {
+              Alert.alert('Menyerah', 'Apakah Anda yakin ingin menyerah?', [
+                { text: 'Batal', style: 'cancel' },
+                {
+                  text: 'Ya, Menyerah',
+                  style: 'destructive',
+                  onPress: () => socketRef.current?.emit('game:action', { tableId, action: 'resign', payload: {} }),
+                },
+              ]);
+            }}
+          >
+            <Text style={styles.passBtnText}>Menyerah 🏳️</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Player's Secret Hand (Bawah) */}
@@ -540,7 +934,9 @@ export default function GameTableScreen() {
         <View style={styles.myHandSection}>
           <View style={styles.handHeaderRow}>
             <Text style={styles.handSectionTitle}>
-              Kartu di Tangan Anda ({myHand.length})
+              {table.game_type === 'catur'
+                ? `Papan Catur: Anda ${gameState?.whitePlayerId === currentUserId ? 'Putih ⚪ (Jalan Duluan)' : 'Hitam ⚫'}`
+                : `Kartu di Tangan Anda (${table.game_type === 'gapleh' ? myHand.length : myCards.length})`}
             </Text>
             {isMyTurn && (
               <View style={styles.turnPulseBanner}>
@@ -549,32 +945,51 @@ export default function GameTableScreen() {
             )}
           </View>
 
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.handTilesScroll}
-          >
-            {myHand.map((card, idx) => {
-              const isPlayable =
-                isMyTurn &&
-                validMoves.some(
-                  (m: any) =>
-                    (m.card[0] === card[0] && m.card[1] === card[1]) ||
-                    (m.card[0] === card[1] && m.card[1] === card[0])
-                );
+          {table.game_type === 'gapleh' ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.handTilesScroll}
+            >
+              {myHand.map((card, idx) => {
+                const isPlayable =
+                  isMyTurn &&
+                  validMoves.some(
+                    (m: any) =>
+                      (m.card[0] === card[0] && m.card[1] === card[1]) ||
+                      (m.card[0] === card[1] && m.card[1] === card[0])
+                  );
 
-              return (
-                <DominoTile
+                return (
+                  <DominoTile
+                    key={idx}
+                    card={card}
+                    size="large"
+                    highlight={isPlayable}
+                    disabled={!isPlayable}
+                    onPress={() => handleCardPress(card)}
+                  />
+                );
+              })}
+            </ScrollView>
+          ) : table.game_type !== 'catur' ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+            >
+              {myCards.map((card, idx) => (
+                <PlayingCardTile
                   key={idx}
                   card={card}
                   size="large"
-                  highlight={isPlayable}
-                  disabled={!isPlayable}
-                  onPress={() => handleCardPress(card)}
+                  highlight={isMyTurn}
+                  disabled={!isMyTurn}
+                  onPress={() => handlePlayCardAction(card)}
                 />
-              );
-            })}
-          </ScrollView>
+              ))}
+            </ScrollView>
+          ) : null}
         </View>
       )}
 

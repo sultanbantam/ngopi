@@ -1,8 +1,80 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { verifyJWT, AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../utils/prisma';
+import axios from 'axios';
 
 const router = Router();
+
+// GET /api/jukebox/search?term=...
+router.get('/search', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const term = String(req.query.term || req.query.q || req.query.query || '').trim();
+    if (!term) {
+      res.status(200).json({ success: true, results: [] });
+      return;
+    }
+
+    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=30`;
+    const response = await axios.get(itunesUrl, { timeout: 8000 });
+
+    if (response.data?.results && Array.isArray(response.data.results)) {
+      const results = response.data.results
+        .filter((item: any) => Boolean(item.previewUrl))
+        .map((item: any) => ({
+          title: item.trackName || 'Lagu',
+          artist: item.artistName || 'Artis',
+          genre: item.primaryGenreName || 'Musik',
+          uri: item.previewUrl,
+          duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+          thumbnail: item.artworkUrl100 || item.artworkUrl60 || null,
+        }));
+
+      res.status(200).json({ success: true, results });
+      return;
+    }
+
+    res.status(200).json({ success: true, results: [] });
+  } catch (error: any) {
+    console.error('Jukebox music search proxy error:', error?.message);
+    res.status(500).json({ success: false, error: 'Gagal mencari musik' });
+  }
+});
+
+// GET /api/jukebox/radio/stream?url=...
+router.get('/radio/stream', async (req: Request, res: Response): Promise<void> => {
+  const streamUrl = String(req.query.url || '');
+  if (!streamUrl || !streamUrl.startsWith('http')) {
+    res.status(400).send('Invalid stream url');
+    return;
+  }
+
+  try {
+    const streamRes = await axios({
+      method: 'GET',
+      url: streamUrl,
+      responseType: 'stream',
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+
+    res.setHeader('Content-Type', streamRes.headers['content-type'] || 'audio/mpeg');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'no-cache, no-store');
+
+    streamRes.data.pipe(res);
+
+    req.on('close', () => {
+      try {
+        streamRes.data.destroy();
+      } catch (_) {}
+    });
+  } catch (err: any) {
+    console.error('Radio proxy stream error:', err?.message);
+    res.status(502).send('Radio stream currently unavailable');
+  }
+});
 
 // GET /api/jukebox/:warungId/now-playing
 router.get('/:warungId/now-playing', verifyJWT, async (req: AuthRequest, res: Response): Promise<void> => {
