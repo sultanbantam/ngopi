@@ -174,13 +174,14 @@ export class TableManager {
       const botIdx = active.data.players.findIndex((p) => p.is_bot);
       if (botIdx !== -1) {
         const replacedBot = active.data.players.splice(botIdx, 1)[0];
+        const seatNum = replacedBot ? replacedBot.seat_number : 0;
         const newPlayer: GamePlayerInfo = {
           id: makeId('p'),
           user_id: finalUserId,
           username: user.username,
           display_name: user.display_name,
           avatar_url: user.avatar_url ?? null,
-          seat_number: replacedBot.seat_number,
+          seat_number: seatNum,
           is_ready: false,
           is_active: true,
           is_bot: false,
