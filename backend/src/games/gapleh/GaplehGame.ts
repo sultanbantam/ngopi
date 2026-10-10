@@ -174,7 +174,7 @@ export class GaplehGame extends BaseGame {
   private advanceTurn(): string {
     const currentIndex = this.state.turnOrder.indexOf(this.state.currentTurn);
     const nextIndex = (currentIndex + 1) % this.state.turnOrder.length;
-    this.state.currentTurn = this.state.turnOrder[nextIndex];
+    this.state.currentTurn = this.state.turnOrder[nextIndex] || '';
     return this.state.currentTurn;
   }
 
@@ -250,7 +250,7 @@ export class GaplehGame extends BaseGame {
   }
 
   getResults(): GameResult {
-    const winnerId = this.state.winnerId || this.players[0].user_id;
+    const winnerId = this.state.winnerId || (this.players[0] ? this.players[0].user_id : '');
     const losers = this.players.map((p) => p.user_id).filter((id) => id !== winnerId);
 
     const winnerPlayer = this.players.find((p) => p.user_id === winnerId);
@@ -273,7 +273,7 @@ export class GaplehGame extends BaseGame {
 
   handleTimeout(userId: string): ActionResult {
     const validMoves = this.getValidMoves(userId);
-    if (validMoves.length > 0) {
+    if (validMoves.length > 0 && validMoves[0]) {
       // Pick first valid move
       const move = validMoves[0];
       return this.handleAction(userId, 'play', { card: move.card, side: move.side });
@@ -286,7 +286,7 @@ export class GaplehGame extends BaseGame {
     if (!this.isPlayerTurn(userId)) return null;
 
     const validMoves = this.getValidMoves(userId);
-    if (validMoves.length === 0) {
+    if (validMoves.length === 0 || !validMoves[0]) {
       return { action: 'pass', payload: {} };
     }
 
@@ -300,6 +300,7 @@ export class GaplehGame extends BaseGame {
     });
 
     const bestMove = validMoves[0];
+    if (!bestMove) return { action: 'pass', payload: {} };
     return {
       action: 'play',
       payload: { card: bestMove.card, side: bestMove.side },

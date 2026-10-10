@@ -17,7 +17,9 @@ export class GaplehRules {
     const shuffled = [...deck];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+      const temp = shuffled[i]!;
+      shuffled[i] = shuffled[j]!;
+      shuffled[j] = temp;
     }
     return shuffled;
   }
@@ -48,7 +50,7 @@ export class GaplehRules {
     }
 
     // Fallback: highest card sum
-    let bestPlayer = playerIds[0];
+    let bestPlayer = playerIds[0] || '';
     let maxVal = -1;
     let bestCard: DominoCard | undefined;
 
@@ -155,7 +157,7 @@ export class GaplehRules {
     const scores: Record<string, number> = {};
     let minPips = Infinity;
     let minCardCount = Infinity;
-    let winnerId = playerIds[0];
+    let winnerId = playerIds[0] || '';
 
     for (const id of playerIds) {
       const hand = hands[id] || [];

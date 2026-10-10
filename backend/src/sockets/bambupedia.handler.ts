@@ -262,6 +262,7 @@ const formatRiddleMessage = (riddle: TebakTebakan) =>
 export const emitWarkopRiddle = (io: Server) => {
   if (WARKOP_TEBAK_TEBAKAN.length === 0) return;
   const riddle = WARKOP_TEBAK_TEBAKAN[currentRiddleIndex % WARKOP_TEBAK_TEBAKAN.length];
+  if (!riddle) return;
   currentRiddleIndex = (currentRiddleIndex + 1) % WARKOP_TEBAK_TEBAKAN.length;
   currentRiddle = riddle;
   riddleAnswered = false;
@@ -354,6 +355,8 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
 
   if (currentRiddle && !riddleAnswered) {
     socket.emit('bambupedia_message', createSystemMessage('sys-tebak', 'system', formatRiddleMessage(currentRiddle), 'WarkopBot'));
+  } else if (!currentRiddle || riddleAnswered) {
+    emitWarkopRiddle(io);
   }
 
   if (isFirstJoin) {

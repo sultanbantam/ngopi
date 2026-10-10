@@ -196,7 +196,7 @@ export class TableManager {
     while (takenSeats.has(nextSeat)) nextSeat++;
 
     const botIndex = active.data.players.filter((p) => p.is_bot).length;
-    const botName = BOT_NAMES[botIndex % BOT_NAMES.length];
+    const botName = BOT_NAMES[botIndex % BOT_NAMES.length] || 'Kang Kopi Bot ☕';
     const botId = makeId('bot');
 
     const botPlayer: GamePlayerInfo = {
