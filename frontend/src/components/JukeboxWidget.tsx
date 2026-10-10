@@ -21,10 +21,12 @@ interface JukeboxWidgetProps {
   warungId: string;
 }
 
+import { musicSynthesizer } from '../utils/musicSynthesizer';
+
 const PRESET_SONGS = [
-  { title: 'Kopi Dangdut', artist: 'Fahmi Shahab', uri: 'https://cdn.pixabay.com/download/audio/2022/10/14/audio_9939f792cb.mp3?filename=coffee-acoustic-chill-124008.mp3', duration: 180 },
-  { title: 'Senja di Kedai Kopi', artist: 'Warkop Indie', uri: 'https://cdn.pixabay.com/download/audio/2022/05/27/audio_1808fbf07a.mp3?filename=lofi-study-112191.mp3', duration: 160 },
-  { title: 'Melodi Malam Warung', artist: 'Ngopi Collective', uri: 'https://cdn.pixabay.com/download/audio/2022/01/18/audio_d0a13f69d2.mp3?filename=chill-abstract-intention-12099.mp3', duration: 210 },
+  { title: 'Senja di Kedai Kopi', artist: 'Warkop Indie', uri: 'synth:lofi', duration: 160 },
+  { title: 'Kopi Dangdut', artist: 'Fahmi Shahab', uri: 'synth:dangdut', duration: 180 },
+  { title: 'Melodi Malam Warung', artist: 'Ngopi Collective', uri: 'synth:malam', duration: 210 },
 ];
 
 export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
@@ -38,7 +40,6 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   const [newTitle, setNewTitle] = useState('');
   const [newArtist, setNewArtist] = useState('');
   const [newUri, setNewUri] = useState('');
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const loadNowPlaying = async () => {
     try {
@@ -46,7 +47,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       const res = await axios.get(`https://api.ngopi.top/api/jukebox/${warungId}/now-playing`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.data) {
+      if (res.data?.playing) {
         setPlayingTrack(res.data.playing);
         setQueue(res.data.queue || []);
         if (res.data.votes) setVotes(res.data.votes);
@@ -82,71 +83,107 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   // Audio playback on web
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
+
+    if (playingTrack && isPlaying) {
+      musicSynthesizer.play(playingTrack.track_uri, playingTrack.title);
+    } else {
+      musicSynthesizer.pause();
     }
-    const audio = audioRef.current;
-
-    if (playingTrack?.track_uri) {
-      if (audio.src !== playingTrack.track_uri) {
-        audio.src = playingTrack.track_uri;
-        if (isPlaying) {
-          audio.play().catch(() => setIsPlaying(false));
-        }
-      }
-    }
-
-    const updateProgress = () => {
-      if (audio.duration) {
-        setProgress(Math.round((audio.currentTime / audio.duration) * 100));
-      }
-    };
-    audio.addEventListener('timeupdate', updateProgress);
-    audio.addEventListener('ended', handleTrackEnded);
-
-    return () => {
-      audio.removeEventListener('timeupdate', updateProgress);
-      audio.removeEventListener('ended', handleTrackEnded);
-    };
   }, [playingTrack, isPlaying]);
 
+  // Progress simulation for procedural audio & tracks
+  useEffect(() => {
+    if (!isPlaying) return;
+    const intervalSec = ((playingTrack?.duration || 180) / 100) * 1000;
+    const timer = setInterval(() => {
+      setProgress(p => {
+        if (p >= 100) {
+          handleTrackEnded();
+          return 0;
+        }
+        return p + 1;
+      });
+    }, intervalSec);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, playingTrack]);
+
   const handleTrackEnded = () => {
-    // Vote skip automatically when finished
     handleVote('skip');
   };
 
   const togglePlay = () => {
-    if (Platform.OS !== 'web' || !audioRef.current) return;
+    if (!playingTrack) {
+      // Pick first preset song immediately
+      const firstSong = PRESET_SONGS[0];
+      const newTrack: Track = {
+        id: `local-${Date.now()}`,
+        title: firstSong.title,
+        artist: firstSong.artist,
+        track_uri: firstSong.uri,
+        duration: firstSong.duration,
+        added_by: 'Warkop',
+        is_playing: true,
+      };
+      setPlayingTrack(newTrack);
+      setIsPlaying(true);
+      musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+      return;
+    }
+
     if (isPlaying) {
-      audioRef.current.pause();
+      musicSynthesizer.pause();
       setIsPlaying(false);
     } else {
-      audioRef.current.play()
-        .then(() => setIsPlaying(true))
-        .catch(() => setIsPlaying(false));
+      musicSynthesizer.play(playingTrack.track_uri, playingTrack.title);
+      setIsPlaying(true);
     }
   };
 
   const handleVote = async (type: 'skip' | 'like') => {
     if (!playingTrack) return;
+
+    if (type === 'skip') {
+      if (queue.length > 0) {
+        const next = queue[0];
+        setQueue(prev => prev.slice(1));
+        setPlayingTrack(next);
+        setProgress(0);
+        setIsPlaying(true);
+        musicSynthesizer.play(next.track_uri, next.title);
+      } else {
+        const currentIdx = PRESET_SONGS.findIndex(s => s.title === playingTrack.title);
+        const nextSong = PRESET_SONGS[(currentIdx + 1) % PRESET_SONGS.length];
+        const nextTrack: Track = {
+          id: `local-${Date.now()}`,
+          title: nextSong.title,
+          artist: nextSong.artist,
+          track_uri: nextSong.uri,
+          duration: nextSong.duration,
+          added_by: 'Warkop',
+          is_playing: true,
+        };
+        setPlayingTrack(nextTrack);
+        setProgress(0);
+        setIsPlaying(true);
+        musicSynthesizer.play(nextTrack.track_uri, nextTrack.title);
+      }
+    } else {
+      setVotes(prev => ({
+        ...prev,
+        likes: prev.likes + 1,
+        userVoted: 'like'
+      }));
+    }
+
     try {
       const token = (await SecureStore.getItemAsync('token')) || (Platform.OS === 'web' ? localStorage.getItem('token') : '');
-      const res = await axios.post(`https://api.ngopi.top/api/jukebox/${warungId}/vote`, {
+      await axios.post(`https://api.ngopi.top/api/jukebox/${warungId}/vote`, {
         track_id: playingTrack.id,
         vote_type: type
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      if (res.data?.skipped) {
-        loadNowPlaying();
-      } else {
-        setVotes(prev => ({
-          ...prev,
-          skips: type === 'skip' ? prev.skips + 1 : prev.skips,
-          likes: type === 'like' ? prev.likes + 1 : prev.likes,
-          userVoted: type
-        }));
-      }
     } catch {}
   };
 
@@ -158,6 +195,27 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
 
     if (!title || !artist || !uri) return;
 
+    const newTrack: Track = {
+      id: `track-${Date.now()}`,
+      title,
+      artist,
+      track_uri: uri,
+      duration,
+      added_by: 'Kamu',
+      is_playing: true,
+    };
+
+    // Immediately play in client state!
+    setPlayingTrack(newTrack);
+    setProgress(0);
+    setIsPlaying(true);
+    musicSynthesizer.play(newTrack.track_uri, newTrack.title);
+
+    setAddModalVisible(false);
+    setNewTitle('');
+    setNewArtist('');
+    setNewUri('');
+
     try {
       const token = (await SecureStore.getItemAsync('token')) || (Platform.OS === 'web' ? localStorage.getItem('token') : '');
       await axios.post(`https://api.ngopi.top/api/jukebox/${warungId}/queue`, {
@@ -168,11 +226,6 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      setAddModalVisible(false);
-      setNewTitle('');
-      setNewArtist('');
-      setNewUri('');
-      loadNowPlaying();
     } catch {}
   };
 

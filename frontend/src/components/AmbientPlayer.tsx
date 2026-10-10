@@ -57,73 +57,40 @@ const DEFAULT_SOUNDS: SoundItem[] = [
   },
 ];
 
+import { ambientSynthesizer } from '../utils/ambientSynthesizer';
+
 const PREF_KEY_SOUND = 'ngopi_ambient_sound_id';
 const PREF_KEY_VOL = 'ngopi_ambient_vol';
 
 export const AmbientPlayer = () => {
-  const [sounds, setSounds] = useState<SoundItem[]>(DEFAULT_SOUNDS);
+  const [sounds] = useState<SoundItem[]>(DEFAULT_SOUNDS);
   const [selectedSoundId, setSelectedSoundId] = useState<string>('kafe_ramai');
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(0.5);
   const [modalVisible, setModalVisible] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Load available sounds from API if possible
   useEffect(() => {
-    axios.get('https://api.ngopi.top/api/ambient/list')
-      .then(res => {
-        if (res.data?.sounds && Array.isArray(res.data.sounds)) {
-          setSounds(res.data.sounds);
-        }
-      })
-      .catch(() => {});
-
     if (Platform.OS === 'web') {
       const savedSound = localStorage.getItem(PREF_KEY_SOUND);
       const savedVol = localStorage.getItem(PREF_KEY_VOL);
       if (savedSound) setSelectedSoundId(savedSound);
       if (savedVol) setVolume(parseFloat(savedVol));
     }
+
+    return () => {
+      ambientSynthesizer.stop();
+    };
   }, []);
 
   const currentSound = sounds.find(s => s.id === selectedSoundId) || sounds[0];
 
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-
-    if (!audioRef.current) {
-      const audio = new Audio();
-      audio.loop = true;
-      audioRef.current = audio;
-    }
-
-    const audio = audioRef.current;
-    if (currentSound && audio.src !== currentSound.audioUrl) {
-      audio.src = currentSound.audioUrl;
-      if (isPlaying) {
-        audio.play().catch(() => setIsPlaying(false));
-      }
-    }
-    audio.volume = volume;
-  }, [selectedSoundId, currentSound]);
-
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !audioRef.current) return;
-    audioRef.current.volume = volume;
-  }, [volume]);
-
   const togglePlay = () => {
-    if (Platform.OS !== 'web' || !audioRef.current) return;
     if (isPlaying) {
-      audioRef.current.pause();
+      ambientSynthesizer.stop();
       setIsPlaying(false);
     } else {
-      audioRef.current.play()
-        .then(() => setIsPlaying(true))
-        .catch(err => {
-          console.warn('Audio play restricted by browser gesture:', err);
-          setIsPlaying(false);
-        });
+      const ok = ambientSynthesizer.start(selectedSoundId, volume);
+      setIsPlaying(ok);
     }
   };
 
@@ -132,11 +99,15 @@ export const AmbientPlayer = () => {
     if (Platform.OS === 'web') {
       localStorage.setItem(PREF_KEY_SOUND, id);
     }
+    if (isPlaying) {
+      ambientSynthesizer.start(id, volume);
+    }
   };
 
   const changeVolume = (newVol: number) => {
     const clamped = Math.max(0, Math.min(1, newVol));
     setVolume(clamped);
+    ambientSynthesizer.setVolume(clamped);
     if (Platform.OS === 'web') {
       localStorage.setItem(PREF_KEY_VOL, clamped.toString());
     }
