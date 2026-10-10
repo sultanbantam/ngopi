@@ -122,6 +122,7 @@ export default function RegisterScreen() {
             value={password}
             onChangeText={setPassword}
             textContentType="newPassword"
+            autoComplete="new-password"
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
@@ -138,6 +139,16 @@ export default function RegisterScreen() {
           <Text style={styles.footerText}>Already have an account?</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
             <Text style={styles.linkText}> Login</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.raised }}>
+          <TouchableOpacity onPress={() => router.push('/privacy')}>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>Kebijakan Privasi</Text>
+          </TouchableOpacity>
+          <Text style={{ color: coffee.muted, fontSize: 12 }}>•</Text>
+          <TouchableOpacity onPress={() => router.push('/terms')}>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>Syarat & Ketentuan</Text>
           </TouchableOpacity>
         </View>
       </View>

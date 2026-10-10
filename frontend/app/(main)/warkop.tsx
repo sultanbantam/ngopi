@@ -25,6 +25,9 @@ import { useRouter } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { getMimeType } from '../../src/utils/fileHelpers';
+import { AmbientPlayer } from '../../src/components/AmbientPlayer';
+import { JukeboxWidget } from '../../src/components/JukeboxWidget';
+import { EmptyState } from '../../src/components/EmptyState';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -788,6 +791,14 @@ export default function BambupediaRoom() {
                 <Ionicons name="people-outline" size={18} color={coffee.accent} />
                 <Text style={styles.menuTileText}>Kontak</Text>
               </TouchableOpacity>
+              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/privacy')}>
+                <Ionicons name="shield-checkmark-outline" size={18} color={coffee.accent} />
+                <Text style={styles.menuTileText}>Privasi</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/terms')}>
+                <Ionicons name="document-text-outline" size={18} color={coffee.accent} />
+                <Text style={styles.menuTileText}>Ketentuan</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -861,6 +872,18 @@ export default function BambupediaRoom() {
         </View>
       </View>
 
+      {/* SPRINT 1: Suasana Warkop (Ambient Sound & Jukebox Warung) */}
+      <View style={{ paddingHorizontal: 14, paddingVertical: 8, backgroundColor: coffee.surface, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={{ fontSize: 14 }}>☕</Text>
+            <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800', letterSpacing: 0.5 }}>SUASANA WARKOP</Text>
+          </View>
+          <AmbientPlayer />
+        </View>
+        <JukeboxWidget warungId={ROOM_ID} />
+      </View>
+
       <KeyboardAvoidingView style={styles.chatArea} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
 
         <FlatList
@@ -869,13 +892,18 @@ export default function BambupediaRoom() {
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
           style={styles.messageList}
-          contentContainerStyle={styles.messageListContent}
+          contentContainerStyle={[styles.messageListContent, visibleMessages.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            <View style={styles.emptyChat}>
-              <Image source={require('../../assets/logo.png')} style={styles.emptyChatIcon} resizeMode="contain" />
-              <Text style={styles.emptyChatTitle}>Belum ada percakapan di sesi ini.</Text>
-            </View>
+            <EmptyState
+              icon="☕"
+              title="Selamat Datang di Warung Kopi!"
+              description="Nongkrong santai, dengarkan musik bersama di Jukebox, dan nikmati obrolan tanpa tekanan medsos."
+              primaryAction={{
+                label: 'Sapa Warkop: "Halo semuanya! ☕"',
+                onPress: () => setInputText('Halo semuanya! ☕'),
+              }}
+            />
           }
         />
 
@@ -905,9 +933,20 @@ export default function BambupediaRoom() {
             <TouchableOpacity style={styles.roundAction} onPress={pickImage} accessibilityLabel="Kamera atau gambar">
               <Ionicons name="camera" size={23} color={coffee.secondary} />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.roundAction} onPress={() => setInputText((value) => `${value}${SMILE}`)} accessibilityLabel="Emoji">
-              <Ionicons name="happy-outline" size={23} color={coffee.secondary} />
-            </TouchableOpacity>
+            
+            {/* FITUR-03: Quick Warkop Emoji Reactions */}
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', flex: 1, overflow: 'hidden' }}>
+              {['☕', '🍵', '🚬', '🎵', '🍜', '🌙'].map((emoji) => (
+                <TouchableOpacity
+                  key={emoji}
+                  style={[styles.roundAction, { width: 36, height: 36, borderRadius: 18, backgroundColor: coffee.inset }]}
+                  onPress={() => setInputText((prev) => `${prev} ${emoji}`.trim())}
+                  accessibilityLabel={`Reaksi ${emoji}`}
+                >
+                  <Text style={{ fontSize: 16 }}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
 
           <View style={styles.inputBar}>

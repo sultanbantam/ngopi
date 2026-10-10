@@ -61,6 +61,12 @@ export const isOriginAllowed = (origin?: string): boolean => {
   const normalized = origin.trim().replace(/\/+$/, '').toLowerCase();
 
   const staticOrigins = new Set([
+    'https://ngopi.top',
+    'https://www.ngopi.top',
+    'https://api.ngopi.top',
+    'http://ngopi.top',
+    'http://www.ngopi.top',
+    'http://api.ngopi.top',
     'https://www.bamboochat.click',
     'https://bamboochat.click',
     'http://www.bamboochat.click',
@@ -79,6 +85,11 @@ export const isOriginAllowed = (origin?: string): boolean => {
 
   // Localhost on any port
   if (/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?$/.test(normalized)) {
+    return true;
+  }
+
+  // Any ngopi.top subdomain or domain
+  if (/^https?:\/\/(?:[a-z0-9-]+\.)*ngopi\.top$/.test(normalized)) {
     return true;
   }
 
@@ -113,6 +124,9 @@ export const getAllowedOrigins = () => {
     .filter(Boolean);
 
   return new Set([
+    'https://ngopi.top',
+    'https://www.ngopi.top',
+    'https://api.ngopi.top',
     'https://www.bamboochat.click',
     'https://bamboochat.click',
     'https://api.bamboochat.click',

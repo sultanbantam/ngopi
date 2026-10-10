@@ -12,6 +12,8 @@ import axios from 'axios';
 import { getAuthHeaders } from '../../src/utils/api';
 import { uploadProfileAvatar, profileSaveError } from '../../src/utils/profileUpload';
 import { profileSlug } from '../../src/utils/profileLink';
+import { EmptyState } from '../../src/components/EmptyState';
+import { useNightMode } from '../../src/theme/nightMode';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -28,6 +30,7 @@ export default function ContactsScreen() {
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
 
   const [activeTab, setActiveTab] = useState<'semua' | 'belum_dibaca' | 'favorit' | 'warkop'>('semua');
+  const { setting: nightSetting, isNightActive, changeSetting: setNightSetting } = useNightMode();
 
   // Modals state
   const [dropdownVisible, setDropdownVisible] = useState(false);
@@ -608,6 +611,23 @@ export default function ContactsScreen() {
         data={getFilteredList()}
         keyExtractor={item => item._type + item.id}
         renderItem={renderItem}
+        contentContainerStyle={getFilteredList().length === 0 ? { flexGrow: 1, justifyContent: 'center' } : undefined}
+        ListEmptyComponent={
+          <EmptyState
+            icon={activeTab === 'warkop' ? '☕' : '👥'}
+            title={activeTab === 'warkop' ? 'Belum Ada Warkop' : 'Belum Ada Kontak'}
+            description={
+              activeTab === 'warkop'
+                ? 'Belum ada warkop komunitas. Buat warkop baru atau gabung lewat tautan undangan!'
+                : 'Belum ada obrolan atau kontak tersimpan. Yuk mulai cari teman di Warung Kopi!'
+            }
+            primaryAction={
+              activeTab === 'warkop'
+                ? { label: '+ Buat Warkop Baru', onPress: openCreateGroupModal }
+                : { label: 'Masuk Warung Kopi ☕', onPress: () => router.push('/(main)/warkop' as any) }
+            }
+          />
+        }
       />
 
       {/* Online Users Horizontal Bar */}
@@ -847,6 +867,23 @@ export default function ContactsScreen() {
             </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); setSettingsModalVisible(true); }}>
               <Text style={styles.actionSheetText}>Pengaturan Privasi</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                const next = nightSetting === 'auto' ? 'on' : nightSetting === 'on' ? 'off' : 'auto';
+                setNightSetting(next);
+              }}
+            >
+              <Text style={styles.actionSheetText}>
+                Mode Ngobrol Malam 🌙: <Text style={{ color: coffee.accent, fontWeight: '700' }}>{nightSetting.toUpperCase()}</Text>
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); router.push('/privacy'); }}>
+              <Text style={styles.actionSheetText}>Kebijakan Privasi</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); router.push('/terms'); }}>
+              <Text style={styles.actionSheetText}>Syarat & Ketentuan</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.actionSheetItem, { borderBottomWidth: 0 }]} onPress={() => { setDropdownVisible(false); handleLogout(); }}>
               <Text style={[styles.actionSheetText, { color: coffee.danger }]}>Keluar</Text>

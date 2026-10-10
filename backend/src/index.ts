@@ -18,6 +18,9 @@ import ticketRoutes from './routes/ticket.routes';
 import adminRoutes from './routes/admin.routes';
 import paymentRoutes from './routes/payment.routes';
 import ogRoutes from './routes/og.routes';
+import keysRoutes from './routes/keys.routes';
+import jukeboxRoutes from './routes/jukebox.routes';
+import ambientRoutes from './routes/ambient.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -34,7 +37,16 @@ app.use(helmet({
     useDefaults: true,
     directives: {
       defaultSrc: ["'self'"],
-      connectSrc: ["'self'", 'https://www.bamboochat.click', 'https://bamboochat.click', 'wss://api.bamboochat.click'],
+      connectSrc: [
+        "'self'",
+        'https://ngopi.top',
+        'https://www.ngopi.top',
+        'https://api.ngopi.top',
+        'wss://api.ngopi.top',
+        'https://www.bamboochat.click',
+        'https://bamboochat.click',
+        'wss://api.bamboochat.click',
+      ],
       imgSrc: ["'self'", 'data:', 'blob:'],
       mediaSrc: ["'self'", 'data:', 'blob:'],
       objectSrc: ["'none'"],
@@ -79,6 +91,9 @@ app.use('/api/tickets', ticketRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/og', ogRoutes);
+app.use('/api/keys', keysRoutes);
+app.use('/api/jukebox', jukeboxRoutes);
+app.use('/api/ambient', ambientRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

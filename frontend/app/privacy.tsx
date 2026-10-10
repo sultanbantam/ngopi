@@ -8,47 +8,46 @@ export default function PrivacyPolicyScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Kembali">
           <Ionicons name="arrow-back" size={24} color={coffee.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy Policy</Text>
+        <Text style={styles.headerTitle}>Kebijakan Privasi</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Ngopi Privacy Policy</Text>
-        <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+        <Text style={styles.title}>Kebijakan Privasi Ngopi</Text>
+        <Text style={styles.tagline}>"ngobrol paling intim" — https://ngopi.top</Text>
+        <Text style={styles.date}>Terakhir diperbarui: 10 Oktober 2026</Text>
 
-        <Text style={styles.sectionTitle}>1. Introduction</Text>
+        <Text style={styles.sectionTitle}>1. Komitmen Privasi Kami</Text>
         <Text style={styles.paragraph}>
-          Welcome to Ngopi. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, and protect your information when you use our application within the Pi Network ecosystem.
+          Ngopi dirancang sebagai ruang komunikasi privat, tenang, dan bermakna untuk semua generasi (Gen Z, Gen Alpha, hingga para penikmat obrolan santai warkop). Privasi dan ketenangan Anda adalah prioritas mutlak kami.
         </Text>
 
-        <Text style={styles.sectionTitle}>2. Information We Collect</Text>
+        <Text style={styles.sectionTitle}>2. Enkripsi Ujung-ke-Ujung (End-to-End Encryption / E2EE)</Text>
         <Text style={styles.paragraph}>
-          - <Text style={styles.bold}>Pi Network Information:</Text> We collect your Pi Network username and authentication token when you log in using the Pi Browser.{"\n"}
-          - <Text style={styles.bold}>Communications:</Text> We store the messages, images, and files you send and receive through Ngopi to provide the messaging service.{"\n"}
-          - <Text style={styles.bold}>Usage Data:</Text> We may collect diagnostic information and usage data to help us improve the app.
+          - Seluruh pesan pribadi, catatan suara, dan berkas dienkripsi menggunakan standar kriptografi modern (X25519 TweetNaCl dan AES-256-GCM).{"\n"}
+          - Kunci enkripsi privat Anda hanya disimpan di perangkat Anda sendiri. Pihak server maupun pihak ketiga mana pun tidak dapat membaca isi pesan Anda.
         </Text>
 
-        <Text style={styles.sectionTitle}>3. How We Use Your Information</Text>
+        <Text style={styles.sectionTitle}>3. Tanpa Nomor Telepon</Text>
         <Text style={styles.paragraph}>
-          - To provide, maintain, and improve our messaging services.{"\n"}
-          - To authenticate your identity via the Pi Network.{"\n"}
-          - To send technical notices, updates, and security alerts.
+          Ngopi tidak pernah meminta nomor telepon pribadi Anda. Pendaftaran dilakukan secara mandiri dengan username privat atau akun terdesentralisasi Bamboochain, sehingga identitas dunia nyata Anda tetap aman dan terlindungi dari spam maupun pelacakan komersial.
         </Text>
 
-        <Text style={styles.sectionTitle}>4. Data Sharing</Text>
+        <Text style={styles.sectionTitle}>4. Tidak Ada Penjualan Data atau Iklan</Text>
         <Text style={styles.paragraph}>
-          We do not sell, rent, or share your personal information with third parties for their commercial purposes. Your data is only shared with other users when you participate in chats or group conversations.
+          Kami tidak pernah menjual, menyewakan, atau memonetisasi data pribadi, riwayat percakapan, atau kontak Anda kepada pihak mana pun. Tidak ada pelacak iklan pihak ketiga di dalam aplikasi Ngopi.
         </Text>
 
-        <Text style={styles.sectionTitle}>5. Security</Text>
+        <Text style={styles.sectionTitle}>5. Penyimpanan Data & Warung Kopi</Text>
         <Text style={styles.paragraph}>
-          We take reasonable measures to help protect information about you from loss, theft, misuse, and unauthorized access, disclosure, alteration, and destruction.
+          - Data interaksi publik di Warung Kopi (seperti lagu di Jukebox Warung, buku tamu, dan reaksi emoji) disimpan untuk memfasilitasi interaksi komunitas yang hangat.{"\n"}
+          - Anda memiliki kendali penuh atas akun Anda dan dapat menghapus akun beserta data riwayat kapan saja melalui menu pengaturan profil.
         </Text>
 
-        <Text style={styles.sectionTitle}>6. Your Rights</Text>
+        <Text style={styles.sectionTitle}>6. Keamanan & Kepatuhan</Text>
         <Text style={styles.paragraph}>
-          You have the right to request the deletion of your account and data. You can exercise this right within the app settings or by contacting our support team.
+          Seluruh komunikasi jaringan diproteksi melalui protokol terenkripsi HTTPS dan WSS (Secure WebSockets). Jika Anda memiliki pertanyaan mengenai privasi, Anda dapat menghubungi tim kami melalui Warkop NgopiCS.
         </Text>
       </ScrollView>
     </View>
@@ -67,6 +66,8 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     paddingHorizontal: 20,
     backgroundColor: coffee.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.border,
   },
   backButton: {
     marginRight: 15,
@@ -82,32 +83,37 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
+    maxWidth: 720,
+    alignSelf: 'center',
+    width: '100%',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: coffee.accent,
-    marginBottom: 5,
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: coffee.muted,
+    marginBottom: 6,
   },
   date: {
-    fontSize: 14,
+    fontSize: 13,
     color: coffee.secondary,
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: coffee.text,
     marginTop: 20,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   paragraph: {
     fontSize: 15,
     color: coffee.secondary,
     lineHeight: 24,
   },
-  bold: {
-    fontWeight: 'bold',
-    color: coffee.text,
-  }
 });

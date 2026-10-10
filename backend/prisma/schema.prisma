@@ -72,6 +72,8 @@ model Group {
   allow_member_invites Boolean  @default(true)
   call_enabled         Boolean  @default(true)
   min_bmc_balance      Float    @default(0)
+  theme                String?  @default("warkop_klasik")
+  ambient_sound        String?
   created_by           String
   created_at           DateTime @default(now())
 
@@ -232,3 +234,135 @@ model RefreshToken {
   @@index([expires_at])
   @@map("refresh_tokens")
 }
+
+// SPRINT 1: Jukebox Warung
+model JukeboxTrack {
+  id         String    @id @default(uuid())
+  warung_id  String    @map("warung_id")
+  track_uri  String    @map("track_uri")
+  title      String
+  artist     String
+  thumbnail  String?
+  duration   Int       @default(0) // detik
+  added_by   String    @map("added_by")
+  position   Int       @default(0)
+  is_playing Boolean   @default(false)
+  started_at DateTime?
+  created_at DateTime  @default(now())
+
+  @@index([warung_id])
+  @@map("jukebox_tracks")
+}
+
+model JukeboxVote {
+  id         String   @id @default(uuid())
+  track_id   String   @map("track_id")
+  user_id    String   @map("user_id")
+  vote_type  String   @map("vote_type") // "skip" atau "like"
+  created_at DateTime @default(now())
+
+  @@unique([track_id, user_id, vote_type])
+  @@map("jukebox_votes")
+}
+
+// SPRINT 2: Surat Kopi & Warkop Engagement
+model CoffeeLetter {
+  id            String    @id @default(uuid())
+  sender_id     String    @map("sender_id")
+  recipient_id  String    @map("recipient_id")
+  content       String    // Terenkripsi
+  scheduled_at  DateTime  @map("scheduled_at")
+  delivery_mode String    @default("scheduled") // "scheduled", "when_online"
+  delivered_at  DateTime?
+  is_opened     Boolean   @default(false)
+  created_at    DateTime  @default(now())
+
+  @@index([recipient_id])
+  @@index([scheduled_at])
+  @@map("coffee_letters")
+}
+
+model WarungMute {
+  id          String    @id @default(uuid())
+  user_id     String    @map("user_id")
+  warung_id   String    @map("warung_id")
+  muted_until DateTime? @map("muted_until")
+  created_at  DateTime  @default(now())
+
+  @@unique([user_id, warung_id])
+  @@map("warung_mutes")
+}
+
+model GuestbookEntry {
+  id         String   @id @default(uuid())
+  warung_id  String   @map("warung_id")
+  user_id    String   @map("user_id")
+  content    String   // Terenkripsi
+  entry_type String   @default("quote") // "quote", "puisi", "gambar"
+  created_at DateTime @default(now())
+
+  @@index([warung_id])
+  @@map("guestbook_entries")
+}
+
+model NgopiSchedule {
+  id           String   @id @default(uuid())
+  warung_id    String   @map("warung_id")
+  title        String
+  description  String?
+  scheduled_at DateTime @map("scheduled_at")
+  call_type    String   @default("voice") // "voice", "video"
+  created_by   String   @map("created_by")
+  is_active    Boolean  @default(true)
+  created_at   DateTime @default(now())
+
+  @@index([warung_id])
+  @@map("ngopi_schedules")
+}
+
+// SPRINT 3: Gamifikasi & Profil Meja
+model ChatStreak {
+  id             String   @id @default(uuid())
+  user_a_id      String   @map("user_a_id")
+  user_b_id      String   @map("user_b_id")
+  current_streak Int      @default(0)
+  longest_streak Int      @default(0)
+  last_chat_at   DateTime @default(now()) @map("last_chat_at")
+
+  @@unique([user_a_id, user_b_id])
+  @@map("chat_streaks")
+}
+
+model Badge {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String
+  icon        String
+  created_at  DateTime @default(now())
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id         String   @id @default(uuid())
+  user_id    String   @map("user_id")
+  badge_id   String   @map("badge_id")
+  awarded_at DateTime @default(now())
+
+  @@unique([user_id, badge_id])
+  @@map("user_badges")
+}
+
+model ProfileTable {
+  id             String   @id @default(uuid())
+  user_id        String   @unique
+  background     String?
+  stickers       Json?
+  quote          String?
+  favorite_track String?
+  updated_at     DateTime @updatedAt
+
+  @@map("profile_tables")
+}
+

@@ -15,9 +15,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { getMimeType } from '../../../src/utils/fileHelpers';
 import { API_URL } from '../../../src/utils/session';
 
+import { EmptyState } from '../../../src/components/EmptyState';
+import { formatMessageTime } from '../../../src/utils/dateFormat';
+
 const NoTranslateText = Text as any;
 const API_ORIGIN = 'https://api.ngopi.top';
-const emojiOptions = ['\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F64F}', '\u{1F525}', '\u{1F389}', '\u{1F60D}', '\u{1F914}', '\u{1F605}', '\u{1F973}'];
+// FITUR-03: Kopi sebagai Reaksi (☕, 🍵, 🚬, 🎵, 🍜, 🌙)
+const emojiOptions = ['☕', '🍵', '🚬', '🎵', '🍜', '🌙', '\u{1F44D}', '\u{2764}\u{FE0F}', '\u{1F602}', '\u{1F62E}', '\u{1F622}', '\u{1F64F}', '\u{1F525}', '\u{1F389}', '\u{1F60D}', '\u{1F914}', '\u{1F605}', '\u{1F973}'];
 
 const normalizeAttachmentUrl = (url?: string | null) => {
   if (!url) return '';
@@ -39,6 +43,7 @@ const decodeMessageContent = (content: unknown, type: string | undefined, secret
 interface Message {
   id: string;
   sender_id: string;
+  rawContent?: string;
   content?: string; // Will store decrypted content in state
   isMine: boolean;
   timestamp: string;
@@ -355,6 +360,7 @@ function PrivateChatRoomScreen() {
           return {
             id: msg.id,
             sender_id: msg.sender_id,
+            rawContent: msg.content,
             content: decodeMessageContent(msg.content, messageType, encryptionSecret, roomKey),
             isMine: msg.sender_id === myId,
             timestamp: msg.timestamp,
@@ -387,6 +393,7 @@ function PrivateChatRoomScreen() {
           setMessages(prev => [...prev, {
             id: data.id || Math.random().toString(),
             sender_id: data.sender_id,
+            rawContent: data.content,
             content: decodeMessageContent(data.content, messageType, encryptionSecret, roomKey),
             isMine: false,
             timestamp: new Date().toISOString(),
@@ -455,9 +462,26 @@ function PrivateChatRoomScreen() {
         socket.on('messages_read', handleMessagesRead);
         socket.on('message_reacted', handleMessageReacted);
         socket.on('message_edited', handleMessageEdited);
+        const handleKeysUpdated = async (data: any) => {
+          if (data.user_id === partnerId && data.public_key) {
+            try {
+              const myKeyPair = await getOrEnsureDeviceKeyPair();
+              if (isValidPublicKey(data.public_key)) {
+                const refreshedSecret = `${NACL_SECRET_PREFIX}${deriveSharedSecret(myKeyPair.privateKey, data.public_key)}`;
+                setSecretKey(refreshedSecret);
+                setMessages(prev => prev.map(m => ({
+                  ...m,
+                  content: decodeMessageContent(m.rawContent || m.content, m.type, refreshedSecret, roomKey),
+                })));
+              }
+            } catch {}
+          }
+        };
+
         socket.on('message_pinned', handleMessagePinned);
         socket.on('message_deleted', handleMessageDeleted);
         socket.on('online_list', handleOnlineList);
+        socket.on('keys:updated', handleKeysUpdated);
 
         cleanupSocketListeners.push(() => {
           socket.off('receive_message', handleReceiveMessage);
@@ -471,6 +495,7 @@ function PrivateChatRoomScreen() {
           socket.off('message_pinned', handleMessagePinned);
           socket.off('message_deleted', handleMessageDeleted);
           socket.off('online_list', handleOnlineList);
+          socket.off('keys:updated', handleKeysUpdated);
         });
 
         socket.emit('request_online_list');
@@ -483,6 +508,44 @@ function PrivateChatRoomScreen() {
       cleanupSocketListeners.forEach((cleanup) => cleanup());
     };
   }, [roomId]);
+
+  const handleRenegotiateKeys = async () => {
+    try {
+      const token = (await SecureStore.getItemAsync('token')) || (Platform.OS === 'web' ? localStorage.getItem('token') : '');
+      const myKeyPair = await getOrEnsureDeviceKeyPair();
+      
+      const res = await axios.post(`${API_ORIGIN}/api/keys/renegotiate`, {
+        targetUserId: roomId,
+        public_key: myKeyPair.publicKey,
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      const targetUser = res.data?.targetUser;
+      let newSecret = secretKey;
+      if (targetUser && isValidPublicKey(targetUser.public_key)) {
+        newSecret = `${NACL_SECRET_PREFIX}${deriveSharedSecret(myKeyPair.privateKey, targetUser.public_key)}`;
+        setSecretKey(newSecret);
+      }
+
+      setMessages(prev => prev.map(m => ({
+        ...m,
+        content: decodeMessageContent(m.rawContent || m.content, m.type, newSecret, actualRoomId),
+      })));
+
+      const socket = socketService.getSocket();
+      if (socket) {
+        socket.emit('keys:renegotiate', {
+          target_user_id: roomId,
+          public_key: myKeyPair.publicKey,
+        });
+      }
+
+      alert('Kunci enkripsi berhasil disinkronkan kembali. ☕');
+    } catch (err: any) {
+      alert('Gagal menyinkronkan kunci: ' + (err.response?.data?.error || err.message));
+    }
+  };
 
   const sendMessage = () => {
     if (!inputText.trim()) return;
@@ -1109,6 +1172,16 @@ function PrivateChatRoomScreen() {
         </View>
       )}
 
+      {/* Fallback Banner jika ada pesan yang gagal didekripsi (BUG-01) */}
+      {messages.some(m => m.content && (m.content.includes('*(Pesan tidak bisa didekripsi') || m.content.includes('*(Gagal mendekripsi)'))) && (
+        <View style={styles.renegotiateBanner}>
+          <Text style={styles.renegotiateBannerText}>⚠️ Kunci enkripsi perlu diperbarui.</Text>
+          <TouchableOpacity style={styles.renegotiateBannerBtn} onPress={handleRenegotiateKeys}>
+            <Text style={styles.renegotiateBannerBtnText}>🔄 Muat Ulang Kunci</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Loading more indicator */}
       {isLoadingMore && (
         <View style={{ padding: 12, alignItems: 'center' }}>
@@ -1120,7 +1193,20 @@ function PrivateChatRoomScreen() {
         ref={flatListRef}
         data={filteredMessages}
         keyExtractor={item => item.id}
-        contentContainerStyle={styles.messageList}
+        contentContainerStyle={[styles.messageList, filteredMessages.length === 0 && { flexGrow: 1, justifyContent: 'center' }]}
+        ListEmptyComponent={
+          <EmptyState
+            icon="☕"
+            title="Belum Ada Pesan"
+            description="Mulai obrolan santai di ruang privat ini. Semua pesan terenkripsi dan aman."
+            primaryAction={{
+              label: 'Sapa: "Ngopi yuk! ☕"',
+              onPress: () => {
+                setInputText('Ngopi yuk! ☕');
+              }
+            }}
+          />
+        }
         onContentSizeChange={() => {
           if (shouldAutoScroll.current) {
             flatListRef.current?.scrollToEnd({ animated: false });
@@ -1146,6 +1232,8 @@ function PrivateChatRoomScreen() {
         scrollEventThrottle={100}
         renderItem={({ item }) => {
           const repliedMsg = item.reply_to_id ? messages.find(m => m.id === item.reply_to_id) : null;
+          const isDecryptionError = item.content && (item.content.includes('*(Pesan tidak bisa didekripsi') || item.content.includes('*(Gagal mendekripsi)'));
+
           return (
             <TouchableOpacity
               style={[styles.messageBubble, item.isMine ? styles.myMessage : styles.theirMessage]}
@@ -1179,14 +1267,19 @@ function PrivateChatRoomScreen() {
                 <View>
                   <NoTranslateText style={styles.messageText} className="notranslate" translate="no">{item.content}</NoTranslateText>
                   {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
+                  {isDecryptionError && (
+                    <TouchableOpacity style={styles.retryKeyInlineBtn} onPress={handleRenegotiateKeys}>
+                      <Text style={styles.retryKeyInlineText}>🔄 Muat Ulang Kunci</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
 
               <View style={styles.messageFooter}>
-                <Text style={styles.timeText}>{new Date(item.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
+                <Text style={styles.timeText}>{formatMessageTime(item.timestamp)}</Text>
                 {item.isMine && (
-                  <Text style={styles.statusText}>
-                    {item.isRead ? 'read' : 'sent'}
+                  <Text style={[styles.statusTicks, item.isRead && styles.statusTicksRead]}>
+                    {item.isRead ? '✓✓' : '✓'}
                   </Text>
                 )}
               </View>
@@ -2174,5 +2267,59 @@ const styles = StyleSheet.create({
     color: coffee.secondary,
     fontSize: 16,
     fontWeight: 'bold',
-  }
+  },
+  renegotiateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(237, 194, 125, 0.15)',
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.warning,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  renegotiateBannerText: {
+    fontSize: 13,
+    color: coffee.warning,
+    fontWeight: '600',
+    flex: 1,
+  },
+  renegotiateBannerBtn: {
+    backgroundColor: coffee.button,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+  },
+  renegotiateBannerBtnText: {
+    color: coffee.buttonText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  retryKeyInlineBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: coffee.inset,
+    borderWidth: 1,
+    borderColor: coffee.warning,
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  retryKeyInlineText: {
+    color: coffee.warning,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statusTicks: {
+    fontSize: 12,
+    color: coffee.muted,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  statusTicksRead: {
+    color: coffee.accent,
+  },
 });

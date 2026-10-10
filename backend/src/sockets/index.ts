@@ -213,6 +213,25 @@ export const setupSocket = (io: Server) => {
       socket.to(data.to).emit('ice_candidate', { candidate: data.candidate, call_id: data.call_id, room_id: data.room_id });
     });
 
+    // Jukebox Warung real-time events
+    socket.on('jukebox:track_changed', (data: { warung_id: string; track: any }) => {
+      io.to(data.warung_id).emit('jukebox:track_changed', data.track);
+    });
+
+    socket.on('jukebox:sync', (data: { warung_id: string; position: number; is_playing: boolean; track_id?: string }) => {
+      socket.to(data.warung_id).emit('jukebox:sync', data);
+    });
+
+    // Real-time E2EE Key Renegotiation notify
+    socket.on('keys:renegotiate', (data: { target_user_id: string; public_key?: string }) => {
+      if (data.target_user_id) {
+        socket.to(data.target_user_id).emit('keys:updated', {
+          user_id: user.id,
+          public_key: data.public_key,
+        });
+      }
+    });
+
     // Request online list on demand
     socket.on('request_online_list', async () => {
       await broadcastOnlineList(io);

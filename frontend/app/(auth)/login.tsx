@@ -144,6 +144,8 @@ export default function LoginScreen() {
             value={password}
             onChangeText={setPassword}
             secureTextEntry={!showPassword}
+            autoComplete="off"
+            textContentType="none"
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
             <Text style={{ color: coffee.secondary }}>{showPassword ? 'Hide' : 'Show'}</Text>
@@ -174,6 +176,16 @@ export default function LoginScreen() {
           <Text style={styles.footerText}>Don't have an account?</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
             <Text style={styles.linkText}> Sign Up</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.raised }}>
+          <TouchableOpacity onPress={() => router.push('/privacy')}>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>Kebijakan Privasi</Text>
+          </TouchableOpacity>
+          <Text style={{ color: coffee.muted, fontSize: 12 }}>•</Text>
+          <TouchableOpacity onPress={() => router.push('/terms')}>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>Syarat & Ketentuan</Text>
           </TouchableOpacity>
         </View>
 

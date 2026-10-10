@@ -8,46 +8,47 @@ export default function TermsOfServiceScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} accessibilityLabel="Kembali">
           <Ionicons name="arrow-back" size={24} color={coffee.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Terms of Service</Text>
+        <Text style={styles.headerTitle}>Syarat & Ketentuan</Text>
       </View>
       <ScrollView style={styles.content} contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Ngopi Terms of Service</Text>
-        <Text style={styles.date}>Last Updated: {new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</Text>
+        <Text style={styles.title}>Syarat & Ketentuan Ngopi</Text>
+        <Text style={styles.tagline}>"ngobrol paling intim" — https://ngopi.top</Text>
+        <Text style={styles.date}>Terakhir diperbarui: 10 Oktober 2026</Text>
 
-        <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
+        <Text style={styles.sectionTitle}>1. Penerimaan Ketentuan</Text>
         <Text style={styles.paragraph}>
-          By accessing or using Ngopi, you agree to be bound by these Terms of Service. If you do not agree to these terms, you may not use our application. Since Ngopi operates within the Pi Network ecosystem, you must also comply with the Pi Network Terms of Service.
+          Dengan mendaftar, mengakses, atau menggunakan aplikasi Ngopi, Anda menyetujui untuk terikat dengan Syarat dan Ketentuan ini. Jika Anda tidak menyetujui ketentuan ini, Anda dipersilakan untuk tidak menggunakan layanan kami.
         </Text>
 
-        <Text style={styles.sectionTitle}>2. Description of Service</Text>
+        <Text style={styles.sectionTitle}>2. Deskripsi Layanan</Text>
         <Text style={styles.paragraph}>
-          Ngopi is a messaging platform designed for the Pi Network community, allowing users to communicate, share media, and interact with other Pioneers.
+          Ngopi adalah platform komunikasi privat dan warkop virtual yang mengedepankan obrolan tenang, autentik, dan bebas tekanan media sosial. Fitur mencakup pesan terenkripsi ujung-ke-ujung (E2EE), Jukebox Warung, Suara Latar (Ambient), panggilan suara/video sejawat, dan integrasi mikro-transaksi Bamboochain (BMC).
         </Text>
 
-        <Text style={styles.sectionTitle}>3. User Conduct</Text>
+        <Text style={styles.sectionTitle}>3. Tata Krama Warung Kopi & Etika Pengguna</Text>
         <Text style={styles.paragraph}>
-          You agree not to use Ngopi to:{"\n"}
-          - Transmit any content that is unlawful, harmful, threatening, abusive, harassing, defamatory, or otherwise objectionable.{"\n"}
-          - Spam, phish, or defraud other users.{"\n"}
-          - Distribute viruses or any other technologies that may harm the app or its users.
+          Kami menjunjung tinggi kenyamanan bersama seperti suasana nongkrong di warkop yang ramah dan saling menghargai. Pengguna dilarang keras untuk:{"\n"}
+          - Mengirim spam, phishing, penipuan, atau materi yang melanggar hukum.{"\n"}
+          - Melakukan pelecehan, ancaman, atau ujaran kebencian kepada pengguna lain.{"\n"}
+          - Berupaya merusak infrastruktur, mengeksploitasi bug sistem, atau menyebarkan malware.
         </Text>
 
-        <Text style={styles.sectionTitle}>4. User Content</Text>
+        <Text style={styles.sectionTitle}>4. Kepemilikan Konten & Kunci Privat</Text>
         <Text style={styles.paragraph}>
-          You retain all rights to the content you send through Ngopi. However, you grant us a worldwide, non-exclusive, royalty-free license to use, copy, reproduce, and process your content solely for the purpose of providing the service. We reserve the right to remove any content that violates these terms.
+          Anda memegang kendali penuh atas akun dan konten Anda. Karena Ngopi menggunakan enkripsi ujung-ke-ujung, Anda bertanggung jawab menjaga keamanan kunci sandi dan cadangan data perangkat Anda.
         </Text>
 
-        <Text style={styles.sectionTitle}>5. Termination</Text>
+        <Text style={styles.sectionTitle}>5. Fitur Warung & Jukebox</Text>
         <Text style={styles.paragraph}>
-          We may suspend or terminate your access to Ngopi at any time, without prior notice or liability, for any reason whatsoever, including without limitation if you breach the Terms.
+          Musik dan audio yang diputar melalui Jukebox Warung dan Ambient Sound ditujukan untuk hiburan bersama dalam komunitas warkop secara wajar. Hak cipta lagu tetap milik pencipta/penyedia aslinya.
         </Text>
 
-        <Text style={styles.sectionTitle}>6. Changes to Terms</Text>
+        <Text style={styles.sectionTitle}>6. Perubahan Ketentuan</Text>
         <Text style={styles.paragraph}>
-          We reserve the right to modify these Terms at any time. We will notify users of any significant changes. Your continued use of Ngopi after such modifications constitutes your acceptance of the new Terms.
+          Kami dapat memperbarui Syarat dan Ketentuan ini sewaktu-waktu demi meningkatkan kenyamanan dan keamanan pengguna. Pembaruan akan selalu diumumkan secara transparan di aplikasi.
         </Text>
       </ScrollView>
     </View>
@@ -66,6 +67,8 @@ const styles = StyleSheet.create({
     paddingBottom: 15,
     paddingHorizontal: 20,
     backgroundColor: coffee.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.border,
   },
   backButton: {
     marginRight: 15,
@@ -81,32 +84,37 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 40,
+    maxWidth: 720,
+    alignSelf: 'center',
+    width: '100%',
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     color: coffee.accent,
-    marginBottom: 5,
+    marginBottom: 4,
+  },
+  tagline: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: coffee.muted,
+    marginBottom: 6,
   },
   date: {
-    fontSize: 14,
+    fontSize: 13,
     color: coffee.secondary,
     marginBottom: 20,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
     color: coffee.text,
     marginTop: 20,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   paragraph: {
     fontSize: 15,
     color: coffee.secondary,
     lineHeight: 24,
   },
-  bold: {
-    fontWeight: 'bold',
-    color: coffee.text,
-  }
 });
