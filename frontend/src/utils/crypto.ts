@@ -28,9 +28,19 @@ export const decryptMessage = (ciphertext: string, secret: string, fallbackSecre
     }
 
     const effectiveSecret = (secret.startsWith(NACL_SECRET_PREFIX) && fallbackSecret) ? fallbackSecret : secret;
-    const key = getKey(effectiveSecret);
-    const bytes = CryptoJS.AES.decrypt(ciphertext, key);
-    const originalText = bytes.toString(CryptoJS.enc.Utf8);
+    let key = getKey(effectiveSecret);
+    let bytes = CryptoJS.AES.decrypt(ciphertext, key);
+    let originalText = bytes.toString(CryptoJS.enc.Utf8);
+    if (!originalText && fallbackSecret && fallbackSecret !== effectiveSecret) {
+      key = getKey(fallbackSecret);
+      bytes = CryptoJS.AES.decrypt(ciphertext, key);
+      originalText = bytes.toString(CryptoJS.enc.Utf8);
+    }
+    if (!originalText && secret && secret !== effectiveSecret) {
+      key = getKey(secret);
+      bytes = CryptoJS.AES.decrypt(ciphertext, key);
+      originalText = bytes.toString(CryptoJS.enc.Utf8);
+    }
     return originalText || '*(Pesan tidak bisa didekripsi)*';
   } catch (e) {
     return '*(Gagal mendekripsi)*';
