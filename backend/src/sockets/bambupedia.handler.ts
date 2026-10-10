@@ -384,8 +384,8 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
 
     // Command /poin or /skor
     if (cleanUserText === '/poin' || cleanUserText === '!poin' || cleanUserText === '/skor') {
-      const pts = userPoints.get(member.username) || 0;
-      const msg = createSystemMessage('sys-poin', 'system', `⭐ Poin Kopi @${member.username}: ${pts} Poin ☕\nJawab tebak-tebakan dari WarkopBot untuk menambah poinmu!`, 'WarkopBot');
+      const pts = PointsManager.getPoints(member.username);
+      const msg = createSystemMessage('sys-poin', 'system', `⭐ Poin Kopi @${member.username}: ${pts} Poin ☕\nJawab tebak-tebakan dari WarkopBot atau menangkan permainan untuk menambah poinmu!`, 'WarkopBot');
       io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', msg);
       return;
     }
