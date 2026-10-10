@@ -11,7 +11,22 @@ export const encryptMessage = (message: string, secret: string): string => {
 
 export const decryptMessage = (ciphertext: string, secret: string, fallbackSecret?: string): string => {
   try {
-    if (ciphertext.startsWith(NACL_MESSAGE_PREFIX)) return decryptWithSharedSecret(ciphertext, secret);
+    if (ciphertext.startsWith(NACL_MESSAGE_PREFIX)) {
+      if (secret && secret.startsWith(NACL_SECRET_PREFIX)) {
+        try {
+          return decryptWithSharedSecret(ciphertext, secret);
+        } catch (err) {
+          // If primary sharedSecret failed, try fallbackSecret if it has NACL prefix
+          if (fallbackSecret && fallbackSecret.startsWith(NACL_SECRET_PREFIX) && fallbackSecret !== secret) {
+            try {
+              return decryptWithSharedSecret(ciphertext, fallbackSecret);
+            } catch {}
+          }
+        }
+      }
+      return '*(Pesan tidak bisa didekripsi - kunci perangkat belum cocok)*';
+    }
+
     const effectiveSecret = (secret.startsWith(NACL_SECRET_PREFIX) && fallbackSecret) ? fallbackSecret : secret;
     const key = getKey(effectiveSecret);
     const bytes = CryptoJS.AES.decrypt(ciphertext, key);

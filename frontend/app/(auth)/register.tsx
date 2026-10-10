@@ -5,7 +5,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator,
 import { router } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
-import { generateDeviceKeyPair } from '../../src/utils/e2ee';
+import { deriveKeyPairFromSeed, generateDeviceKeyPair } from '../../src/utils/e2ee';
 import { setStoredRefreshToken, setStoredToken } from '../../src/utils/session';
 import { explainAuthError } from '../../src/utils/auth-errors';
 
@@ -50,11 +50,9 @@ export default function RegisterScreen() {
 
     let deviceKeys: ReturnType<typeof generateDeviceKeyPair>;
     try {
-      deviceKeys = generateDeviceKeyPair();
+      deviceKeys = deriveKeyPairFromSeed(`ngopi:e2ee:v1:${normalizedUsername}:${password}`);
     } catch {
-      setError('Kunci keamanan perangkat gagal dibuat. Muat ulang halaman atau gunakan browser terbaru.');
-      setLoading(false);
-      return;
+      deviceKeys = generateDeviceKeyPair();
     }
 
     try {

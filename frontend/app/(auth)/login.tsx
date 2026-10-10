@@ -7,6 +7,7 @@ import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 import { API_URL, refreshAccessToken, setStoredRefreshToken, setStoredToken } from '../../src/utils/session';
 import { explainAuthError } from '../../src/utils/auth-errors';
+import { deriveKeyPairFromSeed } from '../../src/utils/e2ee';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 
@@ -89,15 +90,25 @@ export default function LoginScreen() {
       await setStoredToken(token);
       await setStoredRefreshToken(refreshToken);
 
+      const deviceKeys = deriveKeyPairFromSeed(`ngopi:e2ee:v1:${normalizedUsername}:${password}`);
+
       if (Platform.OS === 'web') {
         localStorage.setItem('temp_key', password);
         localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
+        localStorage.setItem('private_key', deviceKeys.privateKey);
       } else {
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);
+        await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
+
+      try {
+        await axios.post(`${API_URL}/auth/profile`, { public_key: deviceKeys.publicKey }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch {}
 
       await afterProfileLogin();
     } catch (err: any) {

@@ -230,7 +230,7 @@ export const getUsers = async (_req: Request, res: Response): Promise<void> => {
 export const updateProfile = async (req: Request, res: Response): Promise<void> => {
   try {
     const userId = (req as any).user?.id;
-    const { display_name, wallet_address, avatar_url, bio, status } = req.body;
+    const { display_name, wallet_address, avatar_url, bio, status, public_key } = req.body;
 
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
@@ -243,6 +243,7 @@ export const updateProfile = async (req: Request, res: Response): Promise<void> 
     if (avatar_url !== undefined) updateData.avatar_url = avatar_url;
     if (bio !== undefined) updateData.bio = bio;
     if (status !== undefined) updateData.status = status;
+    if (public_key !== undefined) updateData.public_key = public_key;
 
     const updatedUser = await prisma.user.update({
       where: { id: userId },

@@ -4,7 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Keyboard
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { socketService } from '../../../src/utils/socket';
 import { encryptMessage, decryptMessage } from '../../../src/utils/crypto';
-import { deriveSharedSecret, isValidPublicKey, NACL_SECRET_PREFIX } from '../../../src/utils/e2ee';
+import { deriveSharedSecret, getOrEnsureDeviceKeyPair, isValidPublicKey, NACL_SECRET_PREFIX } from '../../../src/utils/e2ee';
 import * as SecureStore from '../../../src/utils/storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -329,10 +329,18 @@ function PrivateChatRoomScreen() {
         setAllUsers(userDirectory);
 
         if (!isGroupChat) {
-          const privateKey = Platform.OS === 'web' ? localStorage.getItem('private_key') || '' : (await SecureStore.getItemAsync('private_key')) || '';
+          const myKeyPair = await getOrEnsureDeviceKeyPair();
+          const privateKey = myKeyPair.privateKey;
           const partner = userDirectory.find((item: any) => item.id === partnerId);
           if (privateKey && isValidPublicKey(partner?.public_key)) {
             encryptionSecret = `${NACL_SECRET_PREFIX}${deriveSharedSecret(privateKey, partner.public_key)}`;
+          }
+
+          const meInDirectory = userDirectory.find((item: any) => item.id === myId);
+          if (meInDirectory && meInDirectory.public_key !== myKeyPair.publicKey) {
+            axios.post(`${API_URL}/auth/profile`, { public_key: myKeyPair.publicKey }, {
+              headers: { Authorization: `Bearer ${token}` }
+            }).catch(() => {});
           }
         }
         setSecretKey(encryptionSecret);

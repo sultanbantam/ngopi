@@ -39,6 +39,7 @@ export const profileUpdateSchema = Joi.object({
   avatar_url: Joi.string().uri({ scheme: ['http', 'https'] }).max(1024).allow(null, '').optional(),
   bio: safeText(500).allow(null, '').optional(),
   status: safeText(120).allow(null, '').optional(),
+  public_key: Joi.string().trim().max(2048).allow(null, '').optional(),
 }).min(1);
 
 export const roomParamsSchema = Joi.object({
