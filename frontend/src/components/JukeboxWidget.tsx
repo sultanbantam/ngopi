@@ -7,8 +7,9 @@ import axios from 'axios';
 import * as SecureStore from '../utils/storage';
 import { RADIO_STATIONS, RadioStation } from '../data/radioStations';
 import { musicSynthesizer } from '../utils/musicSynthesizer';
+import { globalAudioPlayer, GlobalTrack } from '../utils/globalAudioPlayer';
 
-interface Track {
+export interface Track {
   id: string;
   title: string;
   artist: string;
@@ -17,6 +18,8 @@ interface Track {
   duration: number;
   added_by: string;
   is_playing: boolean;
+  is_full?: boolean;
+  is_radio?: boolean;
 }
 
 interface JukeboxWidgetProps {
@@ -30,15 +33,25 @@ export interface CatalogSong {
   uri: string;
   duration: number;
   thumbnail?: string | null;
+  is_full?: boolean;
 }
 
 export const SONG_CATALOG: CatalogSong[] = [
+  {
+    title: 'Dealova',
+    artist: 'Once Mekel (Vokal Original)',
+    genre: 'Pop Rock Ballad',
+    uri: 'https://archive.org/download/OnceDealova_201905/Once%20-%20Dealova.mp3',
+    duration: 269,
+    is_full: true,
+  },
   {
     title: 'Kopi Dangdut',
     artist: 'Fahmi Shahab (Vokal Original)',
     genre: 'Dangdut Klasik',
     uri: 'https://archive.org/download/KopiDangdut/KopiDangdutFahmiSahab.mp3',
     duration: 238,
+    is_full: true,
   },
   {
     title: 'Begadang',
@@ -46,6 +59,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Dangdut Warkop',
     uri: 'https://archive.org/download/rhoma-irama-begadang/Rhoma%20Irama%20-%20Begadang.mp3',
     duration: 187,
+    is_full: true,
   },
   {
     title: 'Bento',
@@ -53,6 +67,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Rock Akustik',
     uri: 'https://archive.org/download/BentoIwanFals_201903/Bento%20-%20Iwan%20Fals.mp3',
     duration: 355,
+    is_full: true,
   },
   {
     title: 'Akad',
@@ -60,6 +75,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Indie Folk',
     uri: 'https://archive.org/download/01PayungTeduhAkad/01%20Payung%20Teduh%20Akad.mp3',
     duration: 259,
+    is_full: true,
   },
   {
     title: 'Seberapa Pantas',
@@ -67,6 +83,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Pop 90s/2000s',
     uri: 'https://archive.org/download/sheilaon7seberapapantaslirik/Sheila%20ON7%20-%20Seberapa%20Pantas%20%28lirik%29.mp3',
     duration: 240,
+    is_full: true,
   },
   {
     title: 'Sahabat Sejati',
@@ -74,6 +91,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Pop Akustik',
     uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Sahabat%20Sejati%20%28Lana%20Nitibaskara%29.mp3',
     duration: 217,
+    is_full: true,
   },
   {
     title: 'Kemesraan',
@@ -81,6 +99,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Folk Ballad',
     uri: 'https://archive.org/download/kemesraan-iwan-fals/kemesraan%20-%20iwan%20fals.mp3',
     duration: 313,
+    is_full: true,
   },
   {
     title: 'Sephia',
@@ -88,6 +107,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Pop Ballad',
     uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Sephia.mp3',
     duration: 295,
+    is_full: true,
   },
   {
     title: 'Yang Terlewatkan',
@@ -95,6 +115,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Slow Pop',
     uri: 'https://archive.org/download/SheilaOn7FullAlbumAnugerahTerindahDariSheilaOn7/Yang%20Terlewatkan%20%28Album%20Version%29.mp3',
     duration: 246,
+    is_full: true,
   },
   {
     title: 'Kopi Lambada',
@@ -102,6 +123,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Dangdut Modern',
     uri: 'https://archive.org/download/KopiDangdut/Denada-KopiLambada.mp3',
     duration: 326,
+    is_full: true,
   },
   {
     title: 'Kopi Dangdut (Duet)',
@@ -109,6 +131,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Dangdut Duet',
     uri: 'https://archive.org/download/KopiDangdut/UutPermatasariLizaNatalia-KopiDangdutduetMaut.mp3',
     duration: 221,
+    is_full: true,
   },
   {
     title: 'Senja di Kedai Kopi',
@@ -116,6 +139,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Lo-Fi Chill',
     uri: 'synth:lofi',
     duration: 160,
+    is_full: true,
   },
   {
     title: 'Melodi Malam Warung',
@@ -123,6 +147,7 @@ export const SONG_CATALOG: CatalogSong[] = [
     genre: 'Fingerstyle Gitar',
     uri: 'synth:malam',
     duration: 210,
+    is_full: true,
   },
 ];
 
@@ -201,6 +226,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
             uri: item.previewUrl,
             duration: Math.round((item.trackTimeMillis || 180000) / 1000),
             thumbnail: item.artworkUrl100 || item.artworkUrl60 || null,
+            is_full: false,
           }));
         setGlobalResults(mapped);
       } else {
@@ -225,10 +251,12 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       duration: 0,
       added_by: 'Radio Warkop',
       is_playing: true,
+      is_radio: true,
     };
     setPlayingTrack(radioTrack);
     setProgress(100);
     setIsPlaying(true);
+    globalAudioPlayer.play(radioTrack);
     setAddModalVisible(false);
   };
 
@@ -271,111 +299,48 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     }
   }, [warungId]);
 
-  const htmlAudioRef = useRef<any>(null);
-  const currentAudioUriRef = useRef<string>('');
+  // Sync with global persistent audio player state
+  useEffect(() => {
+    const initial = globalAudioPlayer.getState();
+    if (initial.track) {
+      setPlayingTrack(initial.track as Track);
+      setIsPlaying(initial.isPlaying);
+      setProgress(initial.progress);
+    }
 
-  const startPlayingTrack = useCallback((track: Track) => {
-    if (!track?.track_uri) return;
-
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      if (track.track_uri.startsWith('http')) {
-        musicSynthesizer.pause();
-        try {
-          if (!htmlAudioRef.current) {
-            htmlAudioRef.current = new window.Audio();
-          }
-          const audio = htmlAudioRef.current;
-
-          // If already playing this exact track without being paused, avoid reloading
-          if (currentAudioUriRef.current === track.track_uri && !audio.paused) {
-            return;
-          }
-
-          currentAudioUriRef.current = track.track_uri;
-          audio.src = track.track_uri;
-          audio.load();
-          const playPromise = audio.play();
-          if (playPromise !== undefined) {
-            playPromise.catch((err: any) => {
-              if (err?.name === 'AbortError') return;
-              console.warn('Playback direct error, trying proxy if radio:', err);
-              if (track.added_by === 'Radio Warkop' || track.track_uri.includes('stream')) {
-                const proxyUri = `https://api.ngopi.top/api/jukebox/radio/stream?url=${encodeURIComponent(track.track_uri)}`;
-                currentAudioUriRef.current = proxyUri;
-                audio.src = proxyUri;
-                audio.load();
-                audio.play().catch((pErr: any) => {
-                  if (pErr?.name !== 'AbortError') console.warn('Radio proxy also failed', pErr);
-                });
-              }
-            });
-          }
-          audio.onended = () => {
-            if (track.added_by !== 'Radio Warkop') {
-              handleVote('skip');
-            }
-          };
-          return;
-        } catch (e) {
-          console.warn('Audio element error:', e);
-          return;
-        }
+    const unsubscribe = globalAudioPlayer.subscribe((state) => {
+      if (state.track) {
+        setPlayingTrack(state.track as Track);
       }
-    }
-    if (htmlAudioRef.current) {
-      try { htmlAudioRef.current.pause(); } catch {}
-    }
-    currentAudioUriRef.current = track.track_uri;
-    musicSynthesizer.play(track.track_uri, track.title);
-  }, []);
+      setIsPlaying(state.isPlaying);
+      setProgress(state.progress);
+    });
 
-  const stopPlayingTrack = useCallback(() => {
-    if (htmlAudioRef.current) {
-      try { htmlAudioRef.current.pause(); } catch {}
-    }
-    currentAudioUriRef.current = '';
-    musicSynthesizer.pause();
-  }, []);
-
-  // Audio playback lifecycle
-  useEffect(() => {
-    if (playingTrack && isPlaying) {
-      startPlayingTrack(playingTrack);
-    } else {
-      stopPlayingTrack();
-    }
-  }, [playingTrack, isPlaying, startPlayingTrack, stopPlayingTrack]);
-
-  // Cleanup on unmount
-  useEffect(() => {
     return () => {
-      if (htmlAudioRef.current) {
-        try { htmlAudioRef.current.pause(); } catch {}
-      }
-      musicSynthesizer.pause();
+      unsubscribe();
     };
   }, []);
 
-  // Progress update for real audio & synth
+  // When current track ends, advance to next
   useEffect(() => {
-    if (!isPlaying) return;
-    const interval = setInterval(() => {
-      if (htmlAudioRef.current && !htmlAudioRef.current.paused && htmlAudioRef.current.duration) {
-        const pct = Math.floor((htmlAudioRef.current.currentTime / htmlAudioRef.current.duration) * 100);
-        setProgress(Math.min(100, Math.max(0, pct)));
-        return;
+    globalAudioPlayer.setOnEndCallback(() => {
+      if (playingTrack && !playingTrack.is_radio && playingTrack.added_by !== 'Radio Warkop') {
+        handleVote('skip');
       }
-      setProgress(p => {
-        if (p >= 100) {
-          handleVote('skip');
-          return 0;
-        }
-        return p + 1;
-      });
-    }, 1000);
+    });
+    return () => {
+      globalAudioPlayer.setOnEndCallback(null);
+    };
+  }, [playingTrack, queue]);
 
-    return () => clearInterval(interval);
-  }, [isPlaying]);
+  const startPlayingTrack = useCallback((track: Track) => {
+    if (!track?.track_uri) return;
+    globalAudioPlayer.play(track as GlobalTrack);
+  }, []);
+
+  const stopPlayingTrack = useCallback(() => {
+    globalAudioPlayer.pause();
+  }, []);
 
   const togglePlay = () => {
     if (!playingTrack) {
@@ -388,20 +353,15 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         duration: firstSong.duration,
         added_by: 'Warkop',
         is_playing: true,
+        is_full: firstSong.is_full,
       };
       setPlayingTrack(newTrack);
       setIsPlaying(true);
-      startPlayingTrack(newTrack);
+      globalAudioPlayer.play(newTrack);
       return;
     }
 
-    if (isPlaying) {
-      stopPlayingTrack();
-      setIsPlaying(false);
-    } else {
-      startPlayingTrack(playingTrack);
-      setIsPlaying(true);
-    }
+    globalAudioPlayer.togglePlay();
   };
 
   const handleVote = async (type: 'skip' | 'like') => {
@@ -465,14 +425,17 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       artist,
       track_uri: uri,
       duration,
+      thumbnail: trackData?.thumbnail || null,
       added_by: 'Kamu',
       is_playing: playNow || !playingTrack,
+      is_full: trackData?.is_full,
     };
 
     if (playNow || !playingTrack) {
       setPlayingTrack(newTrack);
       setProgress(0);
       setIsPlaying(true);
+      globalAudioPlayer.play(newTrack);
     } else {
       setQueue(prev => [...prev, newTrack]);
     }
@@ -903,9 +866,20 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
                             </View>
                           )}
                           <View style={{ flex: 1, marginRight: 8 }}>
-                            <Text style={styles.presetTitle} numberOfLines={1}>{item.title}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.presetTitle} numberOfLines={1}>{item.title}</Text>
+                              {item.is_full ? (
+                                <View style={{ backgroundColor: '#059669', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                  <Text style={{ color: '#fff', fontSize: 9, fontWeight: 'bold' }}>UTUH ☕</Text>
+                                </View>
+                              ) : (
+                                <View style={{ backgroundColor: coffee.surface, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4, borderWidth: 1, borderColor: coffee.border }}>
+                                  <Text style={{ color: coffee.muted, fontSize: 9, fontWeight: '600' }}>30s</Text>
+                                </View>
+                              )}
+                            </View>
                             <Text style={styles.presetArtist} numberOfLines={1}>
-                              {item.artist} • <Text style={{ color: coffee.accent }}>{item.genre}</Text>
+                              {item.artist} • <Text style={{ color: coffee.accent }}>{item.genre}</Text> • {Math.floor(item.duration / 60)}:{String(item.duration % 60).padStart(2, '0')}
                             </Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>

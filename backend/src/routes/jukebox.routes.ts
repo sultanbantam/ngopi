@@ -14,26 +14,89 @@ router.get('/search', async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=30`;
-    const response = await axios.get(itunesUrl, { timeout: 8000 });
+    const cleanTerm = term.replace(/[^a-zA-Z0-9\s]/g, ' ').trim();
+    const words = cleanTerm.split(/\s+/).filter(Boolean);
 
-    if (response.data?.results && Array.isArray(response.data.results)) {
-      const results = response.data.results
-        .filter((item: any) => Boolean(item.previewUrl))
-        .map((item: any) => ({
-          title: item.trackName || 'Lagu',
-          artist: item.artistName || 'Artis',
-          genre: item.primaryGenreName || 'Musik',
-          uri: item.previewUrl,
-          duration: Math.round((item.trackTimeMillis || 180000) / 1000),
-          thumbnail: item.artworkUrl100 || item.artworkUrl60 || null,
-        }));
+    // 1. Search Archive.org for full-length MP3 tracks in parallel
+    const searchArchiveOrg = async (): Promise<any[]> => {
+      try {
+        const q = words.length > 0
+          ? '(' + words.map(w => 'title:' + w).join(' AND ') + ') AND mediatype:audio'
+          : cleanTerm + ' AND mediatype:audio';
+        const archiveUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}&fl[]=identifier,title,creator,description&rows=8&output=json`;
+        const arcRes = await axios.get(archiveUrl, { timeout: 6000 });
+        const docs = arcRes.data?.response?.docs || [];
 
-      res.status(200).json({ success: true, results });
-      return;
-    }
+        const tracks: any[] = [];
+        await Promise.all(
+          docs.slice(0, 6).map(async (doc: any) => {
+            try {
+              const filesUrl = `https://archive.org/metadata/${doc.identifier}/files`;
+              const fRes = await axios.get(filesUrl, { timeout: 4500 });
+              const files = fRes.data?.result || [];
+              const mp3 = files.find(
+                (f: any) =>
+                  f.name &&
+                  f.name.toLowerCase().endsWith('.mp3') &&
+                  !f.name.includes('_vbr') &&
+                  !f.name.includes('thumb')
+              );
+              if (mp3 && mp3.length && Number(mp3.length) >= 60 && Number(mp3.length) <= 720) {
+                const rawTitle = doc.title || mp3.title || mp3.name.replace(/\.mp3$/i, '');
+                tracks.push({
+                  title: rawTitle,
+                  artist: doc.creator || 'Lagu Pilihan Warkop',
+                  genre: 'Lagu Utuh ☕',
+                  uri: `https://archive.org/download/${doc.identifier}/${encodeURIComponent(mp3.name)}`,
+                  duration: Math.round(Number(mp3.length)),
+                  thumbnail: `https://archive.org/services/img/${doc.identifier}`,
+                  is_full: true,
+                });
+              }
+            } catch {}
+          })
+        );
+        return tracks;
+      } catch (err: any) {
+        console.warn('Archive.org search error:', err?.message);
+        return [];
+      }
+    };
 
-    res.status(200).json({ success: true, results: [] });
+    // 2. Search iTunes for general preview tracks
+    const searchITunes = async (): Promise<any[]> => {
+      try {
+        const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&entity=song&limit=25`;
+        const response = await axios.get(itunesUrl, { timeout: 6000 });
+        if (response.data?.results && Array.isArray(response.data.results)) {
+          return response.data.results
+            .filter((item: any) => Boolean(item.previewUrl))
+            .map((item: any) => ({
+              title: item.trackName || 'Lagu',
+              artist: item.artistName || 'Artis',
+              genre: item.primaryGenreName || 'Musik',
+              uri: item.previewUrl,
+              duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+              thumbnail: item.artworkUrl100 || item.artworkUrl60 || null,
+              is_full: false,
+            }));
+        }
+      } catch (err: any) {
+        console.warn('iTunes search error:', err?.message);
+      }
+      return [];
+    };
+
+    // Run both searches in parallel
+    const [archiveResults, itunesResults] = await Promise.all([
+      searchArchiveOrg(),
+      searchITunes(),
+    ]);
+
+    // Put full-length songs at the top so user can listen to complete tracks
+    const combined = [...archiveResults, ...itunesResults];
+
+    res.status(200).json({ success: true, results: combined });
   } catch (error: any) {
     console.error('Jukebox music search proxy error:', error?.message);
     res.status(500).json({ success: false, error: 'Gagal mencari musik' });

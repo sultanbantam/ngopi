@@ -6,6 +6,7 @@ import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { OnboardingModal } from '../../src/components/OnboardingModal';
+import { GlobalAudioBar } from '../../src/components/GlobalAudioBar';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -581,6 +582,7 @@ export default function MainLayout() {
         {renderToast()}
         {renderNotificationCenter()}
         <OnboardingModal />
+        <GlobalAudioBar />
       </View>
     );
   }
@@ -606,6 +608,7 @@ export default function MainLayout() {
       {renderToast()}
       {renderNotificationCenter()}
       <OnboardingModal />
+      <GlobalAudioBar />
     </View>
   );
 }
