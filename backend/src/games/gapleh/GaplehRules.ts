@@ -65,7 +65,9 @@ export class GaplehRules {
       }
     }
 
-    return { startingPlayerId: bestPlayer, startingCard: bestCard };
+    return bestCard
+      ? { startingPlayerId: bestPlayer, startingCard: bestCard }
+      : { startingPlayerId: bestPlayer };
   }
 
   // Find all valid moves for a hand given the current board
