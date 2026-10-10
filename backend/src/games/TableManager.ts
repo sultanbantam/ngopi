@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import crypto from 'crypto';
 import { BaseGame } from './engine/BaseGame';
 import { GameRegistry } from './engine/GameRegistry';
 import {
@@ -12,6 +12,8 @@ import {
 } from './engine/types';
 import { GaplehGame } from './gapleh/GaplehGame';
 import { prisma } from '../utils/prisma';
+
+const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
 
 // Register built-in games
 GameRegistry.register('gapleh', GaplehGame);
@@ -51,16 +53,16 @@ export class TableManager {
     warungId?: string | null;
     config?: TableConfig;
   }): Promise<GameTableData> {
-    const tableId = `tbl_${uuidv4().substring(0, 8)}`;
+    const tableId = makeId('tbl');
     const maxPlayers = params.maxPlayers || (params.gameType === 'catur' ? 2 : 4);
     const minPlayers = params.minPlayers || 2;
 
     const hostPlayer: GamePlayerInfo = {
-      id: `p_${uuidv4().substring(0, 8)}`,
+      id: makeId('p'),
       user_id: params.host.id,
       username: params.host.username,
       display_name: params.host.display_name,
-      avatar_url: params.host.avatar_url,
+      avatar_url: params.host.avatar_url ?? null,
       seat_number: 0,
       is_ready: true, // Host is ready by default
       is_active: true,
@@ -84,7 +86,7 @@ export class TableManager {
       config: {
         turnTimeLimitSec: 30,
         ...params.config,
-        password: params.password,
+        password: params.password ?? undefined,
       },
     };
 
@@ -163,11 +165,11 @@ export class TableManager {
     }
 
     const newPlayer: GamePlayerInfo = {
-      id: `p_${uuidv4().substring(0, 8)}`,
+      id: makeId('p'),
       user_id: user.id,
       username: user.username,
       display_name: user.display_name,
-      avatar_url: user.avatar_url,
+      avatar_url: user.avatar_url ?? null,
       seat_number: nextSeat,
       is_ready: false,
       is_active: true,
@@ -195,13 +197,14 @@ export class TableManager {
 
     const botIndex = active.data.players.filter((p) => p.is_bot).length;
     const botName = BOT_NAMES[botIndex % BOT_NAMES.length];
-    const botId = `bot_${uuidv4().substring(0, 6)}`;
+    const botId = makeId('bot');
 
     const botPlayer: GamePlayerInfo = {
-      id: `p_${uuidv4().substring(0, 8)}`,
+      id: makeId('p'),
       user_id: botId,
       username: `bot_${nextSeat + 1}`,
       display_name: botName,
+      avatar_url: null,
       seat_number: nextSeat,
       is_ready: true,
       is_active: true,
@@ -367,11 +370,11 @@ export class TableManager {
     const exists = active.data.spectators.some((s) => s.user_id === user.id);
     if (!exists) {
       active.data.spectators.push({
-        id: `s_${uuidv4().substring(0, 8)}`,
+        id: makeId('s'),
         user_id: user.id,
         username: user.username,
         display_name: user.display_name,
-        avatar_url: user.avatar_url,
+        avatar_url: user.avatar_url ?? null,
         joined_at: new Date().toISOString(),
       });
     }
@@ -389,7 +392,7 @@ export class TableManager {
     if (!active) return null;
 
     const chatItem = {
-      id: uuidv4(),
+      id: makeId('chat'),
       senderId: sender.id,
       senderName: sender.name,
       message,
