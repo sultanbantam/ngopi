@@ -572,6 +572,10 @@ export default function ContactsScreen() {
       </View>
 
       <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.gameLobbyButton} onPress={() => router.push('/(main)/games' as any)}>
+          <Ionicons name="game-controller-outline" size={18} color={coffee.accent} />
+          <Text style={styles.gameLobbyButtonText}>Meja Warkop 🎮</Text>
+        </TouchableOpacity>
         <TouchableOpacity style={styles.helpCenterButton} onPress={openHelpCenter}>
           <Ionicons name="help-circle-outline" size={18} color={coffee.text} />
           <Text style={styles.helpCenterButtonText}>Pusat Bantuan</Text>
@@ -1003,6 +1007,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginBottom: 12,
     flexWrap: 'wrap',
+  },
+  gameLobbyButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: coffee.raised,
+    borderWidth: 1,
+    borderColor: coffee.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  gameLobbyButtonText: {
+    color: coffee.accent,
+    fontWeight: '800',
   },
   helpCenterButton: {
     flexDirection: 'row',

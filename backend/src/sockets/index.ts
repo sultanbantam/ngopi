@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { handleChatEvents } from './chat.handler';
 import { emitBambupediaMembers, handleBambupediaEvents, startBambupediaEcosystemInfo, startBambupediaTips } from './bambupedia.handler';
 import { handleTicketEvents } from './ticket.handler';
+import { setupGameSocket } from '../games/sockets/gameSocket';
 import { prisma } from '../utils/prisma';
 import crypto from 'crypto';
 
@@ -104,6 +105,8 @@ export const setupSocket = (io: Server) => {
   // Start scheduled ecosystem platform messages and BambooChat usage tips for Bambupedia room
   startBambupediaEcosystemInfo(io);
   startBambupediaTips(io);
+  // Setup Ngopi Games (/games) namespace
+  setupGameSocket(io);
   // Middleware for authentication
   io.use((socket: Socket, next) => {
     const token = getSocketAuthToken(socket);

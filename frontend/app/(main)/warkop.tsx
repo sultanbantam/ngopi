@@ -1065,6 +1065,13 @@ export default function BambupediaRoom() {
             <Ionicons name="add-circle-outline" size={22} color={coffee.accent} />
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: coffee.raised }]}
+            onPress={() => router.push('/(main)/games' as any)}
+            accessibilityLabel="Meja Warkop (Game)"
+          >
+            <Ionicons name="game-controller-outline" size={20} color={coffee.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.headerIconButton, { backgroundColor: coffee.accentWash }]}
             onPress={() => {
               if (Platform.OS === 'web') {

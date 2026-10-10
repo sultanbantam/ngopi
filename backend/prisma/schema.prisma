@@ -36,6 +36,7 @@ model User {
   ticketMessages      TicketMessage[]
   ticketAuditLogs     TicketAuditLog[]
   refreshTokens       RefreshToken[]
+  gamePlayers         GamePlayer[]
 }
 
 model Message {
@@ -365,4 +366,93 @@ model ProfileTable {
 
   @@map("profile_tables")
 }
+
+// ==========================================
+// MODUL PERMAINAN: "MEJA WARKOP" (Ngopi Games)
+// ==========================================
+
+// Meja Permainan (Table)
+model GameTable {
+  id          String    @id @default(uuid())
+  warung_id   String?   @map("warung_id") // Bisa terikat ke Warung Kopi tertentu
+  game_type   String    @map("game_type") // "gapleh", "remi", "bridge", "truf", "poker", "catur"
+  name        String
+  max_players Int       @map("max_players")
+  min_players Int       @map("min_players")
+  status      String    @default("waiting") // "waiting", "playing", "finished"
+  is_private  Boolean   @default(false) @map("is_private")
+  password    String?
+  config      Json?
+  host_id     String    @map("host_id")
+  created_at  DateTime  @default(now()) @map("created_at")
+  started_at  DateTime? @map("started_at")
+  finished_at DateTime? @map("finished_at")
+
+  players     GamePlayer[]
+  spectators  GameSpectator[]
+  game_state  GameState?
+
+  @@map("game_tables")
+}
+
+// Pemain di Meja
+model GamePlayer {
+  id           String    @id @default(uuid())
+  table_id     String    @map("table_id")
+  user_id      String    @map("user_id")
+  seat_number  Int       @map("seat_number")
+  team         String?
+  chip_balance Float     @default(0) @map("chip_balance")
+  is_ready     Boolean   @default(false) @map("is_ready")
+  is_active    Boolean   @default(true) @map("is_active")
+  joined_at    DateTime  @default(now()) @map("joined_at")
+
+  user         User      @relation(fields: [user_id], references: [id])
+  table        GameTable @relation(fields: [table_id], references: [id], onDelete: Cascade)
+
+  @@unique([table_id, seat_number])
+  @@map("game_players")
+}
+
+// Penonton (Spectator)
+model GameSpectator {
+  id        String    @id @default(uuid())
+  table_id  String    @map("table_id")
+  user_id   String    @map("user_id")
+  joined_at DateTime  @default(now()) @map("joined_at")
+
+  table     GameTable @relation(fields: [table_id], references: [id], onDelete: Cascade)
+
+  @@map("game_spectators")
+}
+
+// State Permainan
+model GameState {
+  id            String    @id @default(uuid())
+  table_id      String    @unique @map("table_id")
+  state_data    Json
+  turn_player   String?   @map("turn_player")
+  turn_deadline DateTime? @map("turn_deadline")
+  round_number  Int       @default(1) @map("round_number")
+  updated_at    DateTime  @updatedAt @map("updated_at")
+
+  table         GameTable @relation(fields: [table_id], references: [id], onDelete: Cascade)
+
+  @@map("game_states")
+}
+
+// Riwayat Pertandingan
+model GameHistory {
+  id           String   @id @default(uuid())
+  table_id     String   @map("table_id")
+  game_type    String   @default("gapleh") @map("game_type")
+  winner_ids   String[] @map("winner_ids")
+  loser_ids    String[] @map("loser_ids")
+  score_data   Json     @map("score_data")
+  duration_sec Int      @map("duration_sec")
+  finished_at  DateTime @default(now()) @map("finished_at")
+
+  @@map("game_histories")
+}
+
 
