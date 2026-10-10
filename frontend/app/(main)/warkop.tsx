@@ -168,6 +168,23 @@ function createLocalWelcomeMessage(member: Member): ChatMessage {
   };
 }
 
+function createLocalRiddleMessage(index?: number): ChatMessage {
+  const idx = typeof index === 'number' ? index : Math.floor(Math.random() * WARKOP_TEBAK_TEBAKAN.length);
+  const riddle = WARKOP_TEBAK_TEBAKAN[idx] || WARKOP_TEBAK_TEBAKAN[0];
+  const createdAt = new Date().toISOString();
+  return {
+    id: `local-riddle-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    room_id: ROOM_ID,
+    room_name: ROOM_NAME,
+    type: 'system',
+    message_type: 'system',
+    content: `🎯 [TEBAK-TEBAKAN WARKOP]\n${riddle.question}\n\nKetik jawabanmu langsung di chat! Penjawab TERCEPAT yang benar mendapat +10 Poin Kopi ☕!`,
+    sender_id: 'system',
+    sender_name: 'WarkopBot',
+    created_at: createdAt,
+  };
+}
+
 function AudioMessage({ url }: { url: string }) {
   const [sound, setSound] = useState<Audio.Sound | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -295,7 +312,7 @@ export default function BambupediaRoom() {
         }
       }
 
-      // Sapaan sekali saja
+      // Sapaan sekali saja dan tebak-tebakan pembuka
       if (userId && username && !hasWelcomedRef.current) {
         hasWelcomedRef.current = true;
         setTimeout(() => {
@@ -305,7 +322,11 @@ export default function BambupediaRoom() {
             display_name: username,
             avatar_url: null
           }));
-        }, 500);
+        }, 400);
+
+        setTimeout(() => {
+          appendMessage(createLocalRiddleMessage(0));
+        }, 1000);
       }
     };
     loadCurrentUser();
@@ -323,6 +344,7 @@ export default function BambupediaRoom() {
         setSocketConnected(true);
         socket.emit('request_bambupedia_members');
         socket.emit('request_warkop_points');
+        socket.emit('bambupedia_send_message', { content: '/tebak', message_type: 'text' });
       };
 
       const handleDisconnect = () => setSocketConnected(false);
@@ -1149,6 +1171,42 @@ export default function BambupediaRoom() {
             </View>
           )}
 
+          {/* Quick Action Chips Bar (Tebak-tebakan, Poin, Sapa) */}
+          <View style={styles.quickChipsBar}>
+            <TouchableOpacity
+              style={styles.quickChipBtn}
+              onPress={() => {
+                sendSocketMessage({ content: '/tebak', message_type: 'text' });
+                setTimeout(() => {
+                  appendMessage(createLocalRiddleMessage());
+                }, 300);
+              }}
+              accessibilityLabel="Minta tebak-tebakan baru"
+            >
+              <Text style={styles.quickChipText}>🎯 Minta Tebakan</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickChipBtn}
+              onPress={() => {
+                sendSocketMessage({ content: '/poin', message_type: 'text' });
+              }}
+              accessibilityLabel="Cek poin kopi saya"
+            >
+              <Text style={styles.quickChipText}>⭐ Poin: {userPoints} Pts</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickChipBtn}
+              onPress={() => {
+                setInputText('Halo kawan warkop! ☕');
+              }}
+              accessibilityLabel="Sapa warkop"
+            >
+              <Text style={styles.quickChipText}>☕ Sapa Warung</Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Modern Unified Single-Row Input Bar */}
           <View style={styles.inputBarRow}>
             <TouchableOpacity style={styles.inlineActionBtn} onPress={pickDocument} accessibilityLabel="Kirim file">
@@ -1462,6 +1520,26 @@ const styles = StyleSheet.create({
     color: coffee.muted,
     fontSize: 11,
     marginTop: 2,
+  },
+  quickChipsBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+  },
+  quickChipBtn: {
+    backgroundColor: coffee.inset,
+    borderWidth: 1,
+    borderColor: coffee.border,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+  },
+  quickChipText: {
+    fontSize: 11,
+    color: coffee.text,
+    fontWeight: '700',
   },
 });
 

@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ScrollView, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, ScrollView, Platform, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { coffee } from '../theme/coffee';
 import { socketService } from '../utils/socket';
 import axios from 'axios';
 import * as SecureStore from '../utils/storage';
+import { RADIO_STATIONS, RadioStation } from '../data/radioStations';
+import { musicSynthesizer } from '../utils/musicSynthesizer';
 
 interface Track {
   id: string;
@@ -21,14 +23,13 @@ interface JukeboxWidgetProps {
   warungId: string;
 }
 
-import { musicSynthesizer } from '../utils/musicSynthesizer';
-
 export interface CatalogSong {
   title: string;
   artist: string;
   genre: string;
   uri: string;
   duration: number;
+  thumbnail?: string | null;
 }
 
 export const SONG_CATALOG: CatalogSong[] = [
@@ -135,7 +136,12 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
   const [progress, setProgress] = useState(0); // 0 - 100
   const [modalVisible, setModalVisible] = useState(false);
   const [addModalVisible, setAddModalVisible] = useState(false);
+  const [addModalTab, setAddModalTab] = useState<'catalog' | 'global' | 'radio'>('catalog');
   const [searchSongQuery, setSearchSongQuery] = useState('');
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [globalResults, setGlobalResults] = useState<CatalogSong[]>([]);
+  const [isSearchingGlobal, setIsSearchingGlobal] = useState(false);
+  const [globalSearchError, setGlobalSearchError] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newArtist, setNewArtist] = useState('');
   const [newUri, setNewUri] = useState('');
@@ -149,6 +155,64 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
       s.genre.toLowerCase().includes(q)
     );
   }, [searchSongQuery]);
+
+  const handleSearchGlobal = async (term?: string) => {
+    const q = (term !== undefined ? term : globalSearchQuery).trim();
+    if (!q) {
+      setGlobalResults([]);
+      return;
+    }
+    setIsSearchingGlobal(true);
+    setGlobalSearchError('');
+    try {
+      const res = await axios.get('https://itunes.apple.com/search', {
+        params: {
+          term: q,
+          entity: 'song',
+          limit: 30,
+        },
+        timeout: 10000,
+      });
+      if (res.data?.results && Array.isArray(res.data.results)) {
+        const mapped: CatalogSong[] = res.data.results
+          .filter((item: any) => Boolean(item.previewUrl))
+          .map((item: any) => ({
+            title: item.trackName || 'Lagu',
+            artist: item.artistName || 'Artis',
+            genre: item.primaryGenreName || 'Pop',
+            uri: item.previewUrl,
+            duration: Math.round((item.trackTimeMillis || 180000) / 1000),
+            thumbnail: item.artworkUrl100 || item.artworkUrl60 || null,
+          }));
+        setGlobalResults(mapped);
+      } else {
+        setGlobalResults([]);
+      }
+    } catch (e: any) {
+      console.warn('Global music search error:', e?.message);
+      setGlobalSearchError('Pencarian gagal atau koneksi terputus. Coba lagi.');
+    } finally {
+      setIsSearchingGlobal(false);
+    }
+  };
+
+  const playRadioStation = (station: RadioStation) => {
+    const radioTrack: Track = {
+      id: `radio-${station.id}`,
+      title: station.name,
+      artist: `${station.genre} • ${station.location}`,
+      track_uri: station.streamUrl,
+      thumbnail: null,
+      duration: 0,
+      added_by: 'Radio Warkop',
+      is_playing: true,
+    };
+    setPlayingTrack(radioTrack);
+    setProgress(100);
+    setIsPlaying(true);
+    startPlayingTrack(radioTrack);
+    setAddModalVisible(false);
+  };
 
   const loadNowPlaying = async () => {
     try {
@@ -202,18 +266,24 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
           const audio = htmlAudioRef.current;
           if (audio.src !== track.track_uri) {
             audio.src = track.track_uri;
-            audio.crossOrigin = 'anonymous';
             audio.load();
           }
-          audio.play().catch(() => {
-            musicSynthesizer.play('synth:lofi', track.title);
+          audio.play().catch((err: any) => {
+            console.warn('Playback error:', err);
+            if (track.added_by !== 'Radio Warkop') {
+              musicSynthesizer.play('synth:lofi', track.title);
+            }
           });
           audio.onended = () => {
-            handleVote('skip');
+            if (track.added_by !== 'Radio Warkop') {
+              handleVote('skip');
+            }
           };
           return;
         } catch {
-          musicSynthesizer.play('synth:lofi', track.title);
+          if (track.added_by !== 'Radio Warkop') {
+            musicSynthesizer.play('synth:lofi', track.title);
+          }
           return;
         }
       }
@@ -511,15 +581,15 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         </View>
       </Modal>
 
-      {/* Add Track Modal */}
+      {/* Add Track & Radio Modal */}
       <Modal transparent visible={addModalVisible} animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
+          <View style={[styles.modalCard, { maxHeight: '92%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Pilih Lagu untuk Warkop</Text>
+                <Text style={styles.modalTitle}>Musik & Suasana Warkop</Text>
                 <Text style={{ fontSize: 11, color: coffee.muted, marginTop: 2 }}>
-                  Cari lagu favorit atau masukkan audio sendiri
+                  Pilih lagu warkop, cari musik global dunia, atau dengarkan radio streaming
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setAddModalVisible(false)} style={{ padding: 4 }}>
@@ -527,109 +597,306 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
               </TouchableOpacity>
             </View>
 
-            {/* Kotak Pencarian Lagu */}
-            <View style={styles.searchBar}>
-              <Ionicons name="search" size={16} color={coffee.muted} style={{ marginRight: 8 }} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Cari lagu, artis, atau genre..."
-                placeholderTextColor={coffee.muted}
-                value={searchSongQuery}
-                onChangeText={setSearchSongQuery}
-                autoCorrect={false}
-              />
-              {searchSongQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchSongQuery('')} style={{ padding: 4 }}>
-                  <Ionicons name="close-circle" size={16} color={coffee.muted} />
-                </TouchableOpacity>
-              )}
+            {/* TAB SELECTION */}
+            <View style={styles.tabBarRow}>
+              <TouchableOpacity
+                style={[styles.tabBtn, addModalTab === 'catalog' && styles.tabBtnActive]}
+                onPress={() => setAddModalTab('catalog')}
+              >
+                <Text style={[styles.tabBtnText, addModalTab === 'catalog' && styles.tabBtnTextActive]}>
+                  🎵 Pilihan
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabBtn, addModalTab === 'global' && styles.tabBtnActive]}
+                onPress={() => setAddModalTab('global')}
+              >
+                <Text style={[styles.tabBtnText, addModalTab === 'global' && styles.tabBtnTextActive]}>
+                  🌐 Cari Global
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.tabBtn, addModalTab === 'radio' && styles.tabBtnActive]}
+                onPress={() => setAddModalTab('radio')}
+              >
+                <Text style={[styles.tabBtnText, addModalTab === 'radio' && styles.tabBtnTextActive]}>
+                  📻 Radio Live
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.presetHeader}>
-              Lagu Pilihan Warkop ({filteredCatalog.length}):
-            </Text>
-
-            <ScrollView style={{ maxHeight: 220, marginBottom: 14 }}>
-              {filteredCatalog.length === 0 ? (
-                <View style={{ paddingVertical: 20, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 24, marginBottom: 6 }}>🔍</Text>
-                  <Text style={styles.emptyQueueText}>
-                    Tidak ditemukan lagu "{searchSongQuery}"
-                  </Text>
+            {/* TAB 1: KATALOG PILIHAN WARKOP */}
+            {addModalTab === 'catalog' && (
+              <>
+                <View style={styles.searchBar}>
+                  <Ionicons name="search" size={16} color={coffee.muted} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Saring lagu pilihan warkop..."
+                    placeholderTextColor={coffee.muted}
+                    value={searchSongQuery}
+                    onChangeText={setSearchSongQuery}
+                    autoCorrect={false}
+                  />
+                  {searchSongQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setSearchSongQuery('')} style={{ padding: 4 }}>
+                      <Ionicons name="close-circle" size={16} color={coffee.muted} />
+                    </TouchableOpacity>
+                  )}
                 </View>
-              ) : (
-                <View style={{ gap: 8 }}>
-                  {filteredCatalog.map((song, i) => (
-                    <View key={i} style={styles.songCatalogItem}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <Text style={styles.presetTitle} numberOfLines={1}>{song.title}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                          <Text style={styles.presetArtist} numberOfLines={1}>{song.artist}</Text>
-                          <View style={styles.genreBadge}>
-                            <Text style={styles.genreText}>{song.genre}</Text>
+
+                <Text style={styles.presetHeader}>
+                  Lagu Pilihan Warkop ({filteredCatalog.length}):
+                </Text>
+
+                <ScrollView style={{ maxHeight: 200, marginBottom: 12 }}>
+                  {filteredCatalog.length === 0 ? (
+                    <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 24, marginBottom: 6 }}>🔍</Text>
+                      <Text style={styles.emptyQueueText}>
+                        Tidak ditemukan di katalog warkop. Coba tab "🌐 Cari Global"!
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {filteredCatalog.map((song, i) => (
+                        <View key={i} style={styles.songCatalogItem}>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.presetTitle} numberOfLines={1}>{song.title}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              <Text style={styles.presetArtist} numberOfLines={1}>{song.artist}</Text>
+                              <View style={styles.genreBadge}>
+                                <Text style={styles.genreText}>{song.genre}</Text>
+                              </View>
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.playNowBtn}
+                              onPress={() => handleAddTrack(song, true)}
+                            >
+                              <Ionicons name="play" size={11} color="#171411" />
+                              <Text style={styles.playNowText}>Putar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.addQueueBtn}
+                              onPress={() => handleAddTrack(song, false)}
+                            >
+                              <Text style={styles.addQueueText}>+ Antrian</Text>
+                            </TouchableOpacity>
                           </View>
                         </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <TouchableOpacity
-                          style={styles.playNowBtn}
-                          onPress={() => handleAddTrack(song, true)}
-                        >
-                          <Ionicons name="play" size={11} color="#171411" />
-                          <Text style={styles.playNowText}>Putar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.addQueueBtn}
-                          onPress={() => handleAddTrack(song, false)}
-                        >
-                          <Text style={styles.addQueueText}>+ Antrian</Text>
-                        </TouchableOpacity>
-                      </View>
+                      ))}
                     </View>
-                  ))}
+                  )}
+                </ScrollView>
+
+                <Text style={styles.presetHeader}>Atau Masukkan Audio Sendiri:</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Judul Lagu"
+                  placeholderTextColor={coffee.muted}
+                  value={newTitle}
+                  onChangeText={setNewTitle}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Artis / Penyanyi"
+                  placeholderTextColor={coffee.muted}
+                  value={newArtist}
+                  onChangeText={setNewArtist}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="URL Audio MP3 (https://...)"
+                  placeholderTextColor={coffee.muted}
+                  value={newUri}
+                  onChangeText={setNewUri}
+                />
+
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { flex: 1, backgroundColor: coffee.raised }, (!newTitle || !newUri) && { opacity: 0.5 }]}
+                    onPress={() => handleAddTrack(undefined, false)}
+                    disabled={!newTitle || !newUri}
+                  >
+                    <Text style={[styles.primaryBtnText, { color: coffee.text, fontSize: 13 }]}>+ Antrian</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { flex: 1.3 }, (!newTitle || !newUri) && { opacity: 0.5 }]}
+                    onPress={() => handleAddTrack(undefined, true)}
+                    disabled={!newTitle || !newUri}
+                  >
+                    <Text style={[styles.primaryBtnText, { fontSize: 13 }]}>▶ Putar Sekarang</Text>
+                  </TouchableOpacity>
                 </View>
-              )}
-            </ScrollView>
+              </>
+            )}
 
-            <Text style={styles.presetHeader}>Atau Masukkan Audio Sendiri:</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Judul Lagu"
-              placeholderTextColor={coffee.muted}
-              value={newTitle}
-              onChangeText={setNewTitle}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Artis / Penyanyi"
-              placeholderTextColor={coffee.muted}
-              value={newArtist}
-              onChangeText={setNewArtist}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="URL Audio MP3 (https://...)"
-              placeholderTextColor={coffee.muted}
-              value={newUri}
-              onChangeText={setNewUri}
-            />
+            {/* TAB 2: PENCARIAN GLOBAL (iTunes Music API) */}
+            {addModalTab === 'global' && (
+              <>
+                <View style={styles.searchBar}>
+                  <Ionicons name="earth" size={16} color={coffee.accent} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Cari lagu / artis sedunia (Sheila On 7, Coldplay)..."
+                    placeholderTextColor={coffee.muted}
+                    value={globalSearchQuery}
+                    onChangeText={setGlobalSearchQuery}
+                    onSubmitEditing={() => handleSearchGlobal()}
+                    autoCorrect={false}
+                  />
+                  <TouchableOpacity
+                    style={styles.searchActionBtn}
+                    onPress={() => handleSearchGlobal()}
+                    disabled={isSearchingGlobal || !globalSearchQuery.trim()}
+                  >
+                    {isSearchingGlobal ? (
+                      <ActivityIndicator size="small" color="#171411" />
+                    ) : (
+                      <Text style={styles.searchActionText}>Cari</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
 
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { flex: 1, backgroundColor: coffee.raised }, (!newTitle || !newUri) && { opacity: 0.5 }]}
-                onPress={() => handleAddTrack(undefined, false)}
-                disabled={!newTitle || !newUri}
-              >
-                <Text style={[styles.primaryBtnText, { color: coffee.text, fontSize: 13 }]}>+ Antrian</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { flex: 1.3 }, (!newTitle || !newUri) && { opacity: 0.5 }]}
-                onPress={() => handleAddTrack(undefined, true)}
-                disabled={!newTitle || !newUri}
-              >
-                <Text style={[styles.primaryBtnText, { fontSize: 13 }]}>▶ Putar Sekarang</Text>
-              </TouchableOpacity>
-            </View>
+                {globalSearchError ? (
+                  <Text style={{ fontSize: 12, color: '#ff7043', marginBottom: 8, textAlign: 'center' }}>
+                    {globalSearchError}
+                  </Text>
+                ) : null}
+
+                <Text style={styles.presetHeader}>
+                  Hasil Pencarian Global ({globalResults.length}):
+                </Text>
+
+                <ScrollView style={{ maxHeight: 330, marginBottom: 8 }}>
+                  {isSearchingGlobal ? (
+                    <View style={{ paddingVertical: 36, alignItems: 'center' }}>
+                      <ActivityIndicator size="large" color={coffee.accent} />
+                      <Text style={{ color: coffee.muted, fontSize: 12, marginTop: 10 }}>
+                        Mencari di katalog musik global...
+                      </Text>
+                    </View>
+                  ) : globalResults.length === 0 ? (
+                    <View style={{ paddingVertical: 30, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 28, marginBottom: 8 }}>🌎</Text>
+                      <Text style={styles.emptyQueueText}>
+                        {globalSearchQuery.trim()
+                          ? `Tidak ditemukan lagu dengan kata kunci "${globalSearchQuery}"`
+                          : 'Ketik nama artis atau judul lagu bebas lalu tekan "Cari"'}
+                      </Text>
+                    </View>
+                  ) : (
+                    <View style={{ gap: 8 }}>
+                      {globalResults.map((item, idx) => (
+                        <View key={idx} style={styles.songCatalogItem}>
+                          {item.thumbnail ? (
+                            <Image
+                              source={{ uri: item.thumbnail }}
+                              style={{ width: 38, height: 38, borderRadius: 6, marginRight: 8 }}
+                            />
+                          ) : (
+                            <View style={[styles.genreBadge, { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', marginRight: 8 }]}>
+                              <Ionicons name="musical-notes" size={16} color={coffee.accent} />
+                            </View>
+                          )}
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <Text style={styles.presetTitle} numberOfLines={1}>{item.title}</Text>
+                            <Text style={styles.presetArtist} numberOfLines={1}>
+                              {item.artist} • <Text style={{ color: coffee.accent }}>{item.genre}</Text>
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.playNowBtn}
+                              onPress={() => handleAddTrack(item, true)}
+                            >
+                              <Ionicons name="play" size={11} color="#171411" />
+                              <Text style={styles.playNowText}>Putar</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.addQueueBtn}
+                              onPress={() => handleAddTrack(item, false)}
+                            >
+                              <Text style={styles.addQueueText}>+ Antrian</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </ScrollView>
+              </>
+            )}
+
+            {/* TAB 3: RADIO STREAMING WARKOP */}
+            {addModalTab === 'radio' && (
+              <>
+                <Text style={styles.presetHeader}>
+                  Siaran Langsung Radio Warkop ({RADIO_STATIONS.length}):
+                </Text>
+                <Text style={{ fontSize: 11, color: coffee.muted, marginBottom: 10 }}>
+                  Dengarkan siaran langsung radio Indonesia 24 jam untuk menemani suasana ngopi santai.
+                </Text>
+
+                <ScrollView style={{ maxHeight: 340, marginBottom: 8 }}>
+                  <View style={{ gap: 8 }}>
+                    {RADIO_STATIONS.map((station) => {
+                      const isCurrentRadio =
+                        playingTrack?.track_uri === station.streamUrl && isPlaying;
+                      return (
+                        <View
+                          key={station.id}
+                          style={[
+                            styles.songCatalogItem,
+                            isCurrentRadio && { borderColor: coffee.accent, backgroundColor: coffee.surface }
+                          ]}
+                        >
+                          <Text style={{ fontSize: 24, marginRight: 8 }}>{station.icon}</Text>
+                          <View style={{ flex: 1, marginRight: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.presetTitle} numberOfLines={1}>{station.name}</Text>
+                              {isCurrentRadio && (
+                                <View style={styles.liveBadgeSmall}>
+                                  <Text style={styles.liveBadgeSmallText}>LIVE</Text>
+                                </View>
+                              )}
+                            </View>
+                            <Text style={styles.presetArtist} numberOfLines={1}>
+                              {station.tagline}
+                            </Text>
+                            <Text style={{ fontSize: 10, color: coffee.muted, marginTop: 1 }}>
+                              📍 {station.location} • {station.genre}
+                            </Text>
+                          </View>
+                          <TouchableOpacity
+                            style={[
+                              styles.playNowBtn,
+                              isCurrentRadio && { backgroundColor: '#ff7043' }
+                            ]}
+                            onPress={() => {
+                              if (isCurrentRadio) {
+                                togglePlay();
+                              } else {
+                                playRadioStation(station);
+                              }
+                            }}
+                          >
+                            <Ionicons name={isCurrentRadio ? 'pause' : 'radio'} size={12} color="#171411" />
+                            <Text style={styles.playNowText}>
+                              {isCurrentRadio ? 'Jeda' : 'Putar'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -920,5 +1187,59 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     color: coffee.text,
+  },
+  tabBarRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: coffee.inset,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: coffee.border,
+  },
+  tabBtnActive: {
+    backgroundColor: coffee.button,
+    borderColor: coffee.button,
+  },
+  tabBtnText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: coffee.muted,
+  },
+  tabBtnTextActive: {
+    color: coffee.buttonText,
+    fontWeight: '700',
+  },
+  searchActionBtn: {
+    backgroundColor: coffee.button,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchActionText: {
+    color: coffee.buttonText,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  liveBadgeSmall: {
+    backgroundColor: '#ff7043',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  liveBadgeSmallText: {
+    color: '#ffffff',
+    fontSize: 8,
+    fontWeight: '800',
   },
 });
