@@ -477,17 +477,6 @@ export class TableManager {
     return null;
   }
 
-  // Reset finished table to waiting state
-  public static resetTable(tableId: string): { success: boolean; error?: string; table?: GameTableData } {
-    const active = this.tables.get(tableId);
-    if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
-    active.data.status = 'waiting';
-    active.gameInstance = null;
-    active.data.players.forEach((p) => {
-      p.is_ready = false;
-    });
-    return { success: true, table: this.sanitizeTableData(active.data) };
-  }
 
   // Leave Table
   public static leaveTable(
