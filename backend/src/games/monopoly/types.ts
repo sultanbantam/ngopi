@@ -14,18 +14,18 @@ export interface MonopolySquare {
   id: number; // 0..23
   name: string;
   type: MonopolySquareType;
-  group?: string; // e.g. 'brown', 'light_blue', 'pink', 'orange', 'red', 'yellow', 'dark_blue', 'station', 'utility'
-  price?: number;
-  rentBase?: number;
-  houseCost?: number;
-  taxAmount?: number;
+  group?: string | undefined;
+  price?: number | undefined;
+  rentBase?: number | undefined;
+  houseCost?: number | undefined;
+  taxAmount?: number | undefined;
 }
 
 export interface MonopolyPropertyState {
   squareId: number;
   ownerId: string | null;
   houses: number; // 0..4 (houses), 5 = hotel
-  isMortgaged?: boolean;
+  isMortgaged?: boolean | undefined;
 }
 
 export interface MonopolyPlayerState {
@@ -65,18 +65,18 @@ export interface MonopolyGameState {
   hasRolled: boolean;
   pendingAction?: {
     type: 'buy_property' | 'pay_rent' | 'draw_card' | 'jail_decision';
-    squareId?: number;
-    ownerId?: string;
-    amount?: number;
-    card?: MonopolyCard;
-  } | null;
+    squareId?: number | undefined;
+    ownerId?: string | undefined;
+    amount?: number | undefined;
+    card?: MonopolyCard | undefined;
+  } | null | undefined;
   lastAction?: {
     userId: string;
     action: string;
     message: string;
-    dice?: [number, number];
-  } | null;
+    dice?: [number, number] | undefined;
+  } | null | undefined;
   isFinished: boolean;
-  winnerId?: string | null;
-  modeBMC?: boolean;
+  winnerId?: string | null | undefined;
+  modeBMC?: boolean | undefined;
 }
