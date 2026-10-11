@@ -8,7 +8,7 @@ export class SnakeLadderGame extends BaseGame {
   readonly minPlayers = 2;
   readonly maxPlayers = 6;
 
-  protected override state!: SnakeLadderGameState;
+  protected declare state: SnakeLadderGameState;
 
   constructor(players: GamePlayerInfo[], config?: any) {
     super(players, config);
