@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Image, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { coffee } from '../theme/coffee';
@@ -8,7 +8,11 @@ import { globalAudioPlayer, GlobalAudioState } from '../utils/globalAudioPlayer'
 export const GlobalAudioBar: React.FC = () => {
   const router = useRouter();
   const pathname = usePathname();
+  const { width } = useWindowDimensions();
+  const isLargeScreen = width > 768;
+  const isChatPage = pathname === '/chat' || pathname.includes('/chat/');
   const [audioState, setAudioState] = useState<GlobalAudioState>(() => globalAudioPlayer.getState());
+  const [isMinimized, setIsMinimized] = useState(false);
 
   useEffect(() => {
     const unsubscribe = globalAudioPlayer.subscribe((state) => {
@@ -42,8 +46,49 @@ export const GlobalAudioBar: React.FC = () => {
     router.push('/(main)/warkop' as any);
   };
 
+  // On mobile phone in chat screen, position bar under top header so it never covers bottom typing area
+  const dockAtTop = !isLargeScreen && isChatPage;
+
+  if (isMinimized) {
+    return (
+      <View style={[styles.container, dockAtTop ? styles.containerTop : styles.containerBottom, styles.minimizedContainer]}>
+        <TouchableOpacity
+          style={styles.minimizedRow}
+          activeOpacity={0.88}
+          onPress={() => setIsMinimized(false)}
+        >
+          <Text style={styles.iconEmojiMini}>{isRadio ? '📻' : '☕'}</Text>
+          <Text style={styles.minimizedTitle} numberOfLines={1}>
+            {track.title}
+          </Text>
+          <TouchableOpacity
+            style={styles.miniControlBtn}
+            onPress={handleTogglePlay}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={14} color={coffee.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.miniControlBtn}
+            onPress={() => setIsMinimized(false)}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="chevron-up" size={14} color={coffee.secondary} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.miniControlBtn}
+            onPress={handleStop}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+          >
+            <Ionicons name="close" size={14} color={coffee.secondary} />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, dockAtTop ? styles.containerTop : styles.containerBottom]}>
       {/* Mini Progress Bar on top edge */}
       {!isRadio && (
         <View style={styles.progressBarBg}>
@@ -93,14 +138,27 @@ export const GlobalAudioBar: React.FC = () => {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             {isLoading ? (
-              <Ionicons name="reload" size={20} color={coffee.accent} />
+              <Ionicons name="reload" size={18} color={coffee.accent} />
             ) : (
               <Ionicons
                 name={isPlaying ? 'pause' : 'play'}
-                size={20}
+                size={18}
                 color={coffee.accent}
               />
             )}
+          </TouchableOpacity>
+
+          {/* Minimize / Collapse Button to never block screen */}
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={(e) => {
+              e?.stopPropagation?.();
+              setIsMinimized(true);
+            }}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Kecilkan Bar Musik"
+          >
+            <Ionicons name="chevron-down" size={17} color={coffee.secondary} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -109,7 +167,7 @@ export const GlobalAudioBar: React.FC = () => {
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             accessibilityLabel="Hentikan Musik"
           >
-            <Ionicons name="close" size={18} color={coffee.secondary} />
+            <Ionicons name="close" size={17} color={coffee.secondary} />
           </TouchableOpacity>
         </View>
       </TouchableOpacity>
@@ -120,11 +178,10 @@ export const GlobalAudioBar: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: Platform.OS === 'web' ? 18 : 28,
     left: '50%',
     transform: [{ translateX: Platform.OS === 'web' ? '-50%' : 0 }],
     alignSelf: Platform.OS === 'web' ? 'auto' : 'center',
-    width: '92%',
+    width: '94%',
     maxWidth: 480,
     backgroundColor: 'rgba(28, 22, 18, 0.96)',
     borderRadius: 16,
@@ -139,6 +196,35 @@ const styles = StyleSheet.create({
     elevation: 10,
     backdropFilter: 'blur(10px)',
   } as any,
+  containerBottom: {
+    bottom: Platform.OS === 'web' ? 18 : 28,
+  },
+  containerTop: {
+    top: Platform.OS === 'web' ? 58 : 68,
+  },
+  minimizedContainer: {
+    borderRadius: 20,
+    maxWidth: 320,
+  },
+  minimizedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 8,
+  },
+  iconEmojiMini: {
+    fontSize: 14,
+  },
+  minimizedTitle: {
+    flex: 1,
+    color: coffee.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  miniControlBtn: {
+    padding: 3,
+  },
   progressBarBg: {
     width: '100%',
     height: 3,

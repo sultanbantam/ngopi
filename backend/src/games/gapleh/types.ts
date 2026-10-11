@@ -17,6 +17,9 @@ export interface GaplehMove {
   side: 'left' | 'right';
 }
 
+export type GaplehGameMode = 'individual' | 'partnership';
+export type GaplehRuleset = 'kampung' | 'tournament';
+
 export interface GaplehState {
   board: GaplehBoard;
   hands: Record<string, DominoCard[]>; // Secret hands, never sent in full to opponents!
@@ -32,6 +35,19 @@ export interface GaplehState {
   isFinished: boolean;
   winnerId?: string | null;
   deadlock: boolean;
-  scores: Record<string, number>;
+  scores: Record<string, number>; // Individual hand pips
   round: number;
+
+  // Partnership-specific fields (optional for backward compatibility with individual mode)
+  gameMode: GaplehGameMode;
+  ruleset: GaplehRuleset;
+  targetScore: number;
+  teams: Record<string, 'A' | 'B'>;
+  teamPips?: { A: number; B: number };
+  roundPoints?: { A: number; B: number };
+  matchScores: { A: number; B: number };
+  winningTeam?: 'A' | 'B' | null;
+  winReason?: 'cards_cleared' | 'deadlock' | 'seri';
+  partnershipSummary?: string;
+  isMatchOver?: boolean;
 }

@@ -487,6 +487,25 @@ export default function GameTableScreen() {
     }
   };
 
+  // Change Catur Settings (Color / Bot Difficulty)
+  const handleChangeCaturSetting = (
+    preferredColor: 'white' | 'black' | 'random',
+    botDifficulty: 'easy' | 'medium' | 'hard'
+  ) => {
+    if (!socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'table:update_catur_setting',
+      { tableId, preferredColor, botDifficulty },
+      (res: any) => {
+        if (!res?.success) {
+          Alert.alert('Gagal', res?.error || 'Tidak dapat memperbarui pengaturan catur.');
+        } else {
+          fetchTableState();
+        }
+      }
+    );
+  };
+
   // Card Action: Remi Discard or Trick Play
   const handlePlayCardAction = (card: any) => {
     if (!isMyTurn) {
@@ -832,11 +851,37 @@ export default function GameTableScreen() {
             ? (table.game_type === 'gapleh' ? myHand.length : myCards.length)
             : gameState?.opponents?.[player.user_id]?.cardCount ?? 7;
 
+          const isPartnership = table.game_type === 'gapleh' && (table.config?.gaplehMode === 'partnership' || gameState?.gameMode === 'partnership');
+          const playerTeam = isPartnership ? (player.team || (player.seat_number % 2 === 0 ? 'A' : 'B')) : null;
+          const myTeam = isPartnership && myPlayer ? (myPlayer.team || (myPlayer.seat_number % 2 === 0 ? 'A' : 'B')) : null;
+          const isTeammate = isPartnership && myTeam && playerTeam === myTeam && !isMe;
+          const isOpponent = isPartnership && myTeam && playerTeam !== myTeam;
+
           return (
             <View
               key={player.user_id}
-              style={[styles.playerSeatCard, isTurn && styles.playerSeatCardActive]}
+              style={[
+                styles.playerSeatCard,
+                isTurn && styles.playerSeatCardActive,
+                playerTeam === 'A' && { borderColor: 'rgba(59, 130, 246, 0.5)', borderWidth: 1 },
+                playerTeam === 'B' && { borderColor: 'rgba(249, 115, 22, 0.5)', borderWidth: 1 },
+              ]}
             >
+              {isPartnership && (
+                <View
+                  style={{
+                    backgroundColor: playerTeam === 'A' ? '#1e3a8a' : '#7c2d12',
+                    paddingHorizontal: 6,
+                    paddingVertical: 1,
+                    borderRadius: 4,
+                    marginBottom: 2,
+                  }}
+                >
+                  <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>
+                    {playerTeam === 'A' ? 'TIM A' : 'TIM B'} {player.seat_number % 2 === 0 ? '(1)' : '(2)'}
+                  </Text>
+                </View>
+              )}
               <View
                 style={[
                   styles.seatAvatar,
@@ -850,6 +895,12 @@ export default function GameTableScreen() {
               <Text style={styles.seatName} numberOfLines={1}>
                 {player.display_name} {isMe ? '(Anda)' : ''} {player.user_id === table.host_id ? '👑' : ''}
               </Text>
+              {isTeammate && (
+                <Text style={{ color: '#60a5fa', fontSize: 9, fontWeight: '800' }}>Rekan 🤝</Text>
+              )}
+              {isOpponent && (
+                <Text style={{ color: '#fb923c', fontSize: 9, fontWeight: '700' }}>Lawan 🎯</Text>
+              )}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={styles.cardCountText}>
                   {player.is_bot ? '🤖 Bot' : table.game_type === 'gapleh' ? '🁫' : '🃏'} {isPlaying ? (table.game_type === 'catur' ? (gameState?.whitePlayerId === player.user_id ? 'Putih ⚪' : 'Hitam ⚫') : `${cardCount} kartu`) : player.is_ready ? 'Siap' : 'Menunggu'}
@@ -884,7 +935,49 @@ export default function GameTableScreen() {
         <View style={styles.tableFelt}>
           {isPlaying ? (
             table.game_type === 'gapleh' && gameState?.board ? (
-              <View style={styles.boardContainer}>
+              <View style={{ width: '100%', alignItems: 'center' }}>
+                {(gameState?.gameMode === 'partnership' || table.config?.gaplehMode === 'partnership') && (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 12,
+                      backgroundColor: 'rgba(0,0,0,0.5)',
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: coffee.border,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ color: '#93c5fd', fontWeight: '900', fontSize: 11 }}>TIM A:</Text>
+                      <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 12 }}>
+                        {gameState?.ruleset === 'tournament'
+                          ? `${gameState?.matchScores?.A ?? 0} / ${gameState?.targetScore ?? 250}`
+                          : `${gameState?.matchScores?.A ?? 0} Poin`}
+                      </Text>
+                    </View>
+                    <Text style={{ color: coffee.secondary, fontSize: 10 }}>VS</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ color: '#fdba74', fontWeight: '900', fontSize: 11 }}>TIM B:</Text>
+                      <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 12 }}>
+                        {gameState?.ruleset === 'tournament'
+                          ? `${gameState?.matchScores?.B ?? 0} / ${gameState?.targetScore ?? 250}`
+                          : `${gameState?.matchScores?.B ?? 0} Poin`}
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: coffee.raised, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ color: coffee.accent, fontSize: 9, fontWeight: '800' }}>
+                        {gameState?.ruleset === 'tournament' ? '🏆 Turnamen' : '🏘️ Kampung'}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.boardContainer}>
                 {/* Left End Open Pip Indicator */}
                 {gameState.board.leftEnd !== null && (
                   <View style={styles.endPipBadge}>
@@ -927,43 +1020,122 @@ export default function GameTableScreen() {
                   </View>
                 )}
               </View>
-            ) : table.game_type === 'catur' && gameState?.board ? (
-              /* Catur 8x8 Board */
+            </View>
+          ) : table.game_type === 'catur' && gameState?.board ? (
+              /* Catur 8x8 Board with Full Color & Difficulty Controls */
               <View style={{ alignItems: 'center', paddingVertical: 4 }}>
-                {/* Chess Info & Orientation Bar */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                  <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
-                    <Text style={{ color: coffee.text, fontSize: 11, fontWeight: '700' }}>
-                      Anda: {gameState?.whitePlayerId === currentUserId ? '⚪ Putih (Dulu)' : '⚫ Hitam'}
-                    </Text>
+                {/* Chess Controls Header */}
+                <View style={{ width: '100%', maxWidth: 360, gap: 6, marginBottom: 8 }}>
+                  {/* Row 1: User Color Selector */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#241a12', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700' }}>Warna Bidak:</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: gameState?.whitePlayerId === currentUserId ? coffee.button : coffee.raised,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: gameState?.whitePlayerId === currentUserId ? coffee.accent : coffee.border,
+                        }}
+                        onPress={() => handleChangeCaturSetting('white', (table.config?.botDifficulty || gameState?.botDifficulty || 'medium') as any)}
+                      >
+                        <Text style={{ color: gameState?.whitePlayerId === currentUserId ? coffee.buttonText : coffee.text, fontSize: 11, fontWeight: '800' }}>
+                          ⚪ Putih (Dulu)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: gameState?.blackPlayerId === currentUserId ? coffee.button : coffee.raised,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: gameState?.blackPlayerId === currentUserId ? coffee.accent : coffee.border,
+                        }}
+                        onPress={() => handleChangeCaturSetting('black', (table.config?.botDifficulty || gameState?.botDifficulty || 'medium') as any)}
+                      >
+                        <Text style={{ color: gameState?.blackPlayerId === currentUserId ? coffee.buttonText : coffee.text, fontSize: 11, fontWeight: '800' }}>
+                          ⚫ Hitam
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: coffee.raised,
+                          paddingHorizontal: 8,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                          borderWidth: 1,
+                          borderColor: coffee.border,
+                        }}
+                        onPress={() => handleChangeCaturSetting('random', (table.config?.botDifficulty || gameState?.botDifficulty || 'medium') as any)}
+                      >
+                        <Text style={{ color: coffee.text, fontSize: 11, fontWeight: '700' }}>
+                          🎲 Acak
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
-                  {table.players?.some((p: any) => p.is_bot) && (
-                    <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: coffee.accent }}>
-                      <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700' }}>
-                        🤖 Bot {table.config?.botDifficulty === 'easy' ? 'Pemula (+15)' : table.config?.botDifficulty === 'hard' ? 'Master (+60)' : 'Menengah (+35)'}
+                  {/* Row 2: Bot Level & Flip Board */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#241a12', padding: 8, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700' }}>Level Bot:</Text>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      {(['easy', 'medium', 'hard'] as const).map((diff) => {
+                        const isCurrent = (table.config?.botDifficulty || gameState?.botDifficulty || 'medium') === diff;
+                        const label = diff === 'easy' ? '🌱 Pemula' : diff === 'medium' ? '⚔️ Menengah' : '👑 Master';
+                        const currentColor = gameState?.whitePlayerId === currentUserId ? 'white' : 'black';
+                        return (
+                          <TouchableOpacity
+                            key={diff}
+                            style={{
+                              backgroundColor: isCurrent ? 'rgba(212, 163, 115, 0.25)' : coffee.raised,
+                              paddingHorizontal: 6,
+                              paddingVertical: 3,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: isCurrent ? coffee.accent : coffee.border,
+                            }}
+                            onPress={() => handleChangeCaturSetting(currentColor as any, diff)}
+                          >
+                            <Text style={{ color: isCurrent ? coffee.accent : coffee.secondary, fontSize: 10, fontWeight: '800' }}>
+                              {label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#382619', paddingHorizontal: 6, paddingVertical: 4, borderRadius: 6 }}
+                      onPress={() => setFlipChessBoard((f) => !f)}
+                    >
+                      <Text style={{ color: coffee.accent, fontSize: 10, fontWeight: '700' }}>🔄 Balik</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Check Indicator Banner */}
+                  {gameState?.inCheck && (
+                    <View style={{ backgroundColor: 'rgba(220, 38, 38, 0.25)', borderColor: '#dc2626', borderWidth: 1, borderRadius: 6, paddingVertical: 3, alignItems: 'center' }}>
+                      <Text style={{ color: '#f87171', fontWeight: '900', fontSize: 11 }}>
+                        🚨 SKAK! RAJA DALAM ANCAMAN!
                       </Text>
                     </View>
                   )}
-
-                  <TouchableOpacity
-                    style={{ backgroundColor: '#382619', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}
-                    onPress={() => setFlipChessBoard((f) => !f)}
-                  >
-                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700' }}>
-                      🔄 Balik Papan
-                    </Text>
-                  </TouchableOpacity>
                 </View>
 
+                {/* 8x8 Chessboard Grid */}
                 <View style={{ width: 280, height: 280, borderWidth: 2, borderColor: '#5c3d24', borderRadius: 6, overflow: 'hidden' }}>
-                  {(flipChessBoard ? [...gameState.board].reverse() : gameState.board).map((rowList: any[], displayRIdx: number) => {
-                    const rIdx = flipChessBoard ? 7 - displayRIdx : displayRIdx;
-                    const cols = flipChessBoard ? [...rowList].reverse() : rowList;
-                    return (
-                      <View key={displayRIdx} style={{ flexDirection: 'row', flex: 1 }}>
-                        {cols.map((piece: string | null, displayCIdx: number) => {
-                          const cIdx = flipChessBoard ? 7 - displayCIdx : displayCIdx;
+                  {(() => {
+                    const isUserBlack = Boolean(gameState?.whitePlayerId && gameState.whitePlayerId !== currentUserId);
+                    const shouldFlip = flipChessBoard ? !isUserBlack : isUserBlack;
+                    const rows = shouldFlip ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+                    const cols = shouldFlip ? [7, 6, 5, 4, 3, 2, 1, 0] : [0, 1, 2, 3, 4, 5, 6, 7];
+
+                    return rows.map((rIdx) => (
+                      <View key={rIdx} style={{ flexDirection: 'row', flex: 1 }}>
+                        {cols.map((cIdx) => {
+                          const piece = gameState.board[rIdx]?.[cIdx] || null;
                           const isDark = (rIdx + cIdx) % 2 === 1;
                           const isSelected = selectedChessSquare?.row === rIdx && selectedChessSquare?.col === cIdx;
                           const pieceSymbol = piece ? CHESS_UNICODE[piece] || piece : null;
@@ -971,7 +1143,7 @@ export default function GameTableScreen() {
 
                           return (
                             <TouchableOpacity
-                              key={displayCIdx}
+                              key={cIdx}
                               activeOpacity={0.7}
                               onPress={() => handleChessSquarePress(rIdx, cIdx)}
                               style={{
@@ -998,9 +1170,10 @@ export default function GameTableScreen() {
                           );
                         })}
                       </View>
-                    );
-                  })}
+                    ));
+                  })()}
                 </View>
+
                 <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 6, fontWeight: '600' }}>
                   {isMyTurn ? 'Pilih bidak Anda lalu pilih kotak tujuan' : 'Menunggu langkah lawan...'}
                 </Text>
@@ -1601,12 +1774,37 @@ export default function GameTableScreen() {
       {/* Game Over Results Modal */}
       <Modal visible={resultModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={{ fontSize: 44, textAlign: 'center', marginBottom: 8 }}>🏆</Text>
-            <Text style={[styles.modalTitle, { textAlign: 'center' }]}>Permainan Selesai</Text>
-            <Text style={[styles.modalSub, { textAlign: 'center', marginTop: 4 }]}>
+          <View style={[styles.modalCard, { maxWidth: 420 }]}>
+            <Text style={{ fontSize: 44, textAlign: 'center', marginBottom: 6 }}>🏆</Text>
+            <Text style={[styles.modalTitle, { textAlign: 'center' }]}>
+              {gameResult?.gameMode === 'partnership' || gameState?.gameMode === 'partnership' || table.config?.gaplehMode === 'partnership'
+                ? (gameResult?.winningTeam ? `Tim ${gameResult.winningTeam} Menang!` : 'Putaran Seri!')
+                : 'Permainan Selesai'}
+            </Text>
+            <Text style={[styles.modalSub, { textAlign: 'center', marginTop: 4, lineHeight: 18 }]}>
               {gameResult?.summary || 'Pertandingan selesai.'}
             </Text>
+
+            {/* Formula Explanation Callout */}
+            {gameResult?.formulaExplanation && (
+              <View
+                style={{
+                  backgroundColor: 'rgba(212, 163, 115, 0.1)',
+                  borderColor: coffee.accent,
+                  borderWidth: 1,
+                  borderRadius: 10,
+                  padding: 10,
+                  marginTop: 10,
+                }}
+              >
+                <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '800', marginBottom: 2 }}>
+                  ℹ️ Penjelasan Perhitungan Skor:
+                </Text>
+                <Text style={{ color: coffee.text, fontSize: 11, lineHeight: 16 }}>
+                  {gameResult.formulaExplanation}
+                </Text>
+              </View>
+            )}
 
             {/* Winner Points Banner */}
             {gameResult?.winners?.includes(currentUserId) && (
@@ -1617,7 +1815,7 @@ export default function GameTableScreen() {
                   borderWidth: 1,
                   borderRadius: 12,
                   padding: 12,
-                  marginTop: 12,
+                  marginTop: 10,
                   alignItems: 'center',
                   gap: 4,
                 }}
@@ -1629,23 +1827,69 @@ export default function GameTableScreen() {
                   ⭐ +{gameResult?.pointsAwarded ?? 50} Poin Kopi Warkop telah dikumpulkan!
                 </Text>
                 <Text style={{ color: coffee.secondary, fontSize: 11 }}>
-                  Poin Anda tersimpan permanen dan tidak akan hilang.
+                  Poin Anda tersimpan permanen di profil akun Anda.
                 </Text>
               </View>
             )}
 
+            {/* Team Pip Breakdown for Partnership Mode */}
+            {gameResult?.teamPips && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  gap: 8,
+                  marginTop: 10,
+                  justifyContent: 'space-between',
+                }}
+              >
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#1e3a8a',
+                    padding: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#93c5fd', fontSize: 11, fontWeight: '900' }}>TIM A</Text>
+                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900' }}>
+                    {gameResult.teamPips.A} Mata
+                  </Text>
+                  <Text style={{ color: '#bfdbfe', fontSize: 10 }}>Total Sisa Kartu</Text>
+                </View>
+                <View
+                  style={{
+                    flex: 1,
+                    backgroundColor: '#7c2d12',
+                    padding: 8,
+                    borderRadius: 8,
+                    alignItems: 'center',
+                  }}
+                >
+                  <Text style={{ color: '#fdba74', fontSize: 11, fontWeight: '900' }}>TIM B</Text>
+                  <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900' }}>
+                    {gameResult.teamPips.B} Mata
+                  </Text>
+                  <Text style={{ color: '#fed7aa', fontSize: 10 }}>Total Sisa Kartu</Text>
+                </View>
+              </View>
+            )}
+
+            {/* Scores & Individual Pips Breakdown */}
             {gameResult?.scores && (
               <View style={styles.scoresListContainer}>
-                <Text style={styles.scoresListTitle}>Hasil Poin Pertandingan:</Text>
+                <Text style={styles.scoresListTitle}>Rincian Sisa Mata Batu Pemain:</Text>
                 {Object.entries(gameResult.scores).map(([uid, pips]) => {
                   const p = table.players?.find((pl: any) => pl.user_id === uid);
                   const isWinner = gameResult.winners?.includes(uid);
+                  const isPartnership = table.game_type === 'gapleh' && (table.config?.gaplehMode === 'partnership' || gameState?.gameMode === 'partnership');
+                  const teamLabel = isPartnership ? `[Tim ${p?.team || (p?.seat_number % 2 === 0 ? 'A' : 'B')}] ` : '';
                   return (
                     <View key={uid} style={styles.scoreRow}>
                       <Text style={[styles.scoreName, isWinner && { color: coffee.accent, fontWeight: '800' }]}>
-                        {p?.display_name || uid} {isWinner ? '👑 Pemenang' : ''}
+                        {teamLabel}{p?.display_name || uid} {isWinner ? '👑 Pemenang' : ''}
                       </Text>
-                      <Text style={styles.scorePips}>{pips as number} Poin</Text>
+                      <Text style={styles.scorePips}>{pips as number} Mata</Text>
                     </View>
                   );
                 })}
@@ -1653,7 +1897,7 @@ export default function GameTableScreen() {
             )}
 
             <TouchableOpacity
-              style={styles.playAgainBtn}
+              style={[styles.playAgainBtn, { marginTop: 4 }]}
               onPress={() => {
                 setResultModalVisible(false);
                 if (socketRef.current && tableId) {

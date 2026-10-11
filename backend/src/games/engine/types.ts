@@ -50,6 +50,11 @@ export interface TableConfig {
   isPrivate?: boolean | undefined;
   password?: string | undefined;
   allowBots?: boolean | undefined;
+  gaplehMode?: 'individual' | 'partnership' | undefined;
+  gaplehRuleset?: 'kampung' | 'tournament' | undefined;
+  targetScore?: number | undefined;
+  preferredColor?: 'white' | 'black' | 'random' | undefined;
+  botDifficulty?: 'easy' | 'medium' | 'hard' | undefined;
 }
 
 export interface GameTableData {

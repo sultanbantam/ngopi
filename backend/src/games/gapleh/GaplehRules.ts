@@ -154,7 +154,27 @@ export class GaplehRules {
     return hand.reduce((sum, [a, b]) => sum + a + b, 0);
   }
 
-  // Resolve winner in deadlock (Gaple / Buntu)
+  // Calculate team pips
+  public static calculateTeamPips(
+    hands: Record<string, DominoCard[]>,
+    teams: Record<string, 'A' | 'B'>
+  ): { A: number; B: number; individualPips: Record<string, number> } {
+    const individualPips: Record<string, number> = {};
+    let sumA = 0;
+    let sumB = 0;
+
+    for (const [userId, hand] of Object.entries(hands)) {
+      const pips = this.calculateHandPips(hand || []);
+      individualPips[userId] = pips;
+      const team = teams[userId];
+      if (team === 'A') sumA += pips;
+      else if (team === 'B') sumB += pips;
+    }
+
+    return { A: sumA, B: sumB, individualPips };
+  }
+
+  // Resolve winner in individual deadlock (Gaple / Buntu)
   public static resolveDeadlock(hands: Record<string, DominoCard[]>, playerIds: string[]): { winnerId: string; scores: Record<string, number> } {
     const scores: Record<string, number> = {};
     let minPips = Infinity;
@@ -180,4 +200,197 @@ export class GaplehRules {
 
     return { winnerId, scores };
   }
+
+  // Resolve partnership round under Gaya Kampung
+  public static resolvePartnershipKampung(
+    hands: Record<string, DominoCard[]>,
+    teams: Record<string, 'A' | 'B'>,
+    playerIds: string[],
+    finisherUserId?: string | null
+  ): {
+    winnerTeam: 'A' | 'B' | null;
+    winReason: 'cards_cleared' | 'deadlock' | 'seri';
+    pointsAwarded: number;
+    teamPips: { A: number; B: number };
+    individualPips: Record<string, number>;
+    winners: string[];
+    losers: string[];
+    summary: string;
+    formulaExplanation: string;
+  } {
+    const { A, B, individualPips } = this.calculateTeamPips(hands, teams);
+    const teamPips = { A, B };
+
+    if (finisherUserId) {
+      const winnerTeam = teams[finisherUserId] || 'A';
+      const winners = playerIds.filter((id) => teams[id] === winnerTeam);
+      const losers = playerIds.filter((id) => teams[id] !== winnerTeam);
+
+      return {
+        winnerTeam,
+        winReason: 'cards_cleared',
+        pointsAwarded: 50,
+        teamPips,
+        individualPips,
+        winners,
+        losers,
+        summary: `Tim ${winnerTeam} menang! Anggota tim berhasil menghabiskan seluruh kartu.`,
+        formulaExplanation: `Berdasarkan Preset Kampung Ngopi, tim yang anggotanya menghabiskan batu menang putaran. Masing-masing anggota Tim ${winnerTeam} mendapatkan 50 poin. (Sisa mata: Tim A: ${A}, Tim B: ${B})`,
+      };
+    }
+
+    // Deadlock condition
+    if (A < B) {
+      const winners = playerIds.filter((id) => teams[id] === 'A');
+      const losers = playerIds.filter((id) => teams[id] === 'B');
+      return {
+        winnerTeam: 'A',
+        winReason: 'deadlock',
+        pointsAwarded: 50,
+        teamPips,
+        individualPips,
+        winners,
+        losers,
+        summary: `Gaple Buntu! Tim A menang karena total mata batu tersisa (${A}) lebih rendah daripada Tim B (${B}).`,
+        formulaExplanation: `Berdasarkan Preset Kampung Ngopi, saat buntu tim dengan total mata sisa terendah menang. Anggota Tim A masing-masing mendapatkan 50 poin kemenangan.`,
+      };
+    } else if (B < A) {
+      const winners = playerIds.filter((id) => teams[id] === 'B');
+      const losers = playerIds.filter((id) => teams[id] === 'A');
+      return {
+        winnerTeam: 'B',
+        winReason: 'deadlock',
+        pointsAwarded: 50,
+        teamPips,
+        individualPips,
+        winners,
+        losers,
+        summary: `Gaple Buntu! Tim B menang karena total mata batu tersisa (${B}) lebih rendah daripada Tim A (${A}).`,
+        formulaExplanation: `Berdasarkan Preset Kampung Ngopi, saat buntu tim dengan total mata sisa terendah menang. Anggota Tim B masing-masing mendapatkan 50 poin kemenangan.`,
+      };
+    } else {
+      // Seri
+      return {
+        winnerTeam: null,
+        winReason: 'seri',
+        pointsAwarded: 0,
+        teamPips,
+        individualPips,
+        winners: [],
+        losers: playerIds,
+        summary: `Gaple Buntu! Putaran Seri: total mata batu tersisa kedua tim sama (${A} vs ${B}).`,
+        formulaExplanation: `Berdasarkan Preset Kampung Ngopi, saat buntu dengan mata sama, putaran berakhir seri dan tidak ada poin kemenangan.`,
+      };
+    }
+  }
+
+  // Resolve partnership round under Preset Turnamen Ngopi
+  public static resolvePartnershipTournament(
+    hands: Record<string, DominoCard[]>,
+    teams: Record<string, 'A' | 'B'>,
+    playerIds: string[],
+    currentMatchScores: { A: number; B: number },
+    targetScore: number = 250,
+    finisherUserId?: string | null
+  ): {
+    winnerTeam: 'A' | 'B' | null;
+    winReason: 'cards_cleared' | 'deadlock' | 'seri';
+    roundPoints: { A: number; B: number };
+    newMatchScores: { A: number; B: number };
+    isMatchOver: boolean;
+    matchWinnerTeam?: 'A' | 'B' | null;
+    teamPips: { A: number; B: number };
+    individualPips: Record<string, number>;
+    winners: string[];
+    losers: string[];
+    summary: string;
+    formulaExplanation: string;
+    pointsAwarded: number;
+  } {
+    const { A, B, individualPips } = this.calculateTeamPips(hands, teams);
+    const teamPips = { A, B };
+    let winnerTeam: 'A' | 'B' | null = null;
+    let winReason: 'cards_cleared' | 'deadlock' | 'seri' = 'seri';
+    let roundPoints = { A: 0, B: 0 };
+    let summary = '';
+    let formulaExplanation = '';
+
+    if (finisherUserId) {
+      winnerTeam = teams[finisherUserId] || 'A';
+      winReason = 'cards_cleared';
+      const opponentTeam = winnerTeam === 'A' ? 'B' : 'A';
+      const oppPips = teamPips[opponentTeam];
+      roundPoints = {
+        A: winnerTeam === 'A' ? oppPips : 0,
+        B: winnerTeam === 'B' ? oppPips : 0,
+      };
+      summary = `Tim ${winnerTeam} menang putaran! Anggota tim berhasil menghabiskan seluruh kartu.`;
+      formulaExplanation = `Berdasarkan Preset Turnamen Ngopi, tim pemenang putaran memperoleh nilai sebesar total mata sisa tim lawan (+${oppPips} poin).`;
+    } else {
+      // Deadlock
+      if (A < B) {
+        winnerTeam = 'A';
+        winReason = 'deadlock';
+        const diff = B - A;
+        roundPoints = { A: diff, B: 0 };
+        summary = `Gaple Buntu! Tim A menang putaran dengan selisih ${diff} mata (${B} - ${A}).`;
+        formulaExplanation = `Berdasarkan Preset Turnamen Ngopi, saat buntu tim pemenang memperoleh poin sebesar selisih mata lawan dikurangi mata sendiri (${B} - ${A} = +${diff} poin).`;
+      } else if (B < A) {
+        winnerTeam = 'B';
+        winReason = 'deadlock';
+        const diff = A - B;
+        roundPoints = { A: 0, B: diff };
+        summary = `Gaple Buntu! Tim B menang putaran dengan selisih ${diff} mata (${A} - ${B}).`;
+        formulaExplanation = `Berdasarkan Preset Turnamen Ngopi, saat buntu tim pemenang memperoleh poin sebesar selisih mata lawan dikurangi mata sendiri (${A} - ${B} = +${diff} poin).`;
+      } else {
+        winnerTeam = null;
+        winReason = 'seri';
+        roundPoints = { A: 0, B: 0 };
+        summary = `Gaple Buntu! Seri: jumlah mata kedua tim sama (${A} vs ${B}), skor putaran 0.`;
+        formulaExplanation = `Berdasarkan Preset Turnamen Ngopi, saat buntu dengan mata sama, skor putaran adalah 0.`;
+      }
+    }
+
+    const newMatchScores = {
+      A: (currentMatchScores?.A || 0) + roundPoints.A,
+      B: (currentMatchScores?.B || 0) + roundPoints.B,
+    };
+
+    const isMatchOver = newMatchScores.A >= targetScore || newMatchScores.B >= targetScore;
+    let matchWinnerTeam: 'A' | 'B' | null = null;
+    let winners: string[] = [];
+    let losers: string[] = [];
+    let pointsAwarded = 0;
+
+    if (isMatchOver) {
+      matchWinnerTeam = newMatchScores.A >= newMatchScores.B ? 'A' : 'B';
+      winners = playerIds.filter((id) => teams[id] === matchWinnerTeam);
+      losers = playerIds.filter((id) => teams[id] !== matchWinnerTeam);
+      pointsAwarded = 50; // Match champions get 50 leaderboard points
+      summary += ` Pertandingan selesai! Tim ${matchWinnerTeam} mencapai target ${targetScore} poin!`;
+    } else if (winnerTeam) {
+      winners = playerIds.filter((id) => teams[id] === winnerTeam);
+      losers = playerIds.filter((id) => teams[id] !== winnerTeam);
+    } else {
+      winners = [];
+      losers = playerIds;
+    }
+
+    return {
+      winnerTeam,
+      winReason,
+      roundPoints,
+      newMatchScores,
+      isMatchOver,
+      matchWinnerTeam,
+      teamPips,
+      individualPips,
+      winners,
+      losers,
+      summary,
+      formulaExplanation,
+      pointsAwarded,
+    };
+  }
 }
+

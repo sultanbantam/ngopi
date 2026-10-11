@@ -67,9 +67,9 @@ export class TableManager {
     warungId?: string | null;
     config?: TableConfig;
   }): Promise<GameTableData> {
-    const tableId = makeId('tbl');
-    const maxPlayers = params.maxPlayers || (params.gameType === 'catur' ? 2 : 4);
-    const minPlayers = params.minPlayers || 2;
+    const isPartnership = params.config?.gaplehMode === 'partnership';
+    const maxPlayers = isPartnership ? 4 : (params.maxPlayers || (params.gameType === 'catur' ? 2 : 4));
+    const minPlayers = isPartnership ? 4 : (params.minPlayers || 2);
 
     const hostPlayer: GamePlayerInfo = {
       id: makeId('p'),
@@ -78,6 +78,7 @@ export class TableManager {
       display_name: params.host.display_name,
       avatar_url: params.host.avatar_url ?? null,
       seat_number: 0,
+      team: isPartnership ? 'A' : undefined,
       is_ready: true, // Host is ready by default
       is_active: true,
       is_bot: false,
@@ -243,6 +244,7 @@ export class TableManager {
       nextSeat++;
     }
 
+    const isPartnership = active.data.config?.gaplehMode === 'partnership';
     const newPlayer: GamePlayerInfo = {
       id: makeId('p'),
       user_id: finalUserId,
@@ -250,6 +252,7 @@ export class TableManager {
       display_name: user.display_name,
       avatar_url: user.avatar_url ?? null,
       seat_number: nextSeat,
+      team: isPartnership ? (nextSeat % 2 === 0 ? 'A' : 'B') : undefined,
       is_ready: false,
       is_active: true,
       is_bot: false,
@@ -286,6 +289,7 @@ export class TableManager {
     const botName = BOT_NAMES[botIndex % BOT_NAMES.length] || 'Kang Kopi Bot ☕';
     const botId = makeId('bot');
 
+    const isPartnership = active.data.config?.gaplehMode === 'partnership';
     const botPlayer: GamePlayerInfo = {
       id: makeId('p'),
       user_id: botId,
@@ -293,6 +297,7 @@ export class TableManager {
       display_name: botName,
       avatar_url: null,
       seat_number: nextSeat,
+      team: isPartnership ? (nextSeat % 2 === 0 ? 'A' : 'B') : undefined,
       is_ready: true,
       is_active: true,
       is_bot: true,
@@ -318,6 +323,58 @@ export class TableManager {
     return { success: true, table: this.sanitizeTableData(active.data) };
   }
 
+  // Reset table
+  public static resetTable(
+    tableId: string,
+    newConfig?: Partial<TableConfig>
+  ): { success: boolean; error?: string; table?: GameTableData } {
+    const active = this.tables.get(tableId);
+    if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
+
+    active.data.status = 'waiting';
+    active.gameInstance = null;
+    if (active.turnTimer) clearTimeout(active.turnTimer);
+
+    if (newConfig) {
+      active.data.config = { ...active.data.config, ...newConfig };
+    }
+
+    active.data.players.forEach((p) => {
+      p.is_ready = p.is_bot ? true : (p.user_id === active.data.host_id);
+    });
+
+    return { success: true, table: this.sanitizeTableData(active.data) };
+  }
+
+  // Update Catur Setting (Color / Bot Difficulty)
+  public static updateCaturSetting(
+    tableId: string,
+    userId: string,
+    setting: { preferredColor?: 'white' | 'black' | 'random'; botDifficulty?: 'easy' | 'medium' | 'hard' }
+  ): { success: boolean; error?: string; table?: GameTableData; started?: boolean } {
+    const active = this.tables.get(tableId);
+    if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
+
+    if (!active.data.config) active.data.config = {};
+    if (setting.preferredColor) active.data.config.preferredColor = setting.preferredColor;
+    if (setting.botDifficulty) active.data.config.botDifficulty = setting.botDifficulty;
+
+    // If game has bot, immediately apply and re-initialize gameInstance so the color/difficulty takes effect immediately!
+    const hasBot = active.data.players.some((p) => p.is_bot);
+    if (hasBot) {
+      active.data.status = 'playing';
+      const gameInstance = GameRegistry.create(
+        active.data.game_type,
+        active.data.players,
+        active.data.config || {}
+      );
+      active.gameInstance = gameInstance;
+      return { success: true, table: this.sanitizeTableData(active.data), started: true };
+    }
+
+    return { success: true, table: this.sanitizeTableData(active.data), started: false };
+  }
+
   // Start Game
   public static startGame(
     tableId: string,
@@ -339,6 +396,14 @@ export class TableManager {
     }
 
     try {
+      if (active.data.config?.gaplehMode === 'partnership') {
+        active.data.players.sort((a, b) => (a.seat_number ?? 0) - (b.seat_number ?? 0));
+        active.data.players.forEach((p, idx) => {
+          const seat = typeof p.seat_number === 'number' ? p.seat_number : idx;
+          p.team = seat % 2 === 0 ? 'A' : 'B';
+        });
+      }
+
       const gameInstance = GameRegistry.create(
         active.data.game_type,
         active.data.players,

@@ -177,8 +177,11 @@ export const setupGameSocket = (io: Server) => {
     });
 
     // Reset finished table to waiting state
-    socket.on('table:reset', (data: { tableId: string }, callback) => {
-      const res = TableManager.resetTable(data.tableId);
+    socket.on('table:reset', (data: { tableId: string; preferredColor?: string; botDifficulty?: string }, callback) => {
+      const res = TableManager.resetTable(data.tableId, {
+        preferredColor: data.preferredColor as any,
+        botDifficulty: data.botDifficulty as any,
+      });
       if (res.success && res.table) {
         gamesNamespace.to(`table:${data.tableId}`).emit('table:state', { table: res.table });
         if (typeof callback === 'function') callback({ success: true, table: res.table });
@@ -186,6 +189,35 @@ export const setupGameSocket = (io: Server) => {
         if (typeof callback === 'function') callback({ success: false, error: res.error });
       }
     });
+
+    // Update Catur Setting (Color / Bot Difficulty)
+    socket.on(
+      'table:update_catur_setting',
+      (
+        data: {
+          tableId: string;
+          preferredColor?: 'white' | 'black' | 'random';
+          botDifficulty?: 'easy' | 'medium' | 'hard';
+        },
+        callback
+      ) => {
+        const res = TableManager.updateCaturSetting(data.tableId, userId, {
+          preferredColor: data.preferredColor,
+          botDifficulty: data.botDifficulty,
+        });
+        if (res.success && res.table) {
+          gamesNamespace.to(`table:${data.tableId}`).emit('table:state', { table: res.table });
+          if (res.started) {
+            gamesNamespace.to(`table:${data.tableId}`).emit('game:started', { table: res.table });
+            broadcastGameState(data.tableId);
+            triggerBotTurnIfNeeded(data.tableId);
+          }
+          if (typeof callback === 'function') callback({ success: true, table: res.table });
+        } else {
+          if (typeof callback === 'function') callback({ success: false, error: res.error });
+        }
+      }
+    );
 
     // Add Bot Player
     socket.on('table:add_bot', (data: { tableId: string }, callback) => {
@@ -218,6 +250,7 @@ export const setupGameSocket = (io: Server) => {
       if (res.success && res.table) {
         gamesNamespace.to(`table:${data.tableId}`).emit('game:started', { table: res.table });
         broadcastGameState(data.tableId);
+        triggerBotTurnIfNeeded(data.tableId);
         if (typeof callback === 'function') callback({ success: true, table: res.table });
       } else {
         if (typeof callback === 'function') callback({ success: false, error: res.error });

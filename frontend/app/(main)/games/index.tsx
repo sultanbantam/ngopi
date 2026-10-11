@@ -74,6 +74,10 @@ export default function GamesLobbyScreen() {
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [chessColor, setChessColor] = useState<'white' | 'black' | 'random'>('white');
   const [botDifficulty, setBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [gaplehMode, setGaplehMode] = useState<'individual' | 'partnership'>('individual');
+  const [gaplehRuleset, setGaplehRuleset] = useState<'kampung' | 'tournament'>('kampung');
+  const [targetScore, setTargetScore] = useState<number>(250);
+  const [gaplehRulesModalVisible, setGaplehRulesModalVisible] = useState<boolean>(false);
 
   // Join password modal state
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -127,15 +131,19 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
-      const config = selectedTab === 'catur' ? { preferredColor: chessColor, botDifficulty } : undefined;
+      const config = selectedTab === 'catur'
+        ? { preferredColor: chessColor, botDifficulty }
+        : selectedTab === 'gapleh'
+        ? { gaplehMode, gaplehRuleset, targetScore }
+        : undefined;
       // 1. Create table
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
           name: `Meja Santai @${currentUsername || 'Ngopikawan'}`,
-          maxPlayers: selectedTab === 'catur' ? 2 : 4,
-          minPlayers: 2,
+          maxPlayers: selectedTab === 'catur' ? 2 : (gaplehMode === 'partnership' ? 4 : 4),
+          minPlayers: gaplehMode === 'partnership' ? 4 : 2,
           isPrivate: false,
           config,
         },
@@ -178,14 +186,18 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
-      const config = selectedTab === 'catur' ? { preferredColor: chessColor, botDifficulty } : undefined;
+      const config = selectedTab === 'catur'
+        ? { preferredColor: chessColor, botDifficulty }
+        : selectedTab === 'gapleh'
+        ? { gaplehMode, gaplehRuleset, targetScore }
+        : undefined;
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
           name: tableName.trim(),
-          maxPlayers: selectedTab === 'catur' ? 2 : maxPlayers,
-          minPlayers: 2,
+          maxPlayers: selectedTab === 'catur' ? 2 : (gaplehMode === 'partnership' ? 4 : maxPlayers),
+          minPlayers: gaplehMode === 'partnership' ? 4 : 2,
           isPrivate,
           password: isPrivate ? password.trim() : undefined,
           config,
@@ -288,6 +300,15 @@ export default function GamesLobbyScreen() {
             <Text style={styles.tableSubText}>
               Host: {item.players[0]?.display_name || 'Ngopikawan'}
             </Text>
+            {(item as any).config?.gaplehMode === 'partnership' && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: coffee.accent }}>
+                  <Text style={{ color: coffee.accent, fontSize: 10, fontWeight: '800' }}>
+                    🤝 2 vs 2 • {(item as any).config?.gaplehRuleset === 'tournament' ? 'Preset Turnamen' : 'Gaya Kampung'}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <View
@@ -568,30 +589,127 @@ export default function GamesLobbyScreen() {
                 />
               </View>
 
-              <View>
-                <Text style={styles.inputLabel}>Jumlah Maksimal Pemain</Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  {[2, 3, 4].map((num) => (
-                    <TouchableOpacity
-                      key={num}
-                      style={[
-                        styles.numberOption,
-                        maxPlayers === num && styles.numberOptionActive,
-                      ]}
-                      onPress={() => setMaxPlayers(num)}
-                    >
-                      <Text
+              {selectedTab !== 'catur' && (
+                <View>
+                  <Text style={styles.inputLabel}>Jumlah Maksimal Pemain</Text>
+                  <View style={{ flexDirection: 'row', gap: 10 }}>
+                    {[2, 3, 4].map((num) => (
+                      <TouchableOpacity
+                        key={num}
                         style={[
-                          styles.numberOptionText,
-                          maxPlayers === num && styles.numberOptionTextActive,
+                          styles.numberOption,
+                          (gaplehMode === 'partnership' ? num === 4 : maxPlayers === num) && styles.numberOptionActive,
+                          gaplehMode === 'partnership' && num !== 4 && { opacity: 0.4 },
                         ]}
+                        disabled={gaplehMode === 'partnership'}
+                        onPress={() => setMaxPlayers(num)}
                       >
-                        {num} Pemain
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                        <Text
+                          style={[
+                            styles.numberOptionText,
+                            (gaplehMode === 'partnership' ? num === 4 : maxPlayers === num) && styles.numberOptionTextActive,
+                          ]}
+                        >
+                          {num} Pemain
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  {gaplehMode === 'partnership' && (
+                    <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 4 }}>
+                      *Mode berpasangan wajib 4 pemain (2 vs 2: Tim A vs Tim B).
+                    </Text>
+                  )}
                 </View>
-              </View>
+              )}
+
+              {/* Gapleh Mode & Ruleset Selector */}
+              {selectedTab === 'gapleh' && (
+                <View style={{ gap: 12, backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                  <View>
+                    <Text style={styles.inputLabel}>Mode Permainan Gapleh</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[styles.numberOption, gaplehMode === 'individual' && styles.numberOptionActive]}
+                        onPress={() => {
+                          setGaplehMode('individual');
+                          setMaxPlayers(4);
+                        }}
+                      >
+                        <Text style={[styles.numberOptionText, gaplehMode === 'individual' && styles.numberOptionTextActive]}>
+                          👤 Individu (4 Pemain)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.numberOption, gaplehMode === 'partnership' && styles.numberOptionActive]}
+                        onPress={() => {
+                          setGaplehMode('partnership');
+                          setMaxPlayers(4);
+                        }}
+                      >
+                        <Text style={[styles.numberOptionText, gaplehMode === 'partnership' && styles.numberOptionTextActive]}>
+                          🤝 Berpasangan (2 vs 2)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {gaplehMode === 'partnership' && (
+                    <>
+                      <View>
+                        <Text style={styles.inputLabel}>Gaya Permainan (Ruleset)</Text>
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                          <TouchableOpacity
+                            style={[styles.numberOption, gaplehRuleset === 'kampung' && styles.numberOptionActive]}
+                            onPress={() => setGaplehRuleset('kampung')}
+                          >
+                            <Text style={[styles.numberOptionText, gaplehRuleset === 'kampung' && styles.numberOptionTextActive]}>
+                              🏘️ Gaya Kampung
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.numberOption, gaplehRuleset === 'tournament' && styles.numberOptionActive]}
+                            onPress={() => setGaplehRuleset('tournament')}
+                          >
+                            <Text style={[styles.numberOptionText, gaplehRuleset === 'tournament' && styles.numberOptionTextActive]}>
+                              🏆 Preset Turnamen Ngopi
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      {gaplehRuleset === 'tournament' && (
+                        <View>
+                          <Text style={styles.inputLabel}>Target Skor Turnamen</Text>
+                          <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                            {[100, 150, 200, 250].map((score) => (
+                              <TouchableOpacity
+                                key={score}
+                                style={[styles.numberOption, targetScore === score && styles.numberOptionActive]}
+                                onPress={() => setTargetScore(score)}
+                              >
+                                <Text style={[styles.numberOptionText, targetScore === score && styles.numberOptionTextActive]}>
+                                  {score} {score === 250 ? '★' : ''}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      )}
+
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
+                        onPress={() => setGaplehRulesModalVisible(true)}
+                      >
+                        <Ionicons name="information-circle" size={16} color={coffee.accent} />
+                        <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '700' }}>
+                          Lihat Ringkasan Aturan {gaplehRuleset === 'tournament' ? 'Preset Turnamen Ngopi' : 'Gaya Kampung'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
+              )}
 
               {selectedTab === 'catur' && (
                 <View style={{ gap: 12, backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
@@ -737,6 +855,77 @@ export default function GamesLobbyScreen() {
               }}
             >
               <Text style={styles.submitCreateBtnText}>Buka Kunci & Gabung</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Gapleh Rules Explanation Modal */}
+      <Modal
+        visible={gaplehRulesModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setGaplehRulesModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>📖 Aturan Gapleh Berpasangan</Text>
+                <Text style={styles.modalSub}>Sistem 2 vs 2: Tim A vs Tim B</Text>
+              </View>
+              <TouchableOpacity onPress={() => setGaplehRulesModalVisible(false)}>
+                <Ionicons name="close" size={22} color={coffee.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+              {/* Seating Order */}
+              <View style={{ backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13, marginBottom: 4 }}>
+                  🪑 Posisi Duduk & Giliran Berselang-seling
+                </Text>
+                <Text style={{ color: coffee.text, fontSize: 12, lineHeight: 18 }}>
+                  • Kursi 1: Tim A (A1) {'\n'}
+                  • Kursi 2: Tim B (B1) {'\n'}
+                  • Kursi 3: Tim A (A2) — Rekan Tim A {'\n'}
+                  • Kursi 4: Tim B (B2) — Rekan Tim B {'\n'}
+                  Urutan giliran memutar teratur: A1 ➔ B1 ➔ A2 ➔ B2.
+                </Text>
+              </View>
+
+              {/* Gaya Kampung */}
+              <View style={{ backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13, marginBottom: 4 }}>
+                  🏘️ Gaya Kampung (Preset Kampung Ngopi)
+                </Text>
+                <Text style={{ color: coffee.text, fontSize: 12, lineHeight: 18 }}>
+                  1. <Text style={{ fontWeight: 'bold' }}>Batu Habis:</Text> Tim yang anggotanya menghabiskan batu langsung menang putaran. Kedua anggota tim masing-masing mendapatkan <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>+50 poin</Text>.{'\n'}
+                  2. <Text style={{ fontWeight: 'bold' }}>Gaple Buntu:</Text> Total mata sisa kedua anggota dijumlahkan per tim. Tim dengan mata terendah menang (+50 poin per anggota).{'\n'}
+                  3. <Text style={{ fontWeight: 'bold' }}>Seri:</Text> Jika total mata kedua tim sama persis saat buntu, putaran seri (0 poin).
+                </Text>
+              </View>
+
+              {/* Preset Turnamen Ngopi */}
+              <View style={{ backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13, marginBottom: 4 }}>
+                  🏆 Preset Turnamen Ngopi (Akumulasi Target)
+                </Text>
+                <Text style={{ color: coffee.text, fontSize: 12, lineHeight: 18 }}>
+                  1. Pertandingan dimainkan dalam putaran akumulasi hingga mencapai target skor (bawaan: 250 poin).{'\n'}
+                  2. <Text style={{ fontWeight: 'bold' }}>Nilai Putaran (Batu Habis):</Text> Tim pemenang putaran memperoleh nilai sebesar <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>total mata sisa tim lawan</Text>.{'\n'}
+                  3. <Text style={{ fontWeight: 'bold' }}>Nilai Putaran (Buntu):</Text> Tim dengan mata sisa terendah memperoleh nilai sebesar <Text style={{ color: coffee.accent, fontWeight: 'bold' }}>selisih mata lawan dikurangi mata sendiri</Text> (Mata Lawan - Mata Pemenang).{'\n'}
+                  4. <Text style={{ fontWeight: 'bold' }}>Buntu Seri:</Text> Nilai putaran 0.{'\n'}
+                  5. Tim pertama yang mencapai target skor memenangkan pertandingan (+50 poin juara).
+                </Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[styles.submitCreateBtn, { marginTop: 12 }]}
+              onPress={() => setGaplehRulesModalVisible(false)}
+            >
+              <Text style={styles.submitCreateBtnText}>Paham & Tutup</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1075,6 +1264,11 @@ const styles = StyleSheet.create({
     color: coffee.text,
     fontSize: 17,
     fontWeight: '800',
+  },
+  modalSub: {
+    color: coffee.secondary,
+    fontSize: 12,
+    marginTop: 2,
   },
   inputLabel: {
     color: coffee.secondary,

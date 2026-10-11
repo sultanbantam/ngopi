@@ -29,16 +29,16 @@ const PIECE_VALUES: Record<string, number> = {
   K: 20000,
 };
 
-// Positional bonuses (Piece-Square Tables for positional intelligence)
+// Full Piece-Square Tables (White's perspective; inverted for Black)
 const PAWN_TABLE = [
-  [0,  0,  0,  0,  0,  0,  0,  0],
+  [ 0,  0,  0,  0,  0,  0,  0,  0],
   [50, 50, 50, 50, 50, 50, 50, 50],
   [10, 10, 20, 30, 30, 20, 10, 10],
-  [5,  5, 10, 25, 25, 10,  5,  5],
-  [0,  0,  0, 20, 20,  0,  0,  0],
-  [5, -5,-10,  0,  0,-10, -5,  5],
-  [5, 10, 10,-20,-20, 10, 10,  5],
-  [0,  0,  0,  0,  0,  0,  0,  0]
+  [ 5,  5, 10, 27, 27, 10,  5,  5],
+  [ 0,  0,  0, 25, 25,  0,  0,  0],
+  [ 5, -5,-10,  0,  0,-10, -5,  5],
+  [ 5, 10, 10,-20,-20, 10, 10,  5],
+  [ 0,  0,  0,  0,  0,  0,  0,  0],
 ];
 
 const KNIGHT_TABLE = [
@@ -49,7 +49,51 @@ const KNIGHT_TABLE = [
   [-30,  0, 15, 20, 20, 15,  0,-30],
   [-30,  5, 10, 15, 15, 10,  5,-30],
   [-40,-20,  0,  5,  5,  0,-20,-40],
-  [-50,-40,-30,-30,-30,-30,-40,-50]
+  [-50,-40,-30,-30,-30,-30,-40,-50],
+];
+
+const BISHOP_TABLE = [
+  [-20,-10,-10,-10,-10,-10,-10,-20],
+  [-10,  0,  0,  0,  0,  0,  0,-10],
+  [-10,  0,  5, 10, 10,  5,  0,-10],
+  [-10,  5,  5, 10, 10,  5,  5,-10],
+  [-10,  0, 10, 10, 10, 10,  0,-10],
+  [-10, 10, 10, 10, 10, 10, 10,-10],
+  [-10,  5,  0,  0,  0,  0,  5,-10],
+  [-20,-10,-10,-10,-10,-10,-10,-20],
+];
+
+const ROOK_TABLE = [
+  [ 0,  0,  0,  0,  0,  0,  0,  0],
+  [ 5, 10, 10, 10, 10, 10, 10,  5],
+  [-5,  0,  0,  0,  0,  0,  0, -5],
+  [-5,  0,  0,  0,  0,  0,  0, -5],
+  [-5,  0,  0,  0,  0,  0,  0, -5],
+  [-5,  0,  0,  0,  0,  0,  0, -5],
+  [-5,  0,  0,  0,  0,  0,  0, -5],
+  [ 0,  0,  0,  5,  5,  0,  0,  0],
+];
+
+const QUEEN_TABLE = [
+  [-20,-10,-10, -5, -5,-10,-10,-20],
+  [-10,  0,  0,  0,  0,  0,  0,-10],
+  [-10,  0,  5,  5,  5,  5,  0,-10],
+  [ -5,  0,  5,  5,  5,  5,  0, -5],
+  [  0,  0,  5,  5,  5,  5,  0, -5],
+  [-10,  5,  5,  5,  5,  5,  0,-10],
+  [-10,  0,  5,  0,  0,  0,  0,-10],
+  [-20,-10,-10, -5, -5,-10,-10,-20],
+];
+
+const KING_TABLE_MID = [
+  [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-30,-40,-40,-50,-50,-40,-40,-30],
+  [-20,-30,-30,-40,-40,-30,-30,-20],
+  [-10,-20,-20,-20,-20,-20,-20,-10],
+  [ 20, 20,  0,  0,  0,  0, 20, 20],
+  [ 20, 30, 10,  0,  0, 10, 30, 20],
 ];
 
 export class CaturGame extends BaseGame {
@@ -78,6 +122,8 @@ export class CaturGame extends BaseGame {
     }
 
     // 8x8 standard chess board
+    // Row 0 is Black's pieces (Rank 8)
+    // Row 7 is White's pieces (Rank 1)
     const board: ChessPiece[][] = [
       ['bR', 'bN', 'bB', 'bQ', 'bK', 'bB', 'bN', 'bR'],
       ['bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP', 'bP'],
@@ -93,7 +139,7 @@ export class CaturGame extends BaseGame {
       board,
       whitePlayerId: whitePlayer.user_id,
       blackPlayerId: blackPlayer.user_id,
-      currentTurn: whitePlayer.user_id,
+      currentTurn: whitePlayer.user_id, // White always moves first
       turnColor: 'w' as 'w' | 'b',
       botDifficulty,
       preferredColor,
@@ -153,7 +199,7 @@ export class CaturGame extends BaseGame {
       );
 
       if (!isLegal) {
-        return { success: false, error: 'Langkah catur tersebut tidak sah menurut aturan.' };
+        return { success: false, error: 'Langkah catur tersebut tidak sah atau membuat raja dalam posisi skak.' };
       }
 
       const destPiece = this.state.board[toRow]![toCol]!;
@@ -166,7 +212,7 @@ export class CaturGame extends BaseGame {
           this.state.capturedBlack.push(destPiece);
         }
 
-        // Win immediately if King captured
+        // Win immediately if King captured (fallback safety)
         if (destPiece === 'wK') {
           this.state.winnerId = this.state.blackPlayerId;
           this.state.isFinished = true;
@@ -191,12 +237,23 @@ export class CaturGame extends BaseGame {
 
       // Switch turn
       if (!this.state.isFinished) {
-        if (this.state.turnColor === 'w') {
-          this.state.turnColor = 'b';
-          this.state.currentTurn = this.state.blackPlayerId;
-        } else {
-          this.state.turnColor = 'w';
-          this.state.currentTurn = this.state.whitePlayerId;
+        const nextColor = this.state.turnColor === 'w' ? 'b' : 'w';
+        const nextPlayerId = nextColor === 'w' ? this.state.whitePlayerId : this.state.blackPlayerId;
+        this.state.turnColor = nextColor;
+        this.state.currentTurn = nextPlayerId;
+
+        // Check if next player has any legal moves (Checkmate / Stalemate detection)
+        const nextMoves = this.generateLegalMoves(this.state.board, nextColor);
+        if (nextMoves.length === 0) {
+          const inCheck = this.isKingInCheck(this.state.board, nextColor);
+          this.state.isFinished = true;
+          if (inCheck) {
+            // Checkmate! Current player wins!
+            this.state.winnerId = userId;
+          } else {
+            // Stalemate (Draw)
+            this.state.winnerId = null;
+          }
         }
       }
 
@@ -218,9 +275,14 @@ export class CaturGame extends BaseGame {
   }
 
   public getStateForPlayer(_userId: string) {
+    const isWhiteTurn = this.state.turnColor === 'w';
+    const activeColor = this.state.turnColor;
+    const inCheck = this.isKingInCheck(this.state.board, activeColor);
+
     return {
       ...this.state,
       gameType: 'catur',
+      inCheck,
     };
   }
 
@@ -236,8 +298,10 @@ export class CaturGame extends BaseGame {
   }
 
   public getResults(): GameResult {
-    const winner = this.state.winnerId || this.players[0]!.user_id;
-    const losers = this.players.filter((p) => p.user_id !== winner).map((p) => p.user_id);
+    const winner = this.state.winnerId;
+    const playerIds = [this.state.whitePlayerId, this.state.blackPlayerId];
+    const winners = winner ? [winner] : [];
+    const losers = winner ? playerIds.filter((id) => id !== winner) : [];
 
     // Dynamic points according to bot difficulty / match type
     const hasBot = this.players.some((p) => p.is_bot);
@@ -253,26 +317,150 @@ export class CaturGame extends BaseGame {
       }
     }
 
+    const winnerName = winner === this.state.whitePlayerId ? 'Bidak Putih' : winner === this.state.blackPlayerId ? 'Bidak Hitam' : 'Permainan Seri';
+
     return {
-      winners: [winner],
+      winners,
       losers,
       scores: {
         [this.state.whitePlayerId]: winner === this.state.whitePlayerId ? 1 : 0,
         [this.state.blackPlayerId]: winner === this.state.blackPlayerId ? 1 : 0,
       },
-      summary: winner === this.state.whitePlayerId ? 'Bidak Putih Menang!' : 'Bidak Hitam Menang!',
-      pointsAwarded,
+      summary: winner ? `Skakmat! ${winnerName} Memenangkan Pertandingan!` : 'Permainan Berakhir Remis (Stalemate)!',
+      pointsAwarded: winner ? pointsAwarded : 0,
     };
   }
 
-  // Generate all legal moves for current player
+  // Generate legal moves that do NOT leave the King in check
   public getValidMoves(userId: string): ChessMove[] {
     if (this.state.currentTurn !== userId) return [];
-    const color = this.state.turnColor;
-    return this.generateMovesForColor(this.state.board, color);
+    return this.generateLegalMoves(this.state.board, this.state.turnColor);
   }
 
-  private generateMovesForColor(board: ChessPiece[][], color: 'w' | 'b'): ChessMove[] {
+  public generateLegalMoves(board: ChessPiece[][], color: 'w' | 'b'): ChessMove[] {
+    const pseudoMoves = this.generatePseudoMoves(board, color);
+    const legalMoves: ChessMove[] = [];
+
+    for (const move of pseudoMoves) {
+      // Simulate move
+      const originalDest = board[move.toRow]![move.toCol];
+      const movingPiece = board[move.fromRow]![move.fromCol];
+
+      board[move.toRow]![move.toCol] = movingPiece;
+      board[move.fromRow]![move.fromCol] = null;
+
+      // Ensure King is not under check after this move
+      if (!this.isKingInCheck(board, color)) {
+        legalMoves.push(move);
+      }
+
+      // Revert simulation
+      board[move.fromRow]![move.fromCol] = movingPiece;
+      board[move.toRow]![move.toCol] = originalDest;
+    }
+
+    return legalMoves;
+  }
+
+  // Check if a specific square is under attack by opponent
+  public isSquareAttacked(board: ChessPiece[][], row: number, col: number, byColor: 'w' | 'b'): boolean {
+    const oppColor = byColor;
+
+    // 1. Pawns attack
+    const pawnRow = byColor === 'w' ? row + 1 : row - 1;
+    if (pawnRow >= 0 && pawnRow < 8) {
+      if (col - 1 >= 0 && board[pawnRow]![col - 1] === `${oppColor}P`) return true;
+      if (col + 1 < 8 && board[pawnRow]![col + 1] === `${oppColor}P`) return true;
+    }
+
+    // 2. Knights attack
+    const knightDirs = [
+      [-2, -1], [-2, 1], [-1, -2], [-1, 2],
+      [1, -2], [1, 2], [2, -1], [2, 1],
+    ];
+    for (const [dr, dc] of knightDirs) {
+      const nr = row + dr!;
+      const nc = col + dc!;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        if (board[nr]![nc] === `${oppColor}N`) return true;
+      }
+    }
+
+    // 3. Diagonal rays (Bishop & Queen)
+    const diagDirs = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
+    for (const [dr, dc] of diagDirs) {
+      let step = 1;
+      while (true) {
+        const nr = row + dr! * step;
+        const nc = col + dc! * step;
+        if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
+        const piece = board[nr]![nc];
+        if (piece) {
+          if (piece === `${oppColor}B` || piece === `${oppColor}Q`) return true;
+          break;
+        }
+        step++;
+      }
+    }
+
+    // 4. Orthogonal rays (Rook & Queen)
+    const straightDirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of straightDirs) {
+      let step = 1;
+      while (true) {
+        const nr = row + dr! * step;
+        const nc = col + dc! * step;
+        if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
+        const piece = board[nr]![nc];
+        if (piece) {
+          if (piece === `${oppColor}R` || piece === `${oppColor}Q`) return true;
+          break;
+        }
+        step++;
+      }
+    }
+
+    // 5. Adjacent King
+    const kingDirs = [
+      [-1, -1], [-1, 0], [-1, 1],
+      [0, -1],           [0, 1],
+      [1, -1],  [1, 0],  [1, 1],
+    ];
+    for (const [dr, dc] of kingDirs) {
+      const nr = row + dr!;
+      const nc = col + dc!;
+      if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+        if (board[nr]![nc] === `${oppColor}K`) return true;
+      }
+    }
+
+    return false;
+  }
+
+  // Check if king of a given color is in check
+  public isKingInCheck(board: ChessPiece[][], color: 'w' | 'b'): boolean {
+    const kingPiece = `${color}K`;
+    let kr = -1;
+    let kc = -1;
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (board[r]![c] === kingPiece) {
+          kr = r;
+          kc = c;
+          break;
+        }
+      }
+      if (kr !== -1) break;
+    }
+
+    if (kr === -1) return false;
+    const oppColor = color === 'w' ? 'b' : 'w';
+    return this.isSquareAttacked(board, kr, kc, oppColor);
+  }
+
+  // Generate pseudo-legal moves based on geometry
+  private generatePseudoMoves(board: ChessPiece[][], color: 'w' | 'b'): ChessMove[] {
     const moves: ChessMove[] = [];
     const oppColor = color === 'w' ? 'b' : 'w';
 
@@ -434,51 +622,27 @@ export class CaturGame extends BaseGame {
     return { success: false, error: 'Waktu habis.' };
   }
 
-  // Bot AI automated intelligence
+  // --- BOT AI BRAIN (Smarter, Tactical, Non-Blundering Chess AI) ---
   public getBotAction(userId: string): { action: string; payload: any } | null {
     const moves = this.getValidMoves(userId);
     if (moves.length === 0) return null;
 
     const diff = this.state.botDifficulty || 'medium';
-    const color = this.state.turnColor;
+    const myColor = this.state.turnColor;
+    const oppColor = myColor === 'w' ? 'b' : 'w';
 
     // --- LEVEL 1: EASY (Pemula) ---
-    // 50% random, 50% captures
+    // Mostly basic evaluations with intentional small noise
     if (diff === 'easy') {
-      const captures = moves.filter((m) => Boolean(this.state.board[m.toRow]![m.toCol]));
-      if (captures.length > 0 && Math.random() < 0.5) {
-        const move = captures[Math.floor(Math.random() * captures.length)]!;
-        return { action: 'move', payload: move };
-      }
-      const move = moves[Math.floor(Math.random() * moves.length)]!;
-      return { action: 'move', payload: move };
-    }
-
-    // --- LEVEL 2: MEDIUM (Menengah) ---
-    // Greedy captures + center control + king check
-    if (diff === 'medium') {
       let bestScore = -Infinity;
       let bestMove = moves[0]!;
 
       for (const m of moves) {
-        let score = 0;
-        const targetPiece = this.state.board[m.toRow]![m.toCol];
-        const movingPiece = this.state.board[m.fromRow]![m.fromCol];
-
-        if (targetPiece) {
-          const targetVal = PIECE_VALUES[targetPiece.charAt(1)] || 100;
-          const movingVal = movingPiece ? PIECE_VALUES[movingPiece.charAt(1)] || 100 : 100;
-          score += targetVal * 2 - movingVal * 0.5;
+        let score = (Math.random() - 0.5) * 40;
+        const target = this.state.board[m.toRow]![m.toCol];
+        if (target) {
+          score += (PIECE_VALUES[target.charAt(1)] || 100);
         }
-
-        // Center control incentive
-        if ([3, 4].includes(m.toRow) && [3, 4].includes(m.toCol)) {
-          score += 25;
-        }
-
-        // Add small random noise for variety
-        score += Math.random() * 10;
-
         if (score > bestScore) {
           bestScore = score;
           bestMove = m;
@@ -487,36 +651,103 @@ export class CaturGame extends BaseGame {
       return { action: 'move', payload: bestMove };
     }
 
-    // --- LEVEL 3: HARD / MASTER (Master AI) ---
-    // 2-ply Minimax evaluation with piece-square tables
-    let bestScore = -Infinity;
-    let bestMove = moves[0]!;
+    // --- LEVEL 2: MEDIUM (Menengah - Solid Tactical Play, No Dumb Blunders) ---
+    if (diff === 'medium') {
+      let bestScore = -Infinity;
+      let bestMove = moves[0]!;
 
-    for (const m of moves) {
-      // Simulate move
-      const originalDest = this.state.board[m.toRow]![m.toCol];
-      const movingPiece = this.state.board[m.fromRow]![m.fromCol];
+      for (const m of moves) {
+        const movingPiece = this.state.board[m.fromRow]![m.fromCol]!;
+        const targetPiece = this.state.board[m.toRow]![m.toCol];
+        const movingVal = PIECE_VALUES[movingPiece.charAt(1)] || 100;
+        const targetVal = targetPiece ? (PIECE_VALUES[targetPiece.charAt(1)] || 100) : 0;
 
-      this.state.board[m.toRow]![m.toCol] = movingPiece;
-      this.state.board[m.fromRow]![m.fromCol] = null;
+        // Simulate move
+        this.state.board[m.toRow]![m.toCol] = movingPiece;
+        this.state.board[m.fromRow]![m.fromCol] = null;
 
-      // Opponent response evaluation (Minimax 1-ply counter)
-      const oppColor = color === 'w' ? 'b' : 'w';
-      const oppMoves = this.generateMovesForColor(this.state.board, oppColor);
+        // 1. Immediate Win Check (Checkmate)
+        const oppReplies = this.generateLegalMoves(this.state.board, oppColor);
+        if (oppReplies.length === 0 && this.isKingInCheck(this.state.board, oppColor)) {
+          // Checkmate! Win immediately!
+          this.state.board[m.fromRow]![m.fromCol] = movingPiece;
+          this.state.board[m.toRow]![m.toCol] = targetPiece;
+          return { action: 'move', payload: m };
+        }
 
-      let worstCounter = 0;
-      for (const om of oppMoves) {
-        const oppTarget = this.state.board[om.toRow]![om.toCol];
-        if (oppTarget) {
-          const capVal = PIECE_VALUES[oppTarget.charAt(1)] || 100;
-          if (capVal > worstCounter) worstCounter = capVal;
+        // 2. Base Evaluation
+        let score = this.evaluateBoard(this.state.board, myColor);
+
+        // 3. Tactical safety check: Is the square we moved to attacked?
+        const isTargetSquareAttacked = this.isSquareAttacked(this.state.board, m.toRow, m.toCol, oppColor);
+        const isTargetSquareDefended = this.isSquareAttacked(this.state.board, m.toRow, m.toCol, myColor);
+
+        if (isTargetSquareAttacked) {
+          if (!isTargetSquareDefended) {
+            // Unconditionally hanging our piece! Heavy penalty!
+            score -= movingVal * 2.5;
+          } else {
+            // Defended, but if we sacrificed high value for low value (e.g. Q for P)
+            if (movingVal > targetVal) {
+              score -= (movingVal - targetVal) * 1.5;
+            }
+          }
+        }
+
+        // 4. Capture bonus (MVV-LVA)
+        if (targetPiece) {
+          score += targetVal * 1.5 - movingVal * 0.1;
+        }
+
+        // 5. Check bonus
+        if (this.isKingInCheck(this.state.board, oppColor)) {
+          score += 55;
+        }
+
+        // 6. Promotion bonus
+        if (movingPiece.charAt(1) === 'P' && (m.toRow === 0 || m.toRow === 7)) {
+          score += 850;
+        }
+
+        // Small variety noise
+        score += Math.random() * 6;
+
+        // Restore board
+        this.state.board[m.fromRow]![m.fromCol] = movingPiece;
+        this.state.board[m.toRow]![m.toCol] = targetPiece;
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestMove = m;
         }
       }
 
-      // Static Board Evaluation from Bot's perspective
-      const evalScore = this.evaluateBoard(this.state.board, color) - worstCounter;
+      return { action: 'move', payload: bestMove };
+    }
 
-      // Restore board
+    // --- LEVEL 3: HARD / MASTER (Deep Minimax with Alpha-Beta Pruning) ---
+    let bestScore = -Infinity;
+    let bestMove = moves[0]!;
+    const depth = 3;
+
+    // Sort moves for Alpha-Beta efficiency (captures and checks first)
+    const sortedMoves = [...moves].sort((a, b) => {
+      const aCap = Boolean(this.state.board[a.toRow]![a.toCol]) ? 100 : 0;
+      const bCap = Boolean(this.state.board[b.toRow]![b.toCol]) ? 100 : 0;
+      return bCap - aCap;
+    });
+
+    for (const m of sortedMoves) {
+      const originalDest = this.state.board[m.toRow]![m.toCol];
+      const movingPiece = this.state.board[m.fromRow]![m.fromCol]!;
+
+      // Simulate
+      this.state.board[m.toRow]![m.toCol] = movingPiece;
+      this.state.board[m.fromRow]![m.fromCol] = null;
+
+      const evalScore = this.minimax(this.state.board, depth - 1, -Infinity, Infinity, false, myColor);
+
+      // Revert
       this.state.board[m.fromRow]![m.fromCol] = movingPiece;
       this.state.board[m.toRow]![m.toCol] = originalDest;
 
@@ -529,7 +760,72 @@ export class CaturGame extends BaseGame {
     return { action: 'move', payload: bestMove };
   }
 
-  // Board evaluation heuristic for Master AI
+  // Minimax with Alpha-Beta Pruning
+  private minimax(
+    board: ChessPiece[][],
+    depth: number,
+    alpha: number,
+    beta: number,
+    isMaximizing: boolean,
+    botColor: 'w' | 'b'
+  ): number {
+    const currentColor = isMaximizing ? botColor : (botColor === 'w' ? 'b' : 'w');
+    const legalMoves = this.generateLegalMoves(board, currentColor);
+
+    // Terminal state: Checkmate or Stalemate
+    if (legalMoves.length === 0) {
+      if (this.isKingInCheck(board, currentColor)) {
+        return isMaximizing ? -100000 + (3 - depth) * 100 : 100000 - (3 - depth) * 100;
+      }
+      return 0; // Stalemate
+    }
+
+    if (depth <= 0) {
+      return this.evaluateBoard(board, botColor);
+    }
+
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      for (const m of legalMoves) {
+        const dest = board[m.toRow]![m.toCol];
+        const piece = board[m.fromRow]![m.fromCol]!;
+
+        board[m.toRow]![m.toCol] = piece;
+        board[m.fromRow]![m.fromCol] = null;
+
+        const score = this.minimax(board, depth - 1, alpha, beta, false, botColor);
+
+        board[m.fromRow]![m.fromCol] = piece;
+        board[m.toRow]![m.toCol] = dest;
+
+        maxEval = Math.max(maxEval, score);
+        alpha = Math.max(alpha, score);
+        if (beta <= alpha) break; // Beta cutoff
+      }
+      return maxEval;
+    } else {
+      let minEval = Infinity;
+      for (const m of legalMoves) {
+        const dest = board[m.toRow]![m.toCol];
+        const piece = board[m.fromRow]![m.fromCol]!;
+
+        board[m.toRow]![m.toCol] = piece;
+        board[m.fromRow]![m.fromCol] = null;
+
+        const score = this.minimax(board, depth - 1, alpha, beta, true, botColor);
+
+        board[m.fromRow]![m.fromCol] = piece;
+        board[m.toRow]![m.toCol] = dest;
+
+        minEval = Math.min(minEval, score);
+        beta = Math.min(beta, score);
+        if (beta <= alpha) break; // Alpha cutoff
+      }
+      return minEval;
+    }
+  }
+
+  // Board evaluation function
   private evaluateBoard(board: ChessPiece[][], myColor: 'w' | 'b'): number {
     let score = 0;
     const oppColor = myColor === 'w' ? 'b' : 'w';
@@ -544,18 +840,42 @@ export class CaturGame extends BaseGame {
         const val = PIECE_VALUES[pType] || 100;
 
         let positional = 0;
+        const rowIdx = pColor === 'w' ? r : 7 - r;
+
         if (pType === 'P') {
-          positional = pColor === 'w' ? PAWN_TABLE[r]![c]! : PAWN_TABLE[7 - r]![c]!;
+          positional = PAWN_TABLE[rowIdx]![c]!;
         } else if (pType === 'N') {
-          positional = KNIGHT_TABLE[r]![c]!;
+          positional = KNIGHT_TABLE[rowIdx]![c]!;
+        } else if (pType === 'B') {
+          positional = BISHOP_TABLE[rowIdx]![c]!;
+        } else if (pType === 'R') {
+          positional = ROOK_TABLE[rowIdx]![c]!;
+        } else if (pType === 'Q') {
+          positional = QUEEN_TABLE[rowIdx]![c]!;
+        } else if (pType === 'K') {
+          positional = KING_TABLE_MID[rowIdx]![c]!;
         }
 
         const totalVal = val + positional;
 
         if (pColor === myColor) {
           score += totalVal;
-        } else if (pColor === oppColor) {
+          // Check for hanging pieces
+          if (this.isSquareAttacked(board, r, c, oppColor)) {
+            const isDefended = this.isSquareAttacked(board, r, c, myColor);
+            if (!isDefended) {
+              score -= val * 0.8;
+            }
+          }
+        } else {
           score -= totalVal;
+          // Check for opponent hanging pieces (reward attacking them)
+          if (this.isSquareAttacked(board, r, c, myColor)) {
+            const isDefended = this.isSquareAttacked(board, r, c, oppColor);
+            if (!isDefended) {
+              score += val * 0.7;
+            }
+          }
         }
       }
     }
