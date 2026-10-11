@@ -22,6 +22,7 @@ import keysRoutes from './routes/keys.routes';
 import jukeboxRoutes from './routes/jukebox.routes';
 import ambientRoutes from './routes/ambient.routes';
 import gameRoutes from './routes/game.routes';
+import leaderboardRoutes from './routes/leaderboard.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -96,6 +97,7 @@ app.use('/api/keys', keysRoutes);
 app.use('/api/jukebox', jukeboxRoutes);
 app.use('/api/ambient', ambientRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

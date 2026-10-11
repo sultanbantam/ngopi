@@ -1,4 +1,4 @@
-export type GameType = 'gapleh' | 'remi' | 'bridge' | 'truf' | 'poker' | 'catur';
+export type GameType = 'gapleh' | 'remi' | 'bridge' | 'truf' | 'poker' | 'catur' | 'uno' | 'snake_ladder';
 
 export type TableStatus = 'waiting' | 'playing' | 'finished';
 
@@ -40,6 +40,7 @@ export interface GameResult {
   losers: string[];
   scores: Record<string, number>;
   summary: string;
+  pointsAwarded?: number | undefined;
 }
 
 export interface TableConfig {

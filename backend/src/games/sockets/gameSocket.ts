@@ -51,13 +51,14 @@ export const setupGameSocket = (io: Server) => {
   const notifyGameFinished = (tableId: string, results: any) => {
     const table = TableManager.getTable(tableId);
     const awardedMap: Record<string, number> = {};
+    const pts = typeof results?.pointsAwarded === 'number' ? results.pointsAwarded : 50;
 
     if (results?.winners && Array.isArray(results.winners)) {
       for (const winnerId of results.winners) {
         const player = table?.players?.find((p) => p.user_id === winnerId);
         if (player && !player.is_bot) {
-          const newPts = PointsManager.addPoints(player.username, 50);
-          PointsManager.addPoints(player.user_id, 50);
+          const newPts = PointsManager.addPoints(player.username, pts);
+          PointsManager.addPoints(player.user_id, pts);
           awardedMap[player.user_id] = newPts;
         }
       }
@@ -67,7 +68,7 @@ export const setupGameSocket = (io: Server) => {
       tableId,
       results: {
         ...results,
-        pointsAwarded: 50,
+        pointsAwarded: pts,
         playerPoints: awardedMap,
       },
     });
@@ -166,6 +167,20 @@ export const setupGameSocket = (io: Server) => {
           player: res.table.players.find((p) => p.user_id === userId),
           table: res.table,
         });
+        if (res.table.status === 'playing') {
+          broadcastGameState(data.tableId);
+        }
+        if (typeof callback === 'function') callback({ success: true, table: res.table });
+      } else {
+        if (typeof callback === 'function') callback({ success: false, error: res.error });
+      }
+    });
+
+    // Reset finished table to waiting state
+    socket.on('table:reset', (data: { tableId: string }, callback) => {
+      const res = TableManager.resetTable(data.tableId);
+      if (res.success && res.table) {
+        gamesNamespace.to(`table:${data.tableId}`).emit('table:state', { table: res.table });
         if (typeof callback === 'function') callback({ success: true, table: res.table });
       } else {
         if (typeof callback === 'function') callback({ success: false, error: res.error });

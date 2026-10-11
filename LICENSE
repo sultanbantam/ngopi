@@ -1,0 +1,44 @@
+PROPRIETARY AND CONFIDENTIAL SOFTWARE NOTICE
+NGOPI APPLICATION (https://ngopi.top)
+
+Copyright (c) 2026 Yayasan Sabumi Nusantara Jaya. All Rights Reserved.
+Official Contact: founder@ngopi.top
+
+1. SCOPE OF RIGHTS AND PROPRIETARY NOTICE
+This software repository contains the original product architecture, system 
+designs, proprietary source code, user interfaces, and branding created for the 
+Ngopi project.
+
+Yayasan Sabumi Nusantara Jaya is the intended operating organization and 
+designated rights holder for all original software, designs, and materials 
+contained herein to the extent that the relevant copyright, intellectual property, 
+or operating rights are lawfully owned by, or have been assigned and transferred 
+to, the foundation.
+
+2. RESTRICTIONS ON ORIGINAL PROPRIETARY WORKS
+To the extent permitted by applicable law, and subject to Section 3:
+- The original proprietary source code, system architectures, and distinctive 
+  branding of Ngopi are proprietary and confidential.
+- Except as expressly permitted in writing by Yayasan Sabumi Nusantara Jaya 
+  or authorized under applicable mandatory statutory law, unauthorized copying, 
+  redistribution, modification, sublicensing, or commercial exploitation of 
+  Ngopi's original proprietary assets is strictly prohibited.
+
+3. PRESERVATION OF THIRD-PARTY AND OPEN-SOURCE RIGHTS
+This software builds upon, incorporates, and interfaces with third-party open-source 
+libraries, frameworks, and upstream foundations (including, but not limited to, 
+Expo, React, React Native, Express, Socket.IO, Prisma, and TweetNaCl).
+
+- Nothing in this notice shall be construed as a claim of ownership or copyright 
+  by Yayasan Sabumi Nusantara Jaya over any upstream open-source code, third-party 
+  libraries, or template foundations created by 650 Industries, Inc. (Expo), 
+  Meta Platforms, Inc., or any other third-party contributor.
+- All rights, permissions, and licenses granted under applicable third-party 
+  licenses (such as MIT, Apache 2.0, BSD, and SIL OFL) are fully preserved and 
+  remain intact for their respective components.
+- For a comprehensive inventory of third-party software, their respective 
+  copyright holders, and the text of their licenses, see THIRD_PARTY_NOTICES.md.
+
+4. DISCLAIMER
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, NGOPI'S ORIGINAL SOFTWARE IS PROVIDED 
+"AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED.

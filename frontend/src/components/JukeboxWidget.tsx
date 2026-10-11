@@ -411,7 +411,7 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
     } catch {}
   };
 
-  const handleAddTrack = async (trackData?: { title: string; artist: string; uri: string; duration: number }, playNow: boolean = false) => {
+  const handleAddTrack = async (trackData?: { title: string; artist: string; uri: string; duration: number; thumbnail?: string | null; is_full?: boolean }, playNow: boolean = false) => {
     const title = trackData?.title || newTitle;
     const artist = trackData?.artist || newArtist;
     const uri = trackData?.uri || newUri;

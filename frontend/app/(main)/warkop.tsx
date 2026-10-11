@@ -31,6 +31,7 @@ import { EmptyState } from '../../src/components/EmptyState';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan';
 import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
+import LeaderboardModal from '../../src/components/LeaderboardModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -246,6 +247,7 @@ export default function BambupediaRoom() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState<number>(0);
+  const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [suasanaExpanded, setSuasanaExpanded] = useState(false);
@@ -1037,10 +1039,18 @@ export default function BambupediaRoom() {
         <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
           <TouchableOpacity
             style={styles.pointsBadgeHeader}
-            onPress={() => setDrawerVisible(true)}
+            onPress={() => setLeaderboardVisible(true)}
             accessibilityLabel={`Poin Kopi: ${userPoints}`}
           >
             <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.headerIconButton, { backgroundColor: 'rgba(212, 163, 115, 0.15)' }]}
+            onPress={() => setLeaderboardVisible(true)}
+            accessibilityLabel="Klasemen Warkop"
+          >
+            <Ionicons name="trophy-outline" size={20} color={coffee.accent} />
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.headerIconButton} onPress={() => router.push({ pathname: '/(main)/contacts', params: { createWarkop: '1' } })} accessibilityLabel="Buat Warkop baru">
@@ -1256,6 +1266,12 @@ export default function BambupediaRoom() {
       </KeyboardAvoidingView>
 
       {renderDrawer()}
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal
+        visible={leaderboardVisible}
+        onClose={() => setLeaderboardVisible(false)}
+      />
     </View>
   );
 }

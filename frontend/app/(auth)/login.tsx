@@ -62,13 +62,13 @@ export default function LoginScreen() {
   }, [params]);
 
   const handleLogin = async () => {
-    const normalizedUsername = username.trim().toLowerCase();
-    if (!normalizedUsername || !password) {
-      setError('Username dan password wajib diisi.');
+    const trimmedInput = username.trim();
+    if (!trimmedInput || !password) {
+      setError('Username / nama akun dan password wajib diisi.');
       return;
     }
-    if (!/^[a-z0-9_.-]{3,30}$/.test(normalizedUsername)) {
-      setError('Username harus 3-30 karakter: huruf kecil, angka, titik, garis bawah, atau tanda minus.');
+    if (trimmedInput.length < 2 || trimmedInput.length > 50) {
+      setError('Username atau nama akun harus antara 2-50 karakter.');
       return;
     }
     if (password.length > 128) {
@@ -79,7 +79,7 @@ export default function LoginScreen() {
     setError('');
 
     try {
-      const response = await axios.post(`${API_URL}/auth/login`, { username: normalizedUsername, password, mfa_code: mfaCode || undefined }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
+      const response = await axios.post(`${API_URL}/auth/login`, { username: trimmedInput, password, mfa_code: mfaCode || undefined }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
       if (response.status === 202 || response.data?.requires_mfa) {
         setChallengeToken(response.data?.challenge_token || challengeToken);
         setError('Masukkan kode MFA 6 digit dari aplikasi authenticator.');
@@ -90,16 +90,17 @@ export default function LoginScreen() {
       await setStoredToken(token);
       await setStoredRefreshToken(refreshToken);
 
-      const deviceKeys = deriveKeyPairFromSeed(`ngopi:e2ee:v1:${normalizedUsername}:${password}`);
+      const canonicalUsername = (user?.username || trimmedInput).toLowerCase();
+      const deviceKeys = deriveKeyPairFromSeed(`ngopi:e2ee:v1:${canonicalUsername}:${password}`);
 
       if (Platform.OS === 'web') {
         localStorage.setItem('temp_key', password);
-        localStorage.setItem('username', normalizedUsername);
+        localStorage.setItem('username', canonicalUsername);
         localStorage.setItem('userId', user.id);
         localStorage.setItem('private_key', deviceKeys.privateKey);
       } else {
         await SecureStore.setItemAsync('temp_key', password);
-        await SecureStore.setItemAsync('username', normalizedUsername);
+        await SecureStore.setItemAsync('username', canonicalUsername);
         await SecureStore.setItemAsync('userId', user.id);
         await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
       }
@@ -128,7 +129,7 @@ export default function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Username"
+          placeholder="Username atau Nama Pengguna"
           placeholderTextColor={coffee.muted}
           value={username}
           onChangeText={setUsername}

@@ -35,4 +35,17 @@ export abstract class BaseGame {
   protected isPlayerTurn(userId: string): boolean {
     return this.state?.currentTurn === userId;
   }
+
+  // Replace a player (e.g. taking over a bot seat during waiting or active match)
+  public replacePlayer(oldUserId: string, newPlayer: GamePlayerInfo): boolean {
+    const idx = this.players.findIndex((p) => p.user_id === oldUserId);
+    if (idx !== -1) {
+      this.players[idx] = newPlayer;
+      if (this.state && this.state.currentTurn === oldUserId) {
+        this.state.currentTurn = newPlayer.user_id;
+      }
+      return true;
+    }
+    return false;
+  }
 }

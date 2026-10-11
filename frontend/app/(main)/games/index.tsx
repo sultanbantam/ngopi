@@ -20,9 +20,11 @@ import axios from 'axios';
 import { getAuthHeaders } from '../../../src/utils/api';
 import * as SecureStore from '../../../src/utils/storage';
 
+import LeaderboardModal from '../../../src/components/LeaderboardModal';
+
 const API_URL = 'https://api.ngopi.top/api';
 
-type GameType = 'gapleh' | 'catur' | 'remi' | 'poker' | 'bridge' | 'truf';
+type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'remi' | 'poker' | 'bridge' | 'truf';
 
 interface GameTable {
   id: string;
@@ -46,6 +48,8 @@ interface GameTable {
 const GAME_TABS: Array<{ id: GameType; label: string; icon: string; count?: number }> = [
   { id: 'gapleh', label: 'Gapleh', icon: 'dots-vertical' },
   { id: 'catur', label: 'Catur', icon: 'chess-knight' },
+  { id: 'uno', label: 'UNO', icon: 'cards-playing-outline' },
+  { id: 'snake_ladder', label: 'Ular Tangga', icon: 'dice-multiple' },
   { id: 'remi', label: 'Remi', icon: 'cards-playing-outline' },
   { id: 'poker', label: 'Poker', icon: 'cards-spade' },
   { id: 'bridge', label: 'Bridge', icon: 'bridge' },
@@ -67,6 +71,9 @@ export default function GamesLobbyScreen() {
   const [isPrivate, setIsPrivate] = useState(false);
   const [password, setPassword] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [leaderboardVisible, setLeaderboardVisible] = useState(false);
+  const [chessColor, setChessColor] = useState<'white' | 'black' | 'random'>('white');
+  const [botDifficulty, setBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
 
   // Join password modal state
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -120,15 +127,17 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
+      const config = selectedTab === 'catur' ? { preferredColor: chessColor, botDifficulty } : undefined;
       // 1. Create table
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
           name: `Meja Santai @${currentUsername || 'Ngopikawan'}`,
-          maxPlayers: 4,
+          maxPlayers: selectedTab === 'catur' ? 2 : 4,
           minPlayers: 2,
           isPrivate: false,
+          config,
         },
         { headers }
       );
@@ -169,15 +178,17 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
+      const config = selectedTab === 'catur' ? { preferredColor: chessColor, botDifficulty } : undefined;
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
           name: tableName.trim(),
-          maxPlayers,
+          maxPlayers: selectedTab === 'catur' ? 2 : maxPlayers,
           minPlayers: 2,
           isPrivate,
           password: isPrivate ? password.trim() : undefined,
+          config,
         },
         { headers }
       );
@@ -318,7 +329,28 @@ export default function GamesLobbyScreen() {
 
         {/* Card Actions */}
         <View style={styles.cardActionsRow}>
-          {isPlaying || isFull ? (
+          {hasBots ? (
+            <>
+              <TouchableOpacity
+                style={styles.joinBtn}
+                onPress={() => handleJoinPress(item)}
+              >
+                <Ionicons name="enter-outline" size={16} color={coffee.buttonText} />
+                <Text style={styles.joinBtnText}>
+                  {isHost ? 'Masuk Kembali' : 'Gabung (Ganti Bot 🤖)'}
+                </Text>
+              </TouchableOpacity>
+              {isPlaying && (
+                <TouchableOpacity
+                  style={styles.spectateBtn}
+                  onPress={() => handleSpectatePress(item.id)}
+                >
+                  <Ionicons name="eye-outline" size={16} color={coffee.text} />
+                  <Text style={styles.spectateBtnText}>Tonton</Text>
+                </TouchableOpacity>
+              )}
+            </>
+          ) : isPlaying || isFull ? (
             <TouchableOpacity
               style={styles.spectateBtn}
               onPress={() => handleSpectatePress(item.id)}
@@ -333,17 +365,8 @@ export default function GamesLobbyScreen() {
             >
               <Ionicons name="enter-outline" size={16} color={coffee.buttonText} />
               <Text style={styles.joinBtnText}>
-                {isHost ? 'Masuk Kembali' : hasBots && item.players.length >= item.max_players ? 'Gabung Kursi (Ganti Bot)' : 'Gabung Kursi'}
+                {isHost ? 'Masuk Kembali' : 'Gabung Kursi'}
               </Text>
-            </TouchableOpacity>
-          )}
-
-          {isPlaying && (
-            <TouchableOpacity
-              style={styles.joinBtnSecondary}
-              onPress={() => handleSpectatePress(item.id)}
-            >
-              <Text style={styles.joinBtnSecondaryText}>Spectator View</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -383,6 +406,14 @@ export default function GamesLobbyScreen() {
             Nongkrong, Ngopi, dan Main Bareng Teman
           </Text>
         </View>
+
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => setLeaderboardVisible(true)}
+          accessibilityLabel="Klasemen Warkop"
+        >
+          <Ionicons name="trophy" size={20} color={coffee.accent} />
+        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.headerIconBtn}
@@ -562,6 +593,70 @@ export default function GamesLobbyScreen() {
                 </View>
               </View>
 
+              {selectedTab === 'catur' && (
+                <View style={{ gap: 12, backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                  <View>
+                    <Text style={styles.inputLabel}>Pilihan Warna Bidak Anda</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[styles.numberOption, chessColor === 'white' && styles.numberOptionActive]}
+                        onPress={() => setChessColor('white')}
+                      >
+                        <Text style={[styles.numberOptionText, chessColor === 'white' && styles.numberOptionTextActive]}>
+                          ⚪ Putih (Dulu)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.numberOption, chessColor === 'black' && styles.numberOptionActive]}
+                        onPress={() => setChessColor('black')}
+                      >
+                        <Text style={[styles.numberOptionText, chessColor === 'black' && styles.numberOptionTextActive]}>
+                          ⚫ Hitam
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.numberOption, chessColor === 'random' && styles.numberOptionActive]}
+                        onPress={() => setChessColor('random')}
+                      >
+                        <Text style={[styles.numberOptionText, chessColor === 'random' && styles.numberOptionTextActive]}>
+                          🎲 Acak
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View>
+                    <Text style={styles.inputLabel}>Tingkat Kesulitan Bot Lawan</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[styles.numberOption, botDifficulty === 'easy' && styles.numberOptionActive]}
+                        onPress={() => setBotDifficulty('easy')}
+                      >
+                        <Text style={[styles.numberOptionText, botDifficulty === 'easy' && styles.numberOptionTextActive]}>
+                          🌱 Pemula (+15)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.numberOption, botDifficulty === 'medium' && styles.numberOptionActive]}
+                        onPress={() => setBotDifficulty('medium')}
+                      >
+                        <Text style={[styles.numberOptionText, botDifficulty === 'medium' && styles.numberOptionTextActive]}>
+                          ⚔️ Menengah (+35)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.numberOption, botDifficulty === 'hard' && styles.numberOptionActive]}
+                        onPress={() => setBotDifficulty('hard')}
+                      >
+                        <Text style={[styles.numberOptionText, botDifficulty === 'hard' && styles.numberOptionTextActive]}>
+                          👑 Master (+60)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              )}
+
               <TouchableOpacity
                 style={styles.checkboxRow}
                 onPress={() => setIsPrivate((p) => !p)}
@@ -646,6 +741,12 @@ export default function GamesLobbyScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal
+        visible={leaderboardVisible}
+        onClose={() => setLeaderboardVisible(false)}
+      />
     </View>
   );
 }

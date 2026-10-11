@@ -115,9 +115,14 @@ export const login = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { username, password, mfa_code } = value;
-    const user = await prisma.user.findUnique({
-      where: { username },
+    const { username: rawUsername, password, mfa_code } = value;
+    const cleanUsername = String(rawUsername).trim().replace(/^@/, '');
+
+    // Search case-insensitively by username first, then fallback to display_name
+    let user = await prisma.user.findFirst({
+      where: {
+        username: { equals: cleanUsername, mode: 'insensitive' },
+      },
       select: {
         id: true,
         username: true,
@@ -131,7 +136,25 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     });
 
     if (!user) {
-      console.warn('Login failed: unknown user', { username });
+      user = await prisma.user.findFirst({
+        where: {
+          display_name: { equals: String(rawUsername).trim(), mode: 'insensitive' },
+        },
+        select: {
+          id: true,
+          username: true,
+          password_hash: true,
+          display_name: true,
+          bmc_id: true,
+          role: true,
+          mfa_enabled: true,
+          mfa_secret_encrypted: true,
+        },
+      });
+    }
+
+    if (!user) {
+      console.warn('Login failed: unknown user', { rawUsername });
       res.status(401).json({ error: 'Invalid username or password' });
       return;
     }

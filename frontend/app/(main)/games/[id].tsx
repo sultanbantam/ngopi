@@ -38,6 +38,81 @@ const CHESS_UNICODE: Record<string, string> = {
   bK: '♚', bQ: '♛', bR: '♜', bB: '♝', bN: '♞', bP: '♟',
 };
 
+const UNO_COLOR_MAP: Record<string, { bg: string; border: string; text: string; label: string }> = {
+  red: { bg: '#ef4444', border: '#b91c1c', text: '#ffffff', label: 'Merah' },
+  yellow: { bg: '#eab308', border: '#a16207', text: '#1e293b', label: 'Kuning' },
+  green: { bg: '#22c55e', border: '#15803d', text: '#ffffff', label: 'Hijau' },
+  blue: { bg: '#3b82f6', border: '#1d4ed8', text: '#ffffff', label: 'Biru' },
+  wild: { bg: '#8b5cf6', border: '#6d28d9', text: '#ffffff', label: 'Wild' },
+};
+
+const UNO_VALUE_LABEL: Record<string, string> = {
+  skip: '🚫',
+  reverse: '🔁',
+  draw2: '+2',
+  wild: '🌈',
+  wild4: '+4',
+};
+
+function UnoCardTile({
+  card,
+  onPress,
+  disabled,
+  highlight,
+  size = 'normal',
+}: {
+  card: { id?: string; color: string; value: string };
+  onPress?: () => void;
+  disabled?: boolean;
+  highlight?: boolean;
+  size?: 'normal' | 'small' | 'large';
+}) {
+  const meta = UNO_COLOR_MAP[card?.color] || UNO_COLOR_MAP.wild!;
+  const displayVal = UNO_VALUE_LABEL[card?.value] || card?.value || '?';
+  const width = size === 'large' ? 56 : size === 'small' ? 36 : 46;
+  const height = size === 'large' ? 82 : size === 'small' ? 52 : 68;
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.8}
+      disabled={disabled || !onPress}
+      onPress={onPress}
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: meta.bg,
+          borderColor: highlight ? '#fef08a' : meta.border,
+          borderWidth: highlight ? 3 : 1.5,
+          borderRadius: 8,
+          padding: 4,
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          shadowColor: '#000',
+          shadowOpacity: 0.25,
+          shadowRadius: 4,
+          elevation: 3,
+        },
+        disabled && { opacity: 0.5 },
+      ]}
+    >
+      <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-start' }}>
+        <Text style={{ fontSize: size === 'large' ? 12 : 10, fontWeight: '900', color: meta.text }}>
+          {displayVal}
+        </Text>
+      </View>
+      <Text style={{ fontSize: size === 'large' ? 24 : 18, fontWeight: '900', color: meta.text }}>
+        {displayVal}
+      </Text>
+      <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'flex-end' }}>
+        <Text style={{ fontSize: size === 'large' ? 12 : 10, fontWeight: '900', color: meta.text }}>
+          {displayVal}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function PlayingCardTile({
   card,
   onPress,
@@ -128,6 +203,77 @@ export default function GameTableScreen() {
   // Result modal
   const [resultModalVisible, setResultModalVisible] = useState(false);
   const [gameResult, setGameResult] = useState<any>(null);
+
+  // UNO and Catur specialized states
+  const [wildPickerCard, setWildPickerCard] = useState<any | null>(null);
+  const [flipChessBoard, setFlipChessBoard] = useState(false);
+
+  // Action: UNO Play Card
+  const handleUnoCardPress = (card: any) => {
+    if (!isMyTurn) {
+      Alert.alert('Perhatian', 'Bukan giliran Anda!');
+      return;
+    }
+    if (card.color === 'wild') {
+      setWildPickerCard(card);
+    } else {
+      executePlayUnoCard(card.id);
+    }
+  };
+
+  const executePlayUnoCard = (cardId: string, chosenColor?: string) => {
+    if (!socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action: 'play',
+        payload: { cardId, chosenColor },
+      },
+      (res: any) => {
+        if (!res?.success) {
+          Alert.alert('Langkah Gagal', res?.error || 'Kartu tidak cocok dengan warna atau angka di meja.');
+        }
+      }
+    );
+  };
+
+  const handleUnoDraw = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'draw', payload: {} });
+  };
+
+  const handleUnoShout = () => {
+    if (!socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'uno', payload: {} });
+  };
+
+  const handleCatchUno = (targetUserId: string) => {
+    if (!socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action: 'catch_uno',
+        payload: { targetUserId },
+      },
+      (res: any) => {
+        if (!res?.success) {
+          Alert.alert('Info', res?.error || 'Pemain sudah panggil UNO.');
+        }
+      }
+    );
+  };
+
+  // Snake & Ladder Action: Roll Dice
+  const handleSnakeLadderRoll = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'roll', payload: {} }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal', res?.error || 'Tidak dapat melempar dadu.');
+      }
+    });
+  };
 
   // Load User Info
   const loadUser = async () => {
@@ -784,49 +930,273 @@ export default function GameTableScreen() {
             ) : table.game_type === 'catur' && gameState?.board ? (
               /* Catur 8x8 Board */
               <View style={{ alignItems: 'center', paddingVertical: 4 }}>
-                <View style={{ width: 280, height: 280, borderWidth: 2, borderColor: '#5c3d24', borderRadius: 6, overflow: 'hidden' }}>
-                  {gameState.board.map((rowList: any[], rIdx: number) => (
-                    <View key={rIdx} style={{ flexDirection: 'row', flex: 1 }}>
-                      {rowList.map((piece: string | null, cIdx: number) => {
-                        const isDark = (rIdx + cIdx) % 2 === 1;
-                        const isSelected = selectedChessSquare?.row === rIdx && selectedChessSquare?.col === cIdx;
-                        const pieceSymbol = piece ? CHESS_UNICODE[piece] || piece : null;
-                        const isPieceWhite = piece?.startsWith('w');
+                {/* Chess Info & Orientation Bar */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                  <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                    <Text style={{ color: coffee.text, fontSize: 11, fontWeight: '700' }}>
+                      Anda: {gameState?.whitePlayerId === currentUserId ? '⚪ Putih (Dulu)' : '⚫ Hitam'}
+                    </Text>
+                  </View>
 
-                        return (
-                          <TouchableOpacity
-                            key={cIdx}
-                            activeOpacity={0.7}
-                            onPress={() => handleChessSquarePress(rIdx, cIdx)}
-                            style={{
-                              flex: 1,
-                              backgroundColor: isSelected ? '#fef08a' : isDark ? '#b88b4a' : '#f5e6cc',
-                              justifyContent: 'center',
-                              alignItems: 'center',
-                            }}
-                          >
-                            {pieceSymbol && (
-                              <Text
-                                style={{
-                                  fontSize: 22,
-                                  color: isPieceWhite ? '#ffffff' : '#171411',
-                                  textShadowColor: isPieceWhite ? '#000000' : '#ffffff',
-                                  textShadowOffset: { width: 0.5, height: 0.5 },
-                                  textShadowRadius: 1,
-                                }}
-                              >
-                                {pieceSymbol}
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        );
-                      })}
+                  {table.players?.some((p: any) => p.is_bot) && (
+                    <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: coffee.accent }}>
+                      <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700' }}>
+                        🤖 Bot {table.config?.botDifficulty === 'easy' ? 'Pemula (+15)' : table.config?.botDifficulty === 'hard' ? 'Master (+60)' : 'Menengah (+35)'}
+                      </Text>
                     </View>
-                  ))}
+                  )}
+
+                  <TouchableOpacity
+                    style={{ backgroundColor: '#382619', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}
+                    onPress={() => setFlipChessBoard((f) => !f)}
+                  >
+                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700' }}>
+                      🔄 Balik Papan
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <View style={{ width: 280, height: 280, borderWidth: 2, borderColor: '#5c3d24', borderRadius: 6, overflow: 'hidden' }}>
+                  {(flipChessBoard ? [...gameState.board].reverse() : gameState.board).map((rowList: any[], displayRIdx: number) => {
+                    const rIdx = flipChessBoard ? 7 - displayRIdx : displayRIdx;
+                    const cols = flipChessBoard ? [...rowList].reverse() : rowList;
+                    return (
+                      <View key={displayRIdx} style={{ flexDirection: 'row', flex: 1 }}>
+                        {cols.map((piece: string | null, displayCIdx: number) => {
+                          const cIdx = flipChessBoard ? 7 - displayCIdx : displayCIdx;
+                          const isDark = (rIdx + cIdx) % 2 === 1;
+                          const isSelected = selectedChessSquare?.row === rIdx && selectedChessSquare?.col === cIdx;
+                          const pieceSymbol = piece ? CHESS_UNICODE[piece] || piece : null;
+                          const isPieceWhite = piece?.startsWith('w');
+
+                          return (
+                            <TouchableOpacity
+                              key={displayCIdx}
+                              activeOpacity={0.7}
+                              onPress={() => handleChessSquarePress(rIdx, cIdx)}
+                              style={{
+                                flex: 1,
+                                backgroundColor: isSelected ? '#fef08a' : isDark ? '#b88b4a' : '#f5e6cc',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                              }}
+                            >
+                              {pieceSymbol && (
+                                <Text
+                                  style={{
+                                    fontSize: 22,
+                                    color: isPieceWhite ? '#ffffff' : '#171411',
+                                    textShadowColor: isPieceWhite ? '#000000' : '#ffffff',
+                                    textShadowOffset: { width: 0.5, height: 0.5 },
+                                    textShadowRadius: 1,
+                                  }}
+                                >
+                                  {pieceSymbol}
+                                </Text>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
                 </View>
                 <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 6, fontWeight: '600' }}>
                   {isMyTurn ? 'Pilih bidak Anda lalu pilih kotak tujuan' : 'Menunggu langkah lawan...'}
                 </Text>
+              </View>
+            ) : table.game_type === 'uno' && gameState?.topCard ? (
+              /* UNO Center Play Arena */
+              <View style={{ alignItems: 'center', gap: 10, paddingVertical: 8 }}>
+                {/* Active Color & Turn Direction */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: UNO_COLOR_MAP[gameState.activeColor]?.bg || '#8b5cf6',
+                      paddingHorizontal: 12,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: '#ffffff',
+                    }}
+                  >
+                    <Text style={{ color: UNO_COLOR_MAP[gameState.activeColor]?.text || '#ffffff', fontWeight: '900', fontSize: 12 }}>
+                      WARNA: {UNO_COLOR_MAP[gameState.activeColor]?.label.toUpperCase()}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      backgroundColor: '#2c1e14',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: coffee.border,
+                    }}
+                  >
+                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700' }}>
+                      {gameState.turnDirection === 1 ? '🔄 Searah Jam' : '🔃 Lawan Arah'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Discard Pile Top Card & Draw Pile */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 24 }}>
+                  <TouchableOpacity
+                    style={{ alignItems: 'center' }}
+                    onPress={handleUnoDraw}
+                    disabled={!isMyTurn}
+                  >
+                    <View
+                      style={{
+                        width: 56,
+                        height: 82,
+                        backgroundColor: '#1e1b4b',
+                        borderRadius: 8,
+                        borderWidth: 2,
+                        borderColor: '#6366f1',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        shadowColor: '#000',
+                        shadowOpacity: 0.3,
+                        shadowRadius: 4,
+                        elevation: 3,
+                      }}
+                    >
+                      <Text style={{ fontSize: 24 }}>🂠</Text>
+                      <Text style={{ fontSize: 10, color: '#c7d2fe', fontWeight: 'bold', marginTop: 2 }}>
+                        {gameState.deckCount ?? 0}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: coffee.text, marginTop: 4, fontWeight: '600' }}>
+                      Ambil Kartu
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={{ alignItems: 'center' }}>
+                    <UnoCardTile card={gameState.topCard} size="large" />
+                    <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 4, fontWeight: '700' }}>
+                      Kartu Terbuka
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : table.game_type === 'snake_ladder' ? (
+              /* Snake & Ladder (Ular Tangga) 10x10 Serpentine Board */
+              <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                {/* Last Action Announcement Banner */}
+                {gameState?.lastAction && (
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(212, 163, 115, 0.2)',
+                      borderColor: coffee.accent,
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      marginBottom: 8,
+                      maxWidth: 320,
+                    }}
+                  >
+                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>
+                      {gameState.lastAction.message}
+                    </Text>
+                  </View>
+                )}
+
+                {/* 10x10 Board Grid */}
+                <View
+                  style={{
+                    width: 300,
+                    height: 300,
+                    borderWidth: 2,
+                    borderColor: '#5c3d24',
+                    borderRadius: 8,
+                    overflow: 'hidden',
+                    backgroundColor: '#1b130e',
+                  }}
+                >
+                  {Array.from({ length: 10 }).map((_, rIdx) => {
+                    const rowNumber = 9 - rIdx; // 9 down to 0
+                    const isEvenRowFromBottom = rowNumber % 2 === 0;
+                    return (
+                      <View key={rIdx} style={{ flexDirection: 'row', flex: 1 }}>
+                        {Array.from({ length: 10 }).map((_, cIdx) => {
+                          const colNumber = isEvenRowFromBottom ? cIdx : 9 - cIdx;
+                          const cellNum = rowNumber * 10 + colNumber + 1;
+                          const isLight = (rowNumber + colNumber) % 2 === 0;
+
+                          const isLadderBase = gameState?.ladders?.[cellNum] !== undefined;
+                          const isSnakeHead = gameState?.snakes?.[cellNum] !== undefined;
+
+                          // Players located on this cell
+                          const cellPlayers = Object.values(gameState?.players || {}).filter(
+                            (p: any) => p.position === cellNum
+                          );
+
+                          return (
+                            <View
+                              key={cIdx}
+                              style={{
+                                flex: 1,
+                                backgroundColor: cellNum === 100 ? '#fef08a' : isLight ? '#f5e6cc' : '#d4bda4',
+                                justifyContent: 'space-between',
+                                alignItems: 'center',
+                                padding: 1,
+                                borderWidth: 0.3,
+                                borderColor: '#a3816a',
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontSize: 7,
+                                  fontWeight: '800',
+                                  color: cellNum === 100 ? '#854d0e' : '#3d2516',
+                                }}
+                              >
+                                {cellNum}
+                              </Text>
+
+                              {isLadderBase && <Text style={{ fontSize: 8 }}>🪜</Text>}
+                              {isSnakeHead && <Text style={{ fontSize: 8 }}>🐍</Text>}
+
+                              {/* Player tokens on cell */}
+                              <View style={{ flexDirection: 'row', gap: 1, flexWrap: 'wrap', justifyContent: 'center' }}>
+                                {cellPlayers.map((cp: any, idx: number) => {
+                                  const isMe = cp.userId === currentUserId;
+                                  return (
+                                    <View
+                                      key={idx}
+                                      style={{
+                                        width: 9,
+                                        height: 9,
+                                        borderRadius: 4.5,
+                                        backgroundColor: isMe ? '#2563eb' : idx === 1 ? '#dc2626' : '#16a34a',
+                                        borderWidth: 1,
+                                        borderColor: '#ffffff',
+                                      }}
+                                    />
+                                  );
+                                })}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Legend Bar */}
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 6, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: coffee.muted }}>🪜 Tangga Naik</Text>
+                  <Text style={{ fontSize: 10, color: coffee.muted }}>🐍 Ular Turun</Text>
+                  <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: '700' }}>🏆 Kotak 100</Text>
+                </View>
               </View>
             ) : table.game_type === 'remi' ? (
               /* Remi Draw Deck and Discard Pile */
@@ -954,6 +1324,62 @@ export default function GameTableScreen() {
           </View>
         )}
 
+        {/* UNO Turn & Shout Controls */}
+        {table.game_type === 'uno' && isPlaying && !isSpectator && (
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {isMyTurn && (
+              <TouchableOpacity
+                style={[styles.passBtn, { backgroundColor: '#4f46e5' }]}
+                onPress={handleUnoDraw}
+              >
+                <Text style={styles.passBtnText}>Ambil (+1) 🂠</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[
+                styles.passBtn,
+                { backgroundColor: gameState?.hasCalledUno ? '#15803d' : '#dc2626' },
+              ]}
+              onPress={handleUnoShout}
+            >
+              <Text style={[styles.passBtnText, { fontWeight: '900' }]}>
+                {gameState?.hasCalledUno ? '✅ SUDAH UNO' : 'TERIAK UNO! 📢'}
+              </Text>
+            </TouchableOpacity>
+
+            {/* Catch Uno Button if an opponent has 1 card without calling Uno */}
+            {gameState?.playersSummary?.some((p: any) => p.user_id !== currentUserId && p.cardCount === 1 && !p.hasCalledUno) && (
+              <TouchableOpacity
+                style={[styles.passBtn, { backgroundColor: '#ea580c' }]}
+                onPress={() => {
+                  const target = gameState.playersSummary.find((p: any) => p.user_id !== currentUserId && p.cardCount === 1 && !p.hasCalledUno);
+                  if (target) handleCatchUno(target.user_id);
+                }}
+              >
+                <Text style={[styles.passBtnText, { fontWeight: '800' }]}>🚨 Tangkap UNO!</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Snake & Ladder Action */}
+        {table.game_type === 'snake_ladder' && isPlaying && !isSpectator && (
+          <TouchableOpacity
+            style={[
+              styles.passBtn,
+              { backgroundColor: isMyTurn ? '#d97706' : '#4b5563' },
+              !isMyTurn && styles.passBtnDisabled,
+            ]}
+            onPress={handleSnakeLadderRoll}
+            disabled={!isMyTurn}
+          >
+            <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 13 }]}>
+              {isMyTurn ? '🎲 LEMPAR DADU!' : 'Menunggu Giliran ⏳'}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {isMyTurn && table.game_type === 'catur' && (
           <TouchableOpacity
             style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]}
@@ -980,6 +1406,10 @@ export default function GameTableScreen() {
             <Text style={styles.handSectionTitle}>
               {table.game_type === 'catur'
                 ? `Papan Catur: Anda ${gameState?.whitePlayerId === currentUserId ? 'Putih ⚪ (Jalan Duluan)' : 'Hitam ⚫'}`
+                : table.game_type === 'uno'
+                ? `Kartu UNO Anda (${myCards.length})`
+                : table.game_type === 'snake_ladder'
+                ? `Posisi Pion Anda: Kotak ${gameState?.players?.[currentUserId]?.position ?? 1} / 100`
                 : `Kartu di Tangan Anda (${table.game_type === 'gapleh' ? myHand.length : myCards.length})`}
             </Text>
             {isMyTurn && (
@@ -1016,6 +1446,49 @@ export default function GameTableScreen() {
                 );
               })}
             </ScrollView>
+          ) : table.game_type === 'uno' ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+            >
+              {myCards.map((card, idx) => (
+                <UnoCardTile
+                  key={card.id || idx}
+                  card={card}
+                  size="large"
+                  highlight={isMyTurn}
+                  disabled={!isMyTurn}
+                  onPress={() => handleUnoCardPress(card)}
+                />
+              ))}
+            </ScrollView>
+          ) : table.game_type === 'snake_ladder' ? (
+            <View style={{ paddingVertical: 4, gap: 6 }}>
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                {Object.values(gameState?.players || {}).map((pl: any) => {
+                  const pInfo = table.players?.find((p: any) => p.user_id === pl.userId);
+                  const isCurrent = gameState?.currentTurn === pl.userId;
+                  return (
+                    <View
+                      key={pl.userId}
+                      style={{
+                        backgroundColor: isCurrent ? 'rgba(212, 163, 115, 0.25)' : '#2c1e14',
+                        borderColor: isCurrent ? coffee.accent : coffee.border,
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                      }}
+                    >
+                      <Text style={{ color: isCurrent ? coffee.accent : coffee.text, fontSize: 11, fontWeight: '700' }}>
+                        {pInfo?.display_name || pl.userId}: Kotak {pl.position} {isCurrent ? '🎲' : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
           ) : table.game_type !== 'catur' ? (
             <ScrollView
               horizontal
@@ -1074,6 +1547,57 @@ export default function GameTableScreen() {
         </View>
       </Modal>
 
+      {/* Wild Card Color Picker Modal */}
+      <Modal visible={!!wildPickerCard} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={{ fontSize: 36, textAlign: 'center', marginBottom: 4 }}>🌈</Text>
+            <Text style={[styles.modalTitle, { textAlign: 'center' }]}>Pilih Warna Kartu Wild</Text>
+            <Text style={[styles.modalSub, { textAlign: 'center', marginTop: 4 }]}>
+              Tentukan warna aktif yang harus dimainkan pemain berikutnya:
+            </Text>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 16, justifyContent: 'center' }}>
+              {(['red', 'yellow', 'green', 'blue'] as const).map((color) => {
+                const meta = UNO_COLOR_MAP[color];
+                return (
+                  <TouchableOpacity
+                    key={color}
+                    style={{
+                      width: '45%',
+                      backgroundColor: meta.bg,
+                      borderColor: meta.border,
+                      borderWidth: 2,
+                      borderRadius: 12,
+                      paddingVertical: 14,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                    onPress={() => {
+                      if (wildPickerCard) {
+                        executePlayUnoCard(wildPickerCard.id, color);
+                        setWildPickerCard(null);
+                      }
+                    }}
+                  >
+                    <Text style={{ color: meta.text, fontWeight: '900', fontSize: 16 }}>
+                      {meta.label.toUpperCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={[styles.cancelChoiceBtn, { marginTop: 16 }]}
+              onPress={() => setWildPickerCard(null)}
+            >
+              <Text style={{ color: coffee.secondary, fontSize: 13, textAlign: 'center' }}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* Game Over Results Modal */}
       <Modal visible={resultModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -1102,7 +1626,7 @@ export default function GameTableScreen() {
                   🎉 SELAMAT! ANDA MENANG!
                 </Text>
                 <Text style={{ color: coffee.text, fontSize: 13, fontWeight: '700' }}>
-                  ⭐ +50 Poin Kopi Warkop telah dikumpulkan!
+                  ⭐ +{gameResult?.pointsAwarded ?? 50} Poin Kopi Warkop telah dikumpulkan!
                 </Text>
                 <Text style={{ color: coffee.secondary, fontSize: 11 }}>
                   Poin Anda tersimpan permanen dan tidak akan hilang.
@@ -1112,7 +1636,7 @@ export default function GameTableScreen() {
 
             {gameResult?.scores && (
               <View style={styles.scoresListContainer}>
-                <Text style={styles.scoresListTitle}>Sisa Poin Balak:</Text>
+                <Text style={styles.scoresListTitle}>Hasil Poin Pertandingan:</Text>
                 {Object.entries(gameResult.scores).map(([uid, pips]) => {
                   const p = table.players?.find((pl: any) => pl.user_id === uid);
                   const isWinner = gameResult.winners?.includes(uid);
@@ -1132,7 +1656,13 @@ export default function GameTableScreen() {
               style={styles.playAgainBtn}
               onPress={() => {
                 setResultModalVisible(false);
-                fetchTableState();
+                if (socketRef.current && tableId) {
+                  socketRef.current.emit('table:reset', { tableId }, () => {
+                    fetchTableState();
+                  });
+                } else {
+                  fetchTableState();
+                }
               }}
             >
               <Text style={styles.playAgainBtnText}>Tutup & Siap Main Lagi</Text>

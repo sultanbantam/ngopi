@@ -16,6 +16,8 @@ import { RemiGame } from './remi/RemiGame';
 import { PokerGame } from './poker/PokerGame';
 import { BridgeGame } from './bridge/BridgeGame';
 import { TrufGame } from './truf/TrufGame';
+import { UnoGame } from './uno/UnoGame';
+import { SnakeLadderGame } from './snake_ladder/SnakeLadderGame';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -27,6 +29,8 @@ GameRegistry.register('remi', RemiGame);
 GameRegistry.register('poker', PokerGame);
 GameRegistry.register('bridge', BridgeGame);
 GameRegistry.register('truf', TrufGame);
+GameRegistry.register('uno', UnoGame);
+GameRegistry.register('snake_ladder', SnakeLadderGame);
 
 interface ActiveTable {
   data: GameTableData;
@@ -149,8 +153,13 @@ export class TableManager {
       return { success: false, error: 'Meja tidak ditemukan.' };
     }
 
-    if (active.data.status !== 'waiting') {
-      return { success: false, error: 'Permainan di meja ini sudah dimulai.' };
+    if (active.data.status === 'finished') {
+      // Reset table to waiting state for a fresh match
+      active.data.status = 'waiting';
+      active.gameInstance = null;
+      active.data.players.forEach((p) => {
+        p.is_ready = false;
+      });
     }
 
     if (active.data.is_private && active.data.config?.password && active.data.config.password !== password) {
@@ -167,6 +176,37 @@ export class TableManager {
     const existingPlayer = active.data.players.find((p) => p.user_id === finalUserId);
     if (existingPlayer) {
       return { success: true, table: this.sanitizeTableData(active.data) };
+    }
+
+    // If game is actively playing, allow taking over a bot seat
+    if (active.data.status === 'playing') {
+      const botIdx = active.data.players.findIndex((p) => p.is_bot);
+      if (botIdx !== -1) {
+        const replacedBot = active.data.players[botIdx]!;
+        const newPlayer: GamePlayerInfo = {
+          id: makeId('p'),
+          user_id: finalUserId,
+          username: user.username,
+          display_name: user.display_name,
+          avatar_url: user.avatar_url ?? null,
+          seat_number: replacedBot.seat_number,
+          team: replacedBot.team,
+          chip_balance: replacedBot.chip_balance,
+          is_ready: true,
+          is_active: true,
+          is_bot: false,
+        };
+        active.data.players[botIdx] = newPlayer;
+        if (active.gameInstance) {
+          active.gameInstance.replacePlayer(replacedBot.user_id, newPlayer);
+        }
+        return { success: true, table: this.sanitizeTableData(active.data) };
+      }
+      return { success: false, error: 'Permainan di meja ini sedang berlangsung tanpa kursi kosong.' };
+    }
+
+    if (active.data.status !== 'waiting') {
+      return { success: false, error: 'Permainan di meja ini sudah dimulai.' };
     }
 
     // If table is full, check if a bot can yield its seat to a real human player
@@ -370,6 +410,18 @@ export class TableManager {
       }
     }
     return null;
+  }
+
+  // Reset finished table to waiting state
+  public static resetTable(tableId: string): { success: boolean; error?: string; table?: GameTableData } {
+    const active = this.tables.get(tableId);
+    if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
+    active.data.status = 'waiting';
+    active.gameInstance = null;
+    active.data.players.forEach((p) => {
+      p.is_ready = false;
+    });
+    return { success: true, table: this.sanitizeTableData(active.data) };
   }
 
   // Leave Table
