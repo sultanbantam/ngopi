@@ -67,6 +67,7 @@ export class TableManager {
     warungId?: string | null;
     config?: TableConfig;
   }): Promise<GameTableData> {
+    const tableId = makeId('tbl');
     const isPartnership = params.config?.gaplehMode === 'partnership';
     const maxPlayers = isPartnership ? 4 : (params.maxPlayers || (params.gameType === 'catur' ? 2 : 4));
     const minPlayers = isPartnership ? 4 : (params.minPlayers || 2);
