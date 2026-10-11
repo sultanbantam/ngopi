@@ -351,7 +351,7 @@ export class TableManager {
   public static updateCaturSetting(
     tableId: string,
     userId: string,
-    setting: { preferredColor?: 'white' | 'black' | 'random'; botDifficulty?: 'easy' | 'medium' | 'hard' }
+    setting: { preferredColor?: 'white' | 'black' | 'random' | undefined; botDifficulty?: 'easy' | 'medium' | 'hard' | undefined }
   ): { success: boolean; error?: string; table?: GameTableData; started?: boolean } {
     const active = this.tables.get(tableId);
     if (!active) return { success: false, error: 'Meja tidak ditemukan.' };

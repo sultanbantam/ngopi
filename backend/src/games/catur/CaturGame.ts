@@ -343,8 +343,8 @@ export class CaturGame extends BaseGame {
 
     for (const move of pseudoMoves) {
       // Simulate move
-      const originalDest = board[move.toRow]![move.toCol];
-      const movingPiece = board[move.fromRow]![move.fromCol];
+      const originalDest: ChessPiece = board[move.toRow]?.[move.toCol] ?? null;
+      const movingPiece: ChessPiece = board[move.fromRow]?.[move.fromCol] ?? null;
 
       board[move.toRow]![move.toCol] = movingPiece;
       board[move.fromRow]![move.fromCol] = null;
@@ -787,8 +787,8 @@ export class CaturGame extends BaseGame {
     if (isMaximizing) {
       let maxEval = -Infinity;
       for (const m of legalMoves) {
-        const dest = board[m.toRow]![m.toCol];
-        const piece = board[m.fromRow]![m.fromCol]!;
+        const dest: ChessPiece = board[m.toRow]?.[m.toCol] ?? null;
+        const piece: ChessPiece = board[m.fromRow]?.[m.fromCol] ?? null;
 
         board[m.toRow]![m.toCol] = piece;
         board[m.fromRow]![m.fromCol] = null;
@@ -806,8 +806,8 @@ export class CaturGame extends BaseGame {
     } else {
       let minEval = Infinity;
       for (const m of legalMoves) {
-        const dest = board[m.toRow]![m.toCol];
-        const piece = board[m.fromRow]![m.fromCol]!;
+        const dest: ChessPiece = board[m.toRow]?.[m.toCol] ?? null;
+        const piece: ChessPiece = board[m.fromRow]?.[m.fromCol] ?? null;
 
         board[m.toRow]![m.toCol] = piece;
         board[m.fromRow]![m.fromCol] = null;

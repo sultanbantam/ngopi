@@ -43,11 +43,11 @@ export interface GaplehState {
   ruleset: GaplehRuleset;
   targetScore: number;
   teams: Record<string, 'A' | 'B'>;
-  teamPips?: { A: number; B: number };
-  roundPoints?: { A: number; B: number };
+  teamPips?: { A: number; B: number } | undefined;
+  roundPoints?: { A: number; B: number } | undefined;
   matchScores: { A: number; B: number };
-  winningTeam?: 'A' | 'B' | null;
-  winReason?: 'cards_cleared' | 'deadlock' | 'seri';
-  partnershipSummary?: string;
-  isMatchOver?: boolean;
+  winningTeam?: 'A' | 'B' | null | undefined;
+  winReason?: 'cards_cleared' | 'deadlock' | 'seri' | undefined;
+  partnershipSummary?: string | undefined;
+  isMatchOver?: boolean | undefined;
 }
