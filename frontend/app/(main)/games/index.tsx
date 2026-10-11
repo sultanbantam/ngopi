@@ -24,7 +24,7 @@ import LeaderboardModal from '../../../src/components/LeaderboardModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
-type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'remi' | 'poker' | 'bridge' | 'truf';
+type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'remi' | 'poker' | 'bridge' | 'truf';
 
 interface GameTable {
   id: string;
@@ -50,6 +50,7 @@ const GAME_TABS: Array<{ id: GameType; label: string; icon: string; count?: numb
   { id: 'catur', label: 'Catur', icon: 'chess-knight' },
   { id: 'uno', label: 'UNO', icon: 'cards-playing-outline' },
   { id: 'snake_ladder', label: 'Ular Tangga', icon: 'dice-multiple' },
+  { id: 'monopoly', label: 'Monopoli', icon: 'home-city-outline' },
   { id: 'remi', label: 'Remi', icon: 'cards-playing-outline' },
   { id: 'poker', label: 'Poker', icon: 'cards-spade' },
   { id: 'bridge', label: 'Bridge', icon: 'bridge' },

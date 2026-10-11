@@ -54,6 +54,18 @@ const UNO_VALUE_LABEL: Record<string, string> = {
   wild4: '+4',
 };
 
+const MONOPOLY_GROUP_COLORS: Record<string, string> = {
+  brown: '#8d6e63',
+  light_blue: '#38bdf8',
+  pink: '#f472b6',
+  orange: '#fb923c',
+  red: '#ef4444',
+  yellow: '#facc15',
+  dark_blue: '#1d4ed8',
+  station: '#64748b',
+  utility: '#eab308',
+};
+
 function UnoCardTile({
   card,
   onPress,
@@ -273,6 +285,151 @@ export default function GameTableScreen() {
         Alert.alert('Gagal', res?.error || 'Tidak dapat melempar dadu.');
       }
     });
+  };
+
+  // Monopoly Actions
+  const handleMonopolyRoll = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'roll', payload: {} }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal', res?.error || 'Tidak dapat melempar dadu.');
+      }
+    });
+  };
+
+  const handleMonopolyBuyProperty = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'buy_property', payload: {} }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal Beli', res?.error || 'Tidak dapat membeli properti.');
+      }
+    });
+  };
+
+  const handleMonopolySkipBuy = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'skip_buy', payload: {} });
+  };
+
+  const handleMonopolyBuildHouse = (squareId: number) => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'build_house', payload: { squareId } }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal Bangun', res?.error || 'Tidak dapat membangun rumah.');
+      }
+    });
+  };
+
+  const handleMonopolyPayJailFine = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'pay_jail_fine', payload: {} }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Gagal', res?.error || 'Gagal membayar denda penjara.');
+      }
+    });
+  };
+
+  const handleMonopolyUseJailCard = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'use_jail_card', payload: {} });
+  };
+
+  const handleMonopolyEndTurn = () => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit('game:action', { tableId, action: 'end_turn', payload: {} }, (res: any) => {
+      if (!res?.success) {
+        Alert.alert('Info', res?.error || 'Gagal mengakhiri giliran.');
+      }
+    });
+  };
+
+  const renderMonopolyTile = (sqId: number) => {
+    const sq = gameState?.squares?.[sqId] || { name: `Kotak ${sqId}`, type: 'property' };
+    const prop = gameState?.properties?.[sqId];
+    const stripeColor = MONOPOLY_GROUP_COLORS[sq?.group || ''] || 'transparent';
+    const cellPlayers = Object.values(gameState?.players || {}).filter(
+      (p: any) => p.position === sqId && !p.isBankrupt
+    );
+    const owner = prop?.ownerId ? table.players?.find((p: any) => p.user_id === prop.ownerId) : null;
+    const isSpecial = sq.type === 'start' || sq.type === 'jail' || sq.type === 'go_to_jail' || sq.type === 'free_parking';
+
+    let displayIcon = '';
+    if (sq.type === 'start') displayIcon = '🚩';
+    else if (sq.type === 'jail') displayIcon = '🔒';
+    else if (sq.type === 'go_to_jail') displayIcon = '👮';
+    else if (sq.type === 'free_parking') displayIcon = '🅿️';
+    else if (sq.type === 'chance') displayIcon = '❓';
+    else if (sq.type === 'community') displayIcon = '🎁';
+    else if (sq.type === 'station') displayIcon = '🚆';
+    else if (sq.type === 'utility') displayIcon = '⚡';
+    else if (sq.type === 'tax') displayIcon = '💸';
+
+    return (
+      <View
+        key={sqId}
+        style={{
+          flex: 1,
+          backgroundColor: isSpecial ? '#2e1c12' : '#23150d',
+          borderRadius: 4,
+          borderWidth: 0.5,
+          borderColor: '#4d301d',
+          overflow: 'hidden',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: 1,
+        }}
+      >
+        {stripeColor !== 'transparent' && (
+          <View style={{ width: '100%', height: 4, backgroundColor: stripeColor }} />
+        )}
+
+        <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+          {displayIcon ? (
+            <Text style={{ fontSize: 9 }}>{displayIcon}</Text>
+          ) : (
+            <Text numberOfLines={1} style={{ fontSize: 7, color: '#f3e8dc', fontWeight: '700', textAlign: 'center' }}>
+              {sq.name}
+            </Text>
+          )}
+
+          {sq.price && (
+            <Text style={{ fontSize: 6.5, color: '#94a3b8' }}>
+              {prop?.houses >= 5 ? '🏨' : prop?.houses > 0 ? `🏠${prop.houses}` : `Rp${sq.price}`}
+            </Text>
+          )}
+
+          {owner && (
+            <View
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: owner.user_id === currentUserId ? '#38bdf8' : '#f59e0b',
+                marginTop: 1,
+              }}
+            />
+          )}
+        </View>
+
+        {cellPlayers.length > 0 && (
+          <View style={{ flexDirection: 'row', gap: 1, justifyContent: 'center', flexWrap: 'wrap', paddingBottom: 1 }}>
+            {cellPlayers.map((cp: any, idx: number) => (
+              <View
+                key={idx}
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: 3.5,
+                  backgroundColor: cp.userId === currentUserId ? '#38bdf8' : idx === 1 ? '#ef4444' : '#22c55e',
+                  borderWidth: 0.5,
+                  borderColor: '#ffffff',
+                }}
+              />
+            ))}
+          </View>
+        )}
+      </View>
+    );
   };
 
   // Load User Info
@@ -1371,6 +1528,130 @@ export default function GameTableScreen() {
                   <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: '700' }}>🏆 Kotak 100</Text>
                 </View>
               </View>
+            ) : table.game_type === 'monopoly' ? (
+              /* Monopoly 24-Square Perimeter Board */
+              <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+                {/* Last Action Announcement Banner */}
+                {gameState?.lastAction && (
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(212, 163, 115, 0.2)',
+                      borderColor: coffee.accent,
+                      borderWidth: 1,
+                      borderRadius: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 5,
+                      marginBottom: 6,
+                      maxWidth: 340,
+                    }}
+                  >
+                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>
+                      {gameState.lastAction.message}
+                    </Text>
+                  </View>
+                )}
+
+                {/* 24-Square Board Container */}
+                <View
+                  style={{
+                    width: 330,
+                    height: 330,
+                    borderWidth: 2,
+                    borderColor: '#5c3d24',
+                    borderRadius: 10,
+                    backgroundColor: '#1b130e',
+                    padding: 3,
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  {/* Top Edge (Squares 12, 13, 14, 15, 16, 17, 18) */}
+                  <View style={{ flexDirection: 'row', height: 48, gap: 2 }}>
+                    {[12, 13, 14, 15, 16, 17, 18].map((sqId) => renderMonopolyTile(sqId))}
+                  </View>
+
+                  {/* Middle Section: Left Edge + Center Area + Right Edge */}
+                  <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', paddingVertical: 2 }}>
+                    {/* Left Edge (Squares 11, 10, 9, 8, 7 - top to bottom) */}
+                    <View style={{ width: 44, justifyContent: 'space-between', gap: 2 }}>
+                      {[11, 10, 9, 8, 7].map((sqId) => renderMonopolyTile(sqId))}
+                    </View>
+
+                    {/* Center Area */}
+                    <View
+                      style={{
+                        flex: 1,
+                        marginHorizontal: 4,
+                        backgroundColor: '#140d08',
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: '#3d2516',
+                        padding: 6,
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <Text style={{ color: coffee.accent, fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>
+                        🏢 MONOPOLI WARKOP
+                      </Text>
+
+                      {/* Dice display */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#25170e', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 18 }}>🎲</Text>
+                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>
+                          [{gameState?.dice?.[0] || 1}] + [{gameState?.dice?.[1] || 1}] = {(gameState?.dice?.[0] || 1) + (gameState?.dice?.[1] || 1)}
+                        </Text>
+                        {gameState?.isDouble && (
+                          <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '800' }}>KEMBAR! 🔥</Text>
+                        )}
+                      </View>
+
+                      {/* Pending Action Box in Center */}
+                      {gameState?.pendingAction?.type === 'buy_property' ? (
+                        <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 8, padding: 6, alignItems: 'center', width: '100%' }}>
+                          <Text style={{ color: '#86efac', fontSize: 10, fontWeight: '700', textAlign: 'center' }}>
+                            Tawaran: {gameState?.squares?.[gameState.pendingAction.squareId]?.name || `Kotak ${gameState.pendingAction.squareId}`} (Rp {gameState.pendingAction.amount})
+                          </Text>
+                          {isMyTurn && !isSpectator && (
+                            <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                              <TouchableOpacity
+                                style={{ backgroundColor: '#15803d', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}
+                                onPress={handleMonopolyBuyProperty}
+                              >
+                                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>Beli 💰</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{ backgroundColor: '#b91c1c', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}
+                                onPress={handleMonopolySkipBuy}
+                              >
+                                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>Lewat ❌</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
+                      ) : (
+                        <View style={{ alignItems: 'center' }}>
+                          <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                            Giliran: <Text style={{ color: isMyTurn ? '#38bdf8' : coffee.accent, fontWeight: '700' }}>
+                              {table.players?.find((p: any) => p.user_id === gameState?.currentTurn)?.display_name || 'Menunggu'}
+                            </Text>
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Right Edge (Squares 19, 20, 21, 22, 23 - top to bottom) */}
+                    <View style={{ width: 44, justifyContent: 'space-between', gap: 2 }}>
+                      {[19, 20, 21, 22, 23].map((sqId) => renderMonopolyTile(sqId))}
+                    </View>
+                  </View>
+
+                  {/* Bottom Edge (Squares 6, 5, 4, 3, 2, 1, 0 - left to right) */}
+                  <View style={{ flexDirection: 'row', height: 48, gap: 2 }}>
+                    {[6, 5, 4, 3, 2, 1, 0].map((sqId) => renderMonopolyTile(sqId))}
+                  </View>
+                </View>
+              </View>
             ) : table.game_type === 'remi' ? (
               /* Remi Draw Deck and Discard Pile */
               <View style={{ alignItems: 'center', gap: 12, paddingVertical: 10 }}>
@@ -1553,6 +1834,57 @@ export default function GameTableScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Monopoly Actions */}
+        {table.game_type === 'monopoly' && isPlaying && !isSpectator && isMyTurn && (
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {!gameState?.hasRolled && (
+              <TouchableOpacity
+                style={[styles.passBtn, { backgroundColor: '#d97706', minWidth: 120 }]}
+                onPress={handleMonopolyRoll}
+              >
+                <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 12 }]}>🎲 LEMPAR DADU!</Text>
+              </TouchableOpacity>
+            )}
+
+            {gameState?.pendingAction?.type === 'buy_property' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.passBtn, { backgroundColor: '#15803d', minWidth: 110 }]}
+                  onPress={handleMonopolyBuyProperty}
+                >
+                  <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 11 }]}>
+                    💰 Beli (Rp {gameState.pendingAction.amount})
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.passBtn, { backgroundColor: '#b91c1c', minWidth: 80 }]}
+                  onPress={handleMonopolySkipBuy}
+                >
+                  <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 11 }]}>❌ Lewat</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {gameState?.hasRolled && !gameState?.pendingAction && (
+              <TouchableOpacity
+                style={[styles.passBtn, { backgroundColor: '#2563eb', minWidth: 120 }]}
+                onPress={handleMonopolyEndTurn}
+              >
+                <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 12 }]}>✅ Selesai Giliran</Text>
+              </TouchableOpacity>
+            )}
+
+            {gameState?.players?.[currentUserId]?.inJail && (
+              <TouchableOpacity
+                style={[styles.passBtn, { backgroundColor: '#7c3aed', minWidth: 120 }]}
+                onPress={handleMonopolyPayJailFine}
+              >
+                <Text style={[styles.passBtnText, { fontWeight: '800', fontSize: 11 }]}>🔓 Denda (Rp 50)</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
         {isMyTurn && table.game_type === 'catur' && (
           <TouchableOpacity
             style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]}
@@ -1583,6 +1915,8 @@ export default function GameTableScreen() {
                 ? `Kartu UNO Anda (${myCards.length})`
                 : table.game_type === 'snake_ladder'
                 ? `Posisi Pion Anda: Kotak ${gameState?.players?.[currentUserId]?.position ?? 1} / 100`
+                : table.game_type === 'monopoly'
+                ? `Aset Monopoli Anda (Saldo: Rp ${gameState?.players?.[currentUserId]?.money ?? 0})`
                 : `Kartu di Tangan Anda (${table.game_type === 'gapleh' ? myHand.length : myCards.length})`}
             </Text>
             {isMyTurn && (
@@ -1661,6 +1995,79 @@ export default function GameTableScreen() {
                   );
                 })}
               </View>
+            </View>
+          ) : table.game_type === 'monopoly' ? (
+            /* Monopoly Player Asset & Balance Cards */
+            <View style={{ paddingVertical: 4, gap: 6 }}>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                {Object.values(gameState?.players || {}).map((pl: any) => {
+                  const pInfo = table.players?.find((p: any) => p.user_id === pl.userId);
+                  const isCurrent = gameState?.currentTurn === pl.userId;
+                  const isMe = pl.userId === currentUserId;
+                  const propCount = pl.properties?.length || 0;
+                  return (
+                    <View
+                      key={pl.userId}
+                      style={{
+                        backgroundColor: isCurrent ? 'rgba(212, 163, 115, 0.25)' : '#2c1e14',
+                        borderColor: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.border,
+                        borderWidth: isMe ? 2 : 1,
+                        borderRadius: 8,
+                        paddingHorizontal: 8,
+                        paddingVertical: 5,
+                        minWidth: 100,
+                      }}
+                    >
+                      <Text style={{ color: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.text, fontSize: 11, fontWeight: '800' }}>
+                        {pInfo?.display_name || pl.userId} {isMe ? '(Anda)' : ''} {isCurrent ? '🎲' : ''}
+                      </Text>
+                      <Text style={{ color: pl.isBankrupt ? '#ef4444' : '#22c55e', fontSize: 11, fontWeight: '700' }}>
+                        {pl.isBankrupt ? '💀 BANGKRUT' : `💰 Rp ${pl.money}`}
+                      </Text>
+                      <Text style={{ color: coffee.muted, fontSize: 9 }}>
+                        🏠 {propCount} Properti {pl.inJail ? '• 🔒 Penjara' : ''}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* My Owned Properties with Build House option */}
+              {gameState?.players?.[currentUserId]?.properties?.length > 0 && (
+                <View style={{ marginTop: 4 }}>
+                  <Text style={{ fontSize: 10, color: coffee.muted, marginBottom: 4, textAlign: 'center' }}>
+                    Properti Anda (Klik untuk bangun Rumah jika punya 1 kelompok warna):
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 4 }}>
+                    {gameState.players[currentUserId].properties.map((sqId: number) => {
+                      const sq = gameState.squares?.[sqId];
+                      const prop = gameState.properties?.[sqId];
+                      const houses = prop?.houses || 0;
+                      return (
+                        <TouchableOpacity
+                          key={sqId}
+                          style={{
+                            backgroundColor: '#1e140d',
+                            borderColor: MONOPOLY_GROUP_COLORS[sq?.group || ''] || coffee.border,
+                            borderWidth: 1.5,
+                            borderRadius: 6,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            alignItems: 'center',
+                          }}
+                          onPress={() => isMyTurn && handleMonopolyBuildHouse(sqId)}
+                          disabled={!isMyTurn}
+                        >
+                          <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '700' }}>{sq?.name || `Kotak ${sqId}`}</Text>
+                          <Text style={{ color: coffee.accent, fontSize: 9 }}>
+                            {houses >= 5 ? '🏨 Hotel' : houses > 0 ? `🏠 x${houses}` : `Rp ${sq?.price || 0}`}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
             </View>
           ) : table.game_type !== 'catur' ? (
             <ScrollView

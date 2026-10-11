@@ -1102,7 +1102,7 @@ export default function BambupediaRoom() {
               accessibilityLabel="Buka / Tutup Musik Jukebox"
             >
               <Text style={{ fontSize: 13 }}>☕</Text>
-              <Text style={styles.suasanaToggleTitle}>SUASANA WARKOP</Text>
+              <Text style={styles.suasanaToggleTitle}>MUSIK WARKOP</Text>
               <Ionicons name={suasanaExpanded ? 'chevron-up' : 'chevron-down'} size={14} color={coffee.accent} />
             </TouchableOpacity>
 
