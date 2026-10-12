@@ -173,6 +173,10 @@ export class PointsEconomyService {
     return up;
   }
 
+  public getUserPoints(userId: string): UserPoints | undefined {
+    return this.userPoints.get(userId);
+  }
+
   private recordTransaction(
     userId: string,
     amount: number,

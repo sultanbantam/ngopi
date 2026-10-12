@@ -79,7 +79,9 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       .map((user) => {
         const ptsByName = PointsManager.getPoints(user.username);
         const ptsById = PointsManager.getPoints(user.id);
-        const ptsService = pointsEconomyService?.getUserPoints(user.id)?.balance || 0;
+        const ptsService = (pointsEconomyService && typeof pointsEconomyService.getUserPoints === 'function')
+          ? (pointsEconomyService.getUserPoints(user.id)?.balance || 0)
+          : 0;
         const totalPoints = Math.max(ptsByName, ptsById, ptsService);
         return {
           id: user.id,
