@@ -1,4 +1,4 @@
-export type GameType = 'gapleh' | 'remi' | 'bridge' | 'truf' | 'poker' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'pokemon';
+export type GameType = 'gapleh' | 'remi' | 'bridge' | 'truf' | 'poker' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'pokemon' | 'mahyong' | 'halma' | 'daku' | 'karambol' | 'billiard';
 
 export type TableStatus = 'waiting' | 'playing' | 'finished';
 

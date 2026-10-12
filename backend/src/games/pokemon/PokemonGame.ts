@@ -22,10 +22,11 @@ export class PokemonGame extends BaseGame {
   }
 
   public initializeState(config: any): PokemonGameState {
-    const playerOrder = this.players.map((p) => p.user_id);
+    const effectivePlayers = this.players.slice(0, 2);
+    const playerOrder = effectivePlayers.map((p) => p.user_id);
     const playersMap: Record<string, PokemonPlayerState> = {};
 
-    for (const p of this.players) {
+    for (const p of effectivePlayers) {
       // Check if custom team passed in config
       let team: PokemonCardInstance[] = [];
       if (config?.customTeams?.[p.user_id] && Array.isArray(config.customTeams[p.user_id])) {

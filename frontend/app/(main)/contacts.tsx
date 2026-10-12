@@ -1,6 +1,6 @@
 import { coffee } from '../../src/theme/coffee';
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView, KeyboardAvoidingView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator, Platform, Modal, TextInput, Alert, Image, ScrollView, KeyboardAvoidingView, Share } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
@@ -298,6 +298,44 @@ export default function ContactsScreen() {
       else Alert.alert('Profil belum tersimpan', message);
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const shareProfileToSocial = async () => {
+    const name = editDisplayName || currentUsername || 'Kawan Warkop';
+    const targetUrl = profileLink || 'https://ngopi.top';
+    const hookText = `☕ Yuk ngopi bareng gue (${name}) di Ngopi (https://ngopi.top)! 🚀\n\nNongkrong seru di warung kopi virtual nusantara: mabar Gapleh Domino, Catur, UNO, Pokemon duel, Mahyong & Billiard, dengerin Jukebox musik bareng, kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gabung & mabar bareng gue di sini: ${targetUrl} ☕🎉`;
+
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: `Profil ${name} di Ngopi.top`,
+            text: hookText,
+            url: targetUrl,
+          });
+          return;
+        } catch {
+          // ignore or fallback
+        }
+      }
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(hookText);
+        }
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(hookText)}`, '_blank');
+      } catch {
+        alert('Teks profil berhasil disalin!');
+      }
+    } else {
+      try {
+        await Share.share({
+          message: hookText,
+          url: targetUrl,
+        });
+      } catch (e) {
+        console.warn(e);
+      }
     }
   };
 
@@ -710,6 +748,59 @@ export default function ContactsScreen() {
             </View>
 
             <Text style={{ color: coffee.muted, marginBottom: 12 }}>Tautan mengikuti nama yang sudah disimpan.</Text>
+
+            {/* Bagikan Profil Card & Social Share Hook */}
+            <View
+              style={{
+                backgroundColor: coffee.raised,
+                borderRadius: 12,
+                padding: 14,
+                marginTop: 8,
+                marginBottom: 16,
+                borderWidth: 1,
+                borderColor: coffee.accent,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <View style={[styles.avatar, { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: coffee.accent }]}>
+                  {editAvatar ? (
+                    <Image source={{ uri: editAvatar }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                  ) : (
+                    <Text style={[styles.avatarText, { fontSize: 18 }]}>{editDisplayName.charAt(0) || 'U'}</Text>
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13 }}>
+                    {editDisplayName || currentUsername || 'Kawan Warkop'}
+                  </Text>
+                  <Text style={{ color: coffee.secondary, fontSize: 11 }} numberOfLines={1}>
+                    Tampil di https://ngopi.top
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={{ color: coffee.text, fontSize: 12, lineHeight: 18, fontStyle: 'italic', marginBottom: 12 }}>
+                "☕ Yuk ngopi & mabar bareng gue di Ngopi! Nongkrong seru warkop virtual, kumpulin poin & tukar token BaMbooChain (BMC)! 🏆"
+              </Text>
+
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  backgroundColor: '#25D366',
+                  borderRadius: 10,
+                  paddingVertical: 10,
+                }}
+                onPress={shareProfileToSocial}
+              >
+                <Ionicons name="share-social-outline" size={18} color="#FFF" />
+                <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 13 }}>
+                  Bagikan Profil ke Sosmed 📢
+                </Text>
+              </TouchableOpacity>
+            </View>
             </ScrollView>
             <View style={[styles.modalActions, { padding: 16, flexWrap: 'wrap', gap: 8 }]}>
               <TouchableOpacity onPress={() => setProfileModalVisible(false)} style={[styles.cancelBtn, { backgroundColor: coffee.border, borderRadius: 8, paddingHorizontal: 20 }]}>

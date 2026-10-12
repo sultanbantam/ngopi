@@ -185,7 +185,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
 
   const handleConvertBmc = async () => {
     if (!walletAddress || !walletAddress.startsWith('0x') || walletAddress.length !== 42) {
-      Alert.alert('Alamat Dompet Tidak Valid', 'Masukkan alamat dompet Bamboochain (0x... 42 karakter).');
+      Alert.alert('Alamat Dompet Tidak Valid', 'Masukkan alamat dompet BaMbooChain (0x... 42 karakter).');
       return;
     }
 
@@ -383,13 +383,72 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                     </View>
                   </View>
 
-                  {/* Cara Mendapat Poin */}
+                  {/* Cara Mendapat Poin Warkop */}
                   <Text style={styles.sectionTitle}>Cara Mendapat Poin Warkop</Text>
+                  
+                  {/* Banner Checkin 7 Hari */}
+                  <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.12)', borderWidth: 1, borderColor: coffee.border, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13 }}>
+                        📅 Check-in Harian (Siklus 07.00 - 07.00 WIB)
+                      </Text>
+                      <Text style={{ color: coffee.secondary, fontSize: 11 }}>Syarat Berturut-turut</Text>
+                    </View>
+                    <Text style={{ color: coffee.text, fontSize: 11, lineHeight: 16, marginBottom: 8 }}>
+                      Check-in setiap hari untuk akumulasi poin makin besar. Dihitung mulai jam 07.00 sampai jam 07.00 WIB. Jika terlewat tidak check-in di hari tertentu, streak akan direset kembali ke Hari 1:
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'space-between' }}>
+                      {[
+                        { day: 1, pts: 1 },
+                        { day: 2, pts: 3 },
+                        { day: 3, pts: 5 },
+                        { day: 4, pts: 7 },
+                        { day: 5, pts: 9 },
+                        { day: 6, pts: 11 },
+                        { day: 7, pts: 20 },
+                      ].map((s) => {
+                        const currentCycleDay = ((pointsData?.streak_days || 1) - 1) % 7 + 1;
+                        const isCurrent = currentCycleDay === s.day;
+                        return (
+                          <View
+                            key={s.day}
+                            style={{
+                              flex: 1,
+                              minWidth: 40,
+                              backgroundColor: isCurrent ? coffee.accent : 'rgba(0,0,0,0.3)',
+                              borderRadius: 8,
+                              paddingVertical: 6,
+                              paddingHorizontal: 2,
+                              alignItems: 'center',
+                              borderWidth: 1,
+                              borderColor: isCurrent ? '#fde047' : coffee.border,
+                            }}
+                          >
+                            <Text style={{ fontSize: 9, color: isCurrent ? '#171411' : coffee.secondary, fontWeight: '700' }}>
+                              H-{s.day}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: isCurrent ? '#171411' : '#fff', fontWeight: '900' }}>
+                              +{s.pts}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+
                   <View style={styles.earningGrid}>
+                    <View style={styles.earningItem}>
+                      <Text style={styles.earningEmoji}>🤝</Text>
+                      <View style={styles.earningInfo}>
+                        <Text style={styles.earningTitle}>Referral Teman (Kode Unik)</Text>
+                        <Text style={styles.earningSub}>+50 Poin untuk setiap teman yang mendaftar menggunakan kode referral Anda!</Text>
+                      </View>
+                    </View>
+
                     <View style={styles.earningItem}>
                       <Text style={styles.earningEmoji}>💬</Text>
                       <View style={styles.earningInfo}>
-                        <Text style={styles.earningTitle}>Kirim Pesan Chat</Text>
+                        <Text style={styles.earningTitle}>Kirim Pesan Chat Warkop</Text>
                         <Text style={styles.earningSub}>+1 Poin (maks 50/hari) • Hari ini: {pointsData?.daily_chat_count || 0}/50</Text>
                       </View>
                     </View>
@@ -406,15 +465,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                       <Text style={styles.earningEmoji}>🎮</Text>
                       <View style={styles.earningInfo}>
                         <Text style={styles.earningTitle}>Main & Menang Game</Text>
-                        <Text style={styles.earningSub}>+10 Poin saat selesai, +25 Poin jika menang!</Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.earningItem}>
-                      <Text style={styles.earningEmoji}>🤝</Text>
-                      <View style={styles.earningInfo}>
-                        <Text style={styles.earningTitle}>Undang Kawan Warkop</Text>
-                        <Text style={styles.earningSub}>+50 Poin untuk setiap teman aktif yang bergabung</Text>
+                        <Text style={styles.earningSub}>+10 Poin saat menyelesaikan match, +25 Poin bonus juara!</Text>
                       </View>
                     </View>
                   </View>

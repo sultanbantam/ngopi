@@ -11,6 +11,7 @@ import {
   Alert,
   Platform,
   useWindowDimensions,
+  Share,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -638,6 +639,45 @@ export default function GameTableScreen() {
         Alert.alert('Perhatian', res?.error || 'Gagal mengubah status siap.');
       }
     });
+  };
+
+  // Share Victory to Social Media
+  const handleShareVictory = async () => {
+    const gameLabel = (table?.game_type || 'Game Warkop').toUpperCase();
+    const winnerName = currentUsername || 'Saya';
+    const hookText = `☕🔥 Mantap Jiwa! Baru aja menang mabar di game ${gameLabel} di Ngopi (https://ngopi.top)! 🏆✨\n\nNongkrong santai warkop digital: mabar Domino Gapleh, Catur, UNO, Pokemon duel, Mahyong, Karambol & Billiard! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas mabar bareng ${winnerName} sekarang: https://ngopi.top ☕🚀`;
+
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: 'Kemenangan di Ngopi.top!',
+            text: hookText,
+            url: 'https://ngopi.top',
+          });
+          return;
+        } catch {
+          // ignore or fallback
+        }
+      }
+      try {
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(hookText);
+        }
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(hookText)}`, '_blank');
+      } catch {
+        alert('Tautan kemenangan telah disiapkan!');
+      }
+    } else {
+      try {
+        await Share.share({
+          message: hookText,
+          url: 'https://ngopi.top',
+        });
+      } catch (e) {
+        console.warn(e);
+      }
+    }
   };
 
   // Chess Action: Move Piece
@@ -2652,6 +2692,26 @@ export default function GameTableScreen() {
                 })}
               </View>
             )}
+
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: '#16a34a',
+                borderRadius: 12,
+                minHeight: 44,
+                marginBottom: 8,
+                paddingHorizontal: 16,
+              }}
+              onPress={handleShareVictory}
+            >
+              <Ionicons name="share-social-outline" size={18} color="#FFF" />
+              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '800' }}>
+                Bagikan Kemenangan ke Sosmed 📢
+              </Text>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.playAgainBtn, { marginTop: 4 }]}

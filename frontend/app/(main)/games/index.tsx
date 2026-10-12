@@ -27,7 +27,7 @@ import PointsHubModal from '../../../src/components/PointsHubModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
-type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'pokemon' | 'remi' | 'poker' | 'bridge' | 'truf';
+type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'pokemon' | 'remi' | 'poker' | 'bridge' | 'truf' | 'mahyong' | 'halma' | 'daku' | 'karambol' | 'billiard';
 
 interface GameTable {
   id: string;
@@ -58,7 +58,12 @@ const GAME_TABS: Array<{ id: GameType; label: string; icon: string; count?: numb
   { id: 'remi', label: 'Remi', icon: 'cards-playing-outline' },
   { id: 'poker', label: 'Poker', icon: 'cards-spade' },
   { id: 'bridge', label: 'Bridge', icon: 'bridge' },
-  { id: 'truf', label: 'Truf', icon: 'cards-diamond' },
+  { id: 'truf', label: 'Truf PekaI', icon: 'cards-diamond' },
+  { id: 'mahyong', label: 'Mahjong', icon: 'cards' },
+  { id: 'halma', label: 'Halma', icon: 'star' },
+  { id: 'daku', label: 'Daku', icon: 'circle-slice-8' },
+  { id: 'karambol', label: 'Karambol', icon: 'record-circle-outline' },
+  { id: 'billiard', label: 'Billiard', icon: 'billiards' },
 ];
 
 export default function GamesLobbyScreen() {
@@ -150,7 +155,7 @@ export default function GamesLobbyScreen() {
         {
           gameType: selectedTab,
           name: `Meja Santai @${currentUsername || 'Ngopikawan'}`,
-          maxPlayers: selectedTab === 'catur' ? 2 : (gaplehMode === 'partnership' ? 4 : 4),
+          maxPlayers: ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab) ? 2 : (gaplehMode === 'partnership' ? 4 : 4),
           minPlayers: gaplehMode === 'partnership' ? 4 : 2,
           isPrivate: false,
           config,
@@ -204,7 +209,7 @@ export default function GamesLobbyScreen() {
         {
           gameType: selectedTab,
           name: tableName.trim(),
-          maxPlayers: selectedTab === 'catur' ? 2 : (gaplehMode === 'partnership' ? 4 : maxPlayers),
+          maxPlayers: ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab) ? 2 : (gaplehMode === 'partnership' ? 4 : maxPlayers),
           minPlayers: gaplehMode === 'partnership' ? 4 : 2,
           isPrivate,
           password: isPrivate ? password.trim() : undefined,

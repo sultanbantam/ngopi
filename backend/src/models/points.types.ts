@@ -23,6 +23,7 @@ export interface UserPoints {
   lifetime: number;
   streak_days: number;
   last_login_date: string; // YYYY-MM-DD
+  last_checkin_cycle_day?: number;
   daily_chat_count: number;
   daily_reaction_count: number;
   updated_at: number;

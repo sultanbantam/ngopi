@@ -281,36 +281,64 @@ export class PointsEconomyService {
     return { pointsAdded: 25, newBalance: up.balance };
   }
 
-  // 6. Login harian (streak) +5 x streak
+  // Helper: Cycle day index based on 07:00 WIB (UTC 00:00)
+  public getWarkopCycleDay(nowMs = Date.now()): number {
+    return Math.floor(nowMs / 86400000);
+  }
+
+  public getStreakPoints(day: number): number {
+    const table: Record<number, number> = {
+      1: 1,
+      2: 3,
+      3: 5,
+      4: 7,
+      5: 9,
+      6: 11,
+      7: 20,
+    };
+    const cycleIndex = ((day - 1) % 7) + 1;
+    return table[cycleIndex] || 1;
+  }
+
+  // 6. Check-in harian (streak 7 hari: 1, 3, 5, 7, 9, 11, 20 poin, cycle 07:00 - 07:00 WIB)
   public claimDailyStreak(userId: string): { awarded: boolean; streak: number; pointsAdded: number; newBalance: number; message: string } {
     const up = this.getOrCreateUserPoints(userId);
-    const today = this.getTodayString();
+    const currentCycleDay = this.getWarkopCycleDay();
+    const lastCycleDay = up.last_checkin_cycle_day ?? -1;
 
-    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-
-    if (up.last_login_date === today && up.streak_days > 0 && up.updated_at > new Date(today).getTime()) {
+    if (lastCycleDay === currentCycleDay) {
       return {
         awarded: false,
-        streak: up.streak_days,
+        streak: up.streak_days || 1,
         pointsAdded: 0,
         newBalance: up.balance,
-        message: 'Streak hari ini sudah diklaim.',
+        message: 'Check-in hari ini sudah diklaim (Siklus 07.00 - 07.00 WIB).',
       };
     }
 
-    if (up.last_login_date === yesterday) {
-      up.streak_days += 1;
-    } else if (up.last_login_date !== today) {
-      up.streak_days = 1; // Reset streak
+    if (lastCycleDay === currentCycleDay - 1) {
+      // Consecutive check-in
+      up.streak_days = (up.streak_days || 0) + 1;
+    } else {
+      // Missed a day or first time -> Reset to day 1
+      up.streak_days = 1;
     }
 
-    const pointsToAward = 5 * up.streak_days;
+    const pointsToAward = this.getStreakPoints(up.streak_days);
     up.balance += pointsToAward;
     up.lifetime += pointsToAward;
-    up.last_login_date = today;
+    up.last_checkin_cycle_day = currentCycleDay;
+    up.last_login_date = this.getTodayString();
     up.updated_at = Date.now();
 
-    this.recordTransaction(userId, pointsToAward, 'daily_streak', null, `Login harian berturut-turut (${up.streak_days} hari)`);
+    const cycleDay = ((up.streak_days - 1) % 7) + 1;
+    this.recordTransaction(
+      userId,
+      pointsToAward,
+      'daily_streak',
+      null,
+      `Check-in harian warkop Hari ke-${cycleDay} (+${pointsToAward} Poin, Siklus 07.00)`
+    );
     this.saveToDisk();
 
     return {
@@ -318,7 +346,7 @@ export class PointsEconomyService {
       streak: up.streak_days,
       pointsAdded: pointsToAward,
       newBalance: up.balance,
-      message: `Selamat! Anda meraih ${pointsToAward} Poin Ngopi untuk ${up.streak_days} hari streak.`,
+      message: `Selamat! Check-in Hari ke-${cycleDay} berhasil (+${pointsToAward} Poin Ngopi).`,
     };
   }
 

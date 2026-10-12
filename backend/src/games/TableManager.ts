@@ -20,6 +20,13 @@ import { UnoGame } from './uno/UnoGame';
 import { SnakeLadderGame } from './snake_ladder/SnakeLadderGame';
 import { MonopolyGame } from './monopoly/MonopolyGame';
 import { PokemonGame } from './pokemon/PokemonGame';
+import {
+  MahyongGame,
+  HalmaGame,
+  DakuGame,
+  KarambolGame,
+  BilliardGame,
+} from './engine/GenericWarkopGame';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -35,6 +42,11 @@ GameRegistry.register('uno', UnoGame);
 GameRegistry.register('snake_ladder', SnakeLadderGame);
 GameRegistry.register('monopoly', MonopolyGame);
 GameRegistry.register('pokemon', PokemonGame);
+GameRegistry.register('mahyong', MahyongGame);
+GameRegistry.register('halma', HalmaGame);
+GameRegistry.register('daku', DakuGame);
+GameRegistry.register('karambol', KarambolGame);
+GameRegistry.register('billiard', BilliardGame);
 
 interface ActiveTable {
   data: GameTableData;
@@ -50,6 +62,16 @@ interface ActiveTable {
 }
 
 const BOT_NAMES = [
+  'UdinBonang',
+  'DadangPoltus',
+  'Samblek',
+  'Bogeg',
+  'UdinBeko',
+  'Sodung',
+  'MangIr',
+  'Petoak',
+  'Bilekah',
+  'Serbombok',
   'Kang Kopi Bot ☕',
   'Mang Udin Bot 🎲',
   'Bang Jago Bot 🔥',
@@ -73,7 +95,8 @@ export class TableManager {
   }): Promise<GameTableData> {
     const tableId = makeId('tbl');
     const isPartnership = params.config?.gaplehMode === 'partnership';
-    const maxPlayers = isPartnership ? 4 : (params.maxPlayers || (params.gameType === 'catur' ? 2 : 4));
+    const isTwoPlayerOnly = ['catur', 'pokemon', 'daku', 'billiard'].includes(params.gameType);
+    const maxPlayers = isPartnership ? 4 : isTwoPlayerOnly ? 2 : (params.maxPlayers || 4);
     const minPlayers = isPartnership ? 4 : (params.minPlayers || 2);
 
     const hostPlayer: GamePlayerInfo = {

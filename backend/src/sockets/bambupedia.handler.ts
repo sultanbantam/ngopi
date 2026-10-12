@@ -3,6 +3,7 @@ import { answerQuestion, getPlatformDirectoryMessage, getPlatformInfoText } from
 import { prisma } from '../utils/prisma';
 import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../data/tebakTebakan';
 import { PointsManager } from '../utils/pointsManager';
+import { findCoffeeStoryOrQnA } from '../data/coffeeStorytelling';
 import fs from 'fs';
 import path from 'path';
 
@@ -293,6 +294,12 @@ const resolveBotResponse = async (content: string) => {
 
   if (lower === '/cs') {
     return 'Saya siap bantu. Buka Pusat Bantuan untuk membuat tiket CS dengan platform yang sesuai, atau jelaskan masalahmu di sini agar AI mencoba mencocokkan FAQ terlebih dahulu.';
+  }
+
+  // Check Coffee Storytelling and Ngopi Feature QnA
+  const coffeeOrFeatureResponse = findCoffeeStoryOrQnA(trimmed);
+  if (coffeeOrFeatureResponse) {
+    return coffeeOrFeatureResponse;
   }
 
   if (!looksLikePlatformQuestion(trimmed)) return null;

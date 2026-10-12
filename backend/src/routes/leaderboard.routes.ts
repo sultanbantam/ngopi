@@ -50,8 +50,14 @@ const DEFAULT_GAME_STATS: Record<string, { name: string; icon: string; matches: 
   uno: { name: 'UNO Card Game', icon: '🎴', matches: 58 },
   remi: { name: 'Remi Klasik', icon: '🃏', matches: 42 },
   poker: { name: 'Poker Meja', icon: '♠️', matches: 31 },
-  truf: { name: 'Truf Minang', icon: '♦️', matches: 19 },
+  truf: { name: 'Truf PekaI', icon: '♦️', matches: 19 },
   bridge: { name: 'Bridge Warkop', icon: '🌉', matches: 12 },
+  pokemon: { name: 'Monster TCG', icon: '🎴', matches: 25 },
+  mahyong: { name: 'Mahjong Warkop', icon: '🀄', matches: 15 },
+  halma: { name: 'Halma Bintang', icon: '🌟', matches: 14 },
+  daku: { name: 'Daku Congklak', icon: '🪵', matches: 18 },
+  karambol: { name: 'Karambol Warkop', icon: '⚪', matches: 22 },
+  billiard: { name: 'Billiard 8-Ball', icon: '🎱', matches: 28 },
 };
 
 // GET /api/leaderboard - Get full klasemen
