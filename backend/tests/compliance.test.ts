@@ -107,7 +107,7 @@ async function runComplianceTests() {
   });
   assert.ok(breach.incident_id.startsWith('inc_'), 'Incident ID generated');
   assert.strictEqual(breach.severity, 'HIGH', 'Severity matches');
-  assert.strictEqual(breach.dpo_contact, DPO_EMAIL, 'DPO contact is dpo@ngopi.top');
+  assert.strictEqual(breach.dpo_contact, DPO_EMAIL, 'DPO contact is founder@ngopi.top');
 
   const detectTime = new Date(breach.detected_at).getTime();
   const deadlineTime = new Date(breach.notification_deadline_kominfo).getTime();

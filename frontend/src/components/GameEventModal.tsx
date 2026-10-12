@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Alert,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -181,7 +182,10 @@ export default function GameEventModal({ visible, onClose, onEventStarted }: Gam
       );
 
       if (res.data?.success) {
-        Alert.alert('Sukses', 'Agenda main bareng berhasil dibuat dan undangan telah dikirim! 📢');
+        Alert.alert(
+          'Agenda Berhasil Dibuat! 📢',
+          'Undangan telah dikirim ke kawan warkop. Anda bisa memantau status siapa saja yang menerima di tab "Agenda Saya" atau membagikan langsung via WhatsApp.'
+        );
         setFormTitle('');
         setFormDescription('');
         setFormInvitees([]);
@@ -192,6 +196,44 @@ export default function GameEventModal({ visible, onClose, onEventStarted }: Gam
       Alert.alert('Gagal', err?.response?.data?.error || 'Gagal membuat agenda event.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Share Event via WhatsApp / Native Share
+  const handleShareEvent = async (evt: GameEvent) => {
+    const formattedDate = new Date(evt.scheduledAt).toLocaleString('id-ID', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const message = `☕ *Undangan Main Bareng di Warkop Ngopi.top!*\n\nYuk ikutan: *${evt.title}*\n🎮 Game: *${evt.gameType.toUpperCase()}*\n📅 Waktu: ${formattedDate} WIB\n${evt.description ? `📝 Pesan: "${evt.description}"\n` : ''}\nLangsung buka dan ikuti di:\n👉 https://ngopi.top/games`;
+
+    if (Platform.OS === 'web') {
+      try {
+        if (typeof navigator !== 'undefined' && (navigator as any).share) {
+          await (navigator as any).share({
+            title: evt.title,
+            text: message,
+            url: 'https://ngopi.top/games',
+          });
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          await navigator.clipboard.writeText(message);
+          Alert.alert('Tautan Tersalin! 📋', 'Pesan undangan telah disalin. Silakan tempelkan ke grup WhatsApp teman-teman Anda.');
+        }
+      } catch (e) {
+        // user cancelled or fallback
+      }
+    } else {
+      try {
+        await Share.share({
+          message,
+          title: evt.title,
+        });
+      } catch (e) {
+        console.log('Share error', e);
+      }
     }
   };
 
@@ -403,26 +445,85 @@ export default function GameEventModal({ visible, onClose, onEventStarted }: Gam
                       </View>
 
                       {/* Invitations Status List */}
-                      <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.25)', padding: 8, borderRadius: 8 }}>
-                        <Text style={{ color: coffee.muted, fontSize: 10, fontWeight: 'bold', marginBottom: 4 }}>
-                          PESERTA DIUNDANG ({evt.invitations.length}):
-                        </Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                          {evt.invitations.map((inv) => (
-                            <View key={inv.id} style={styles.inviteeChip}>
-                              <Text style={{ color: '#fff', fontSize: 10 }}>
-                                @{inv.inviteeName}
-                              </Text>
-                              <Text style={{ fontSize: 10 }}>
-                                {inv.status === 'accepted' ? '✅' : inv.status === 'declined' ? '❌' : '⏳'}
-                              </Text>
-                            </View>
-                          ))}
+                      <View style={{ marginTop: 8, backgroundColor: 'rgba(0,0,0,0.3)', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: '#3d2b1f' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                          <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: 'bold' }}>
+                            STATUS UNDANGAN PESERTA ({evt.invitations.length}):
+                          </Text>
+                          <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                            {evt.invitations.filter(i => i.status === 'accepted').length} Terkonfirmasi
+                          </Text>
                         </View>
+
+                        {evt.invitations.length === 0 ? (
+                          <Text style={{ color: coffee.muted, fontSize: 11, fontStyle: 'italic' }}>
+                            Belum ada teman terdaftar secara spesifik. Klik tombol "Bagikan / Kirim WA" di bawah agar kawan-kawan warkop bisa langsung gabung!
+                          </Text>
+                        ) : (
+                          <View style={{ flexDirection: 'column', gap: 5 }}>
+                            {evt.invitations.map((inv) => {
+                              const isAccepted = inv.status === 'accepted';
+                              const isDeclined = inv.status === 'declined';
+                              return (
+                                <View
+                                  key={inv.id}
+                                  style={{
+                                    flexDirection: 'row',
+                                    justifyContent: 'space-between',
+                                    alignItems: 'center',
+                                    backgroundColor: 'rgba(255,255,255,0.04)',
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 5,
+                                    borderRadius: 6,
+                                  }}
+                                >
+                                  <Text style={{ color: '#fff', fontSize: 11, fontWeight: '600' }}>
+                                    @{inv.inviteeName}
+                                  </Text>
+                                  <View
+                                    style={{
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                      backgroundColor: isAccepted
+                                        ? 'rgba(34,197,94,0.15)'
+                                        : isDeclined
+                                        ? 'rgba(239,68,68,0.15)'
+                                        : 'rgba(234,179,8,0.15)',
+                                      paddingHorizontal: 6,
+                                      paddingVertical: 2,
+                                      borderRadius: 4,
+                                    }}
+                                  >
+                                    <Text
+                                      style={{
+                                        fontSize: 10,
+                                        fontWeight: 'bold',
+                                        color: isAccepted ? '#4ade80' : isDeclined ? '#f87171' : '#facc15',
+                                      }}
+                                    >
+                                      {isAccepted ? '✅ Siap Hadir' : isDeclined ? '❌ Berhalangan' : '⏳ Menunggu Respon'}
+                                    </Text>
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        )}
                       </View>
 
                       {/* Action Buttons for Host */}
-                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#0284c7' }]}
+                          onPress={() => handleShareEvent(evt)}
+                        >
+                          <Ionicons name="share-social" size={13} color="#fff" />
+                          <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>
+                            Bagikan / Kirim WA 📢
+                          </Text>
+                        </TouchableOpacity>
+
                         {isScheduled && (
                           <>
                             <TouchableOpacity

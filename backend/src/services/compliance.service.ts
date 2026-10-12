@@ -15,8 +15,8 @@ import path from 'path';
 
 export const CURRENT_POLICY_VERSION = 'v3.0-2026';
 export const CURRENT_TERMS_VERSION = 'v3.0-2026';
-export const DPO_EMAIL = 'dpo@ngopi.top';
-export const CONTROLLER_NAME = 'PT Ngopi Kreasi Digital (Ngopi App)';
+export const DPO_EMAIL = 'founder@ngopi.top';
+export const CONTROLLER_NAME = 'Yayasan Sabumi Nusantara Jaya';
 
 export class ComplianceService {
   private consents: Map<string, UserConsentRecord> = new Map();

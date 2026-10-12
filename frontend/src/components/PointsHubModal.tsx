@@ -97,15 +97,15 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
       if (resPoints?.data?.points) {
         setPointsData(resPoints.data.points);
       } else {
-        // Fallback demo data
+        // Data awal pengguna baru (0 poin & 0 hari streak)
         setPointsData({
           user_id: 'me',
-          balance: 350,
-          lifetime: 420,
-          streak_days: 3,
+          balance: 0,
+          lifetime: 0,
+          streak_days: 0,
           last_login_date: new Date().toISOString().slice(0, 10),
-          daily_chat_count: 14,
-          daily_reaction_count: 6,
+          daily_chat_count: 0,
+          daily_reaction_count: 0,
         });
       }
 
@@ -115,16 +115,106 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
         setTransactions(resTx.data.transactions);
       }
 
+      const DEFAULT_CATALOG: PremiumFeatureItem[] = [
+        {
+          id: 'voucher_kopi',
+          name: '☕ Voucher Kopi Kenangan / Janji Jiwa',
+          price_points: 250,
+          price_bmc: 0.25,
+          description: 'Voucher digital senilai Rp 20.000 untuk pesan kopi di outlet terdekat.',
+          category: 'voucher',
+          icon: 'cafe-outline',
+        },
+        {
+          id: 'biji_kopi',
+          name: '📦 Biji Kopi Gayo / Dampit 250g',
+          price_points: 1000,
+          price_bmc: 1.0,
+          description: 'Paket biji kopi fresh roasted (Gayo Arabika / Dampit Robusta) dikirim ke alamat Anda.',
+          category: 'fisik',
+          icon: 'cube-outline',
+        },
+        {
+          id: 'tiket_bioskop',
+          name: '🎬 Voucher Tiket Bioskop XXI / Cinepolis',
+          price_points: 1500,
+          price_bmc: 1.5,
+          description: 'Kode voucher nonton M-TIX XXI / Cinepolis untuk 1 tiket film layar lebar.',
+          category: 'voucher',
+          icon: 'film-outline',
+        },
+        {
+          id: 'badge_juragan',
+          name: '👑 Badge Avatar Juragan Warkop',
+          price_points: 300,
+          price_bmc: 0.3,
+          description: 'Bingkai avatar emas eksklusif dan title "Juragan Warkop" berkilau di samping nama Anda.',
+          category: 'customization',
+          icon: 'ribbon-outline',
+        },
+        {
+          id: 'skin_meja',
+          name: '🎨 Skin Meja Kayu Jati Klasik',
+          price_points: 500,
+          price_bmc: 0.5,
+          description: 'Kustomisasi tampilan meja mabar dengan tekstur kayu jati vintage khas warkop tempo dulu.',
+          category: 'customization',
+          icon: 'color-palette-outline',
+        },
+        {
+          id: 'jukebox_vip',
+          name: '🎵 Prioritas Jukebox Warkop (1 Hari)',
+          price_points: 100,
+          price_bmc: 0.1,
+          description: 'Lagu yang Anda request otomatis masuk ke urutan teratas antrian pemutaran Jukebox warkop.',
+          category: 'utility',
+          icon: 'musical-notes-outline',
+        },
+      ];
+
       // 3. Fetch catalog
       const resCatalog = await axios.get(`${API_URL}/bmc/premium/catalog`, { headers }).catch(() => null);
-      if (resCatalog?.data?.catalog) {
+      if (resCatalog?.data?.catalog && resCatalog.data.catalog.length > 0) {
         setCatalog(resCatalog.data.catalog);
+      } else {
+        setCatalog(DEFAULT_CATALOG);
       }
+
+      const DEFAULT_PARTIES: WatchPartyItem[] = [
+        {
+          id: 'cinema_warkop_dki',
+          host_id: 'host_udin',
+          host_name: 'Mang Udin ☕',
+          title: '🎬 Layar Tancap: Komedi Klasik Warkop DKI',
+          video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          current_time: 45,
+          is_playing: true,
+          participants: [
+            { user_id: 'host_udin', user_name: 'Mang Udin ☕' },
+            { user_id: 'bot_1', user_name: 'DadangPoltus' },
+          ],
+        },
+        {
+          id: 'cinema_kopi_gayo',
+          host_id: 'host_kawan',
+          host_name: 'Kang Kopi 🌿',
+          title: '☕ Dokumenter: Perjalanan Biji Kopi Dari Aceh Gayo ke Cangkir',
+          video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          current_time: 120,
+          is_playing: true,
+          participants: [
+            { user_id: 'host_kawan', user_name: 'Kang Kopi 🌿' },
+            { user_id: 'bot_2', user_name: 'Samblek' },
+          ],
+        },
+      ];
 
       // 4. Fetch watch parties
       const resParties = await axios.get(`${API_URL}/bmc/watch-party/list`, { headers }).catch(() => null);
-      if (resParties?.data?.parties) {
+      if (resParties?.data?.parties && resParties.data.parties.length > 0) {
         setWatchParties(resParties.data.parties);
+      } else {
+        setWatchParties(DEFAULT_PARTIES);
       }
     } catch {
       // Offline fallback
@@ -532,7 +622,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                     <Ionicons name="swap-horizontal-outline" size={32} color={coffee.primary} />
                     <Text style={styles.convertHeroTitle}>Bridge Poin Ngopi ➔ Token BMC</Text>
                     <Text style={styles.convertHeroSub}>
-                      Tukarkan hasil interaksi dan kemenangan game Anda menjadi token crypto nyata di Bamboochain.
+                      Tukarkan hasil interaksi dan kemenangan game Anda menjadi token crypto nyata di BaMbooChain.
                     </Text>
                     <View style={styles.rateBadge}>
                       <Text style={styles.rateBadgeText}>Kurs Resmi: 1.000 Poin = 1 BMC Token</Text>
@@ -555,10 +645,10 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                     ))}
                   </View>
 
-                  <Text style={styles.inputLabel}>Alamat Dompet Bamboochain (0x...):</Text>
+                  <Text style={styles.inputLabel}>Alamat Dompet BaMbooChain. (0x...):</Text>
                   <TextInput
                     style={styles.walletInput}
-                    placeholder="0x1234... (Alamat BSC / Bamboochain)"
+                    placeholder="0x..."
                     placeholderTextColor={coffee.textSecondary}
                     value={walletAddress}
                     onChangeText={setWalletAddress}
@@ -578,6 +668,29 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                       </Text>
                     )}
                   </TouchableOpacity>
+
+                  {/* Panduan Integrasi Wallet BMC & Status Penukaran */}
+                  <View
+                    style={{
+                      backgroundColor: 'rgba(217, 119, 6, 0.1)',
+                      borderColor: '#f59e0b',
+                      borderWidth: 1,
+                      borderRadius: 12,
+                      padding: 14,
+                      marginTop: 14,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ color: '#fbbf24', fontSize: 13, fontWeight: '800' }}>
+                      💡 Panduan Integrasi Wallet BMC & Cek Status
+                    </Text>
+                    <Text style={{ color: coffee.text, fontSize: 11, lineHeight: 17 }}>
+                      • <Text style={{ fontWeight: 'bold', color: '#fff' }}>Apakah harus signup di bamboochain.id?</Text> Ya. Anda perlu mendaftar atau memiliki dompet di web resmi <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>bamboochain.id</Text> untuk memiliki alamat dompet (0x...) dan mengakses token BMC Anda.
+                    </Text>
+                    <Text style={{ color: coffee.text, fontSize: 11, lineHeight: 17 }}>
+                      • <Text style={{ fontWeight: 'bold', color: '#fff' }}>Bagaimana cara tahu poin sudah ditukar?</Text> Saldo poin Anda di Ngopi akan langsung terpotong saat tombol konversi ditekan. Transaksi diterbitkan secara on-chain dan Anda dapat memantau statusnya serta saldo token BMC di dashboard dompet <Text style={{ color: '#38bdf8', fontWeight: 'bold' }}>bamboochain.id</Text> atau block explorer BaMbooChain.
+                    </Text>
+                  </View>
                 </View>
               )}
 

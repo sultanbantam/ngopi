@@ -109,7 +109,7 @@ export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
               </View>
               <View>
                 <Text style={styles.headerTitle}>Privasi & Kepatuhan UU PDP</Text>
-                <Text style={styles.headerSubtitle}>UU No. 27/2022 • DPO: dpo@ngopi.top</Text>
+                <Text style={styles.headerSubtitle}>UU No. 27/2022 • DPO: founder@ngopi.top</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -152,7 +152,7 @@ export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
               <View style={styles.textSection}>
                 <Text style={styles.sectionHeading}>Komitmen Perlindungan Data Pribadi</Text>
                 <Text style={styles.paragraph}>
-                  PT Ngopi Kreasi Digital tunduk sepenuhnya pada Undang-Undang No. 27 Tahun 2022 tentang Perlindungan Data Pribadi (UU PDP).
+                  Yayasan Sabumi Nusantara Jaya tunduk sepenuhnya pada Undang-Undang No. 27 Tahun 2022 tentang Perlindungan Data Pribadi (UU PDP).
                 </Text>
 
                 <Text style={styles.subHeading}>Prinsip Utama Ngopi:</Text>
@@ -252,7 +252,7 @@ export default function PrivacyModal({ visible, onClose }: PrivacyModalProps) {
             <View style={styles.dpoCard}>
               <Ionicons name="mail-outline" size={16} color={coffee.primary} />
               <Text style={styles.dpoText}>
-                Hubungi Pejabat Perlindungan Data (DPO): <Text style={styles.boldText}>dpo@ngopi.top</Text>
+                Hubungi Pejabat Perlindungan Data (DPO): <Text style={styles.boldText}>founder@ngopi.top</Text>
               </Text>
             </View>
           </ScrollView>

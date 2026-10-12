@@ -243,7 +243,7 @@ export const getUsers = async (_req: Request, res: Response): Promise<void> => {
         mfa_enabled: true,
       }
     });
-    res.status(200).json(users.map((user) => ({ ...user, role: normalizeRole(user.role) })));
+    res.status(200).json(users.map((user: any) => ({ ...user, role: normalizeRole(user.role) })));
   } catch (err) {
     console.error('Get users error:', err);
     res.status(500).json({ error: 'Internal server error' });

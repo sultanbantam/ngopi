@@ -958,8 +958,8 @@ export default function GameTableScreen() {
   const isPlaying = table.status === 'playing';
   const myPlayer = table.players?.find((p: any) => p.user_id === currentUserId);
   const isMyTurn = isPlaying && gameState?.currentTurn === currentUserId;
-  const allReady = table.players?.length >= table.min_players && table.players?.every((p: any) => p.is_ready || p.is_bot);
-  const canStart = (isHost && table.players?.length >= table.min_players) || (Boolean(myPlayer) && allReady);
+  const allReady = table.players?.every((p: any) => p.is_ready || p.is_bot);
+  const canStart = Boolean(myPlayer);
   const myHand: Array<[number, number]> = table.game_type === 'gapleh' && Array.isArray(gameState?.myHand) ? gameState.myHand : [];
   const myCards: Array<any> = table.game_type !== 'gapleh' && Array.isArray(gameState?.myHand) ? gameState.myHand : [];
   const validMoves = gameState?.validMoves || [];
@@ -1013,12 +1013,8 @@ export default function GameTableScreen() {
         <View style={styles.waitingControlsBanner}>
           <Text style={styles.waitingText}>
             {table.players?.length < table.min_players
-              ? `Menunggu minimal ${table.min_players} pemain untuk mulai.`
-              : allReady
-              ? 'Semua pemain sudah siap! Siapapun pemain dapat memulai pertandingan.'
-              : isHost
-              ? 'Menunggu pemain lain menandai siap...'
-              : 'Silakan tandai siap agar pertandingan dapat dimulai.'}
+              ? `Pemain ${table.players?.length}/${table.min_players}. Tambah bot atau langsung tekan Mulai Main! 🎮`
+              : 'Meja sudah siap! Tekan Mulai Main untuk bertanding sekarang.'}
           </Text>
 
           <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap', justifyContent: 'center' }}>

@@ -144,7 +144,7 @@ const getRoomMembers = async () => {
 
   return users
     .map(normalizeMember)
-    .sort((a, b) => {
+    .sort((a: any, b: any) => {
       if (a.is_online !== b.is_online) return a.is_online ? -1 : 1;
       return a.display_name.localeCompare(b.display_name);
     });
@@ -196,8 +196,8 @@ const notifyMentionedUsers = async (io: Server, message: BambupediaMessage, send
     const mentioned = new Set(message.mentioned_users.map((username) => username.toLowerCase()));
 
     users
-      .filter((user) => user.id !== senderId && mentioned.has(user.username.toLowerCase()))
-      .forEach((user) => {
+      .filter((user: any) => user.id !== senderId && mentioned.has(user.username.toLowerCase()))
+      .forEach((user: any) => {
         io.to(user.id).emit('bambupedia_mention', {
           ...message,
           mentioned_user_id: user.id,

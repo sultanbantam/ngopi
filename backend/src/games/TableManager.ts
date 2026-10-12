@@ -419,9 +419,14 @@ export class TableManager {
       return { success: false, error: 'Hanya host atau pemain yang semua siap yang dapat memulai permainan.' };
     }
 
-    if (active.data.players.length < active.data.min_players) {
-      return { success: false, error: `Minimal butuh ${active.data.min_players} pemain untuk memulai.` };
+    // Auto-fill bots if table hasn't reached min_players
+    while (active.data.players.length < active.data.min_players) {
+      this.addBot(tableId);
     }
+
+    active.data.players.forEach((p) => {
+      if (p.is_bot) p.is_ready = true;
+    });
 
     try {
       if (active.data.config?.gaplehMode === 'partnership') {

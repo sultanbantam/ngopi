@@ -410,7 +410,7 @@ export default function GamesLobbyScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Top Header */}
+      {/* Top Header - Row 1: Brand & Primary Actions */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.backBtn}
@@ -434,51 +434,19 @@ export default function GamesLobbyScreen() {
           <Ionicons name="arrow-back" size={22} color={coffee.text} />
         </TouchableOpacity>
 
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.headerTitle}>Meja Warkop ☕🎮</Text>
-          <Text style={styles.headerSubtitle}>
-            Nongkrong, Ngopi, dan Main Bareng Teman
+        <View style={{ flex: 1, minWidth: 0, paddingRight: 6 }}>
+          <Text style={styles.headerTitle} numberOfLines={1}>Meja Warkop ☕🎮</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={1}>
+            Nongkrong, Ngopi, dan Main Bareng
           </Text>
         </View>
-
-        <TouchableOpacity
-          style={styles.headerIconBtn}
-          onPress={() => setLeaderboardVisible(true)}
-          accessibilityLabel="Klasemen Warkop"
-        >
-          <Ionicons name="trophy" size={20} color={coffee.accent} />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.headerIconBtn, { backgroundColor: '#381e11', borderColor: '#d97706', borderWidth: 1 }]}
-          onPress={() => setPokemonHubVisible(true)}
-          accessibilityLabel="Binder & Booster Kartu Monster"
-        >
-          <Text style={{ fontSize: 16 }}>🎴</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.headerIconBtn, { backgroundColor: '#172554', borderColor: '#3b82f6', borderWidth: 1 }]}
-          onPress={() => setEventModalVisible(true)}
-          accessibilityLabel="Agenda Main Bareng & Undangan"
-        >
-          <Ionicons name="calendar" size={18} color="#60a5fa" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.headerIconBtn, { backgroundColor: '#451a03', borderColor: '#f59e0b', borderWidth: 1 }]}
-          onPress={() => setPointsHubVisible(true)}
-          accessibilityLabel="Ekonomi Poin Ngopi & Token BMC"
-        >
-          <Text style={{ fontSize: 16 }}>🪙</Text>
-        </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.headerIconBtn}
           onPress={onRefresh}
           accessibilityLabel="Refresh daftar meja"
         >
-          <Ionicons name="refresh" size={20} color={coffee.text} />
+          <Ionicons name="refresh" size={18} color={coffee.text} />
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -490,8 +458,49 @@ export default function GamesLobbyScreen() {
           accessibilityLabel="Buat meja baru"
         >
           <Ionicons name="add" size={18} color={coffee.buttonText} />
-          <Text style={styles.createHeaderBtnText}>Buat Meja</Text>
+          <Text style={styles.createHeaderBtnText}>+ Buat Meja</Text>
         </TouchableOpacity>
+      </View>
+
+      {/* Feature Navigation Pills - Row 2: Prominent & Scrollable */}
+      <View style={styles.featurePillsRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.featurePillsScroll}
+        >
+          <TouchableOpacity
+            style={[styles.featurePill, { backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: '#f59e0b' }]}
+            onPress={() => setLeaderboardVisible(true)}
+          >
+            <Ionicons name="trophy" size={16} color="#fbbf24" />
+            <Text style={[styles.featurePillText, { color: '#fef08a' }]}>Klasemen Warkop 🏆</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.featurePill, { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: '#f59e0b' }]}
+            onPress={() => setPointsHubVisible(true)}
+          >
+            <Text style={{ fontSize: 14 }}>🪙</Text>
+            <Text style={[styles.featurePillText, { color: '#fde68a' }]}>Poin & BaMbooChain</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.featurePill, { backgroundColor: 'rgba(59, 130, 246, 0.15)', borderColor: '#3b82f6' }]}
+            onPress={() => setEventModalVisible(true)}
+          >
+            <Ionicons name="calendar" size={15} color="#60a5fa" />
+            <Text style={[styles.featurePillText, { color: '#bfdbfe' }]}>Agenda Mabar 📅</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.featurePill, { backgroundColor: 'rgba(168, 85, 247, 0.15)', borderColor: '#a855f7' }]}
+            onPress={() => setPokemonHubVisible(true)}
+          >
+            <Text style={{ fontSize: 14 }}>🎴</Text>
+            <Text style={[styles.featurePillText, { color: '#e9d5ff' }]}>Binder Kartu Monster</Text>
+          </TouchableOpacity>
+        </ScrollView>
       </View>
 
       {/* Game Selector Tabs */}
@@ -1083,6 +1092,30 @@ const styles = StyleSheet.create({
     color: coffee.buttonText,
     fontSize: 13,
     fontWeight: '800',
+  },
+  featurePillsRow: {
+    backgroundColor: coffee.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.border,
+    paddingVertical: 8,
+  },
+  featurePillsScroll: {
+    paddingHorizontal: 14,
+    gap: 8,
+    alignItems: 'center',
+  },
+  featurePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  featurePillText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   tabsWrapper: {
     backgroundColor: coffee.surface,
