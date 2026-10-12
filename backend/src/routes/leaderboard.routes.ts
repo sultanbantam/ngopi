@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
 import { PointsManager } from '../utils/pointsManager';
-import { pointsService } from '../services/points.service';
+import { pointsEconomyService } from '../services/points.service';
 import { TableManager } from '../games/TableManager';
 import fs from 'fs';
 import path from 'path';
@@ -79,7 +79,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       .map((user) => {
         const ptsByName = PointsManager.getPoints(user.username);
         const ptsById = PointsManager.getPoints(user.id);
-        const ptsService = pointsService.getUserPoints(user.id)?.balance || 0;
+        const ptsService = pointsEconomyService?.getUserPoints(user.id)?.balance || 0;
         const totalPoints = Math.max(ptsByName, ptsById, ptsService);
         return {
           id: user.id,
