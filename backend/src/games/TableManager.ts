@@ -299,11 +299,11 @@ export class TableManager {
   // Add bot player for instant testing/play
   public static addBot(
     tableId: string,
-    hostUserId: string
+    hostUserId?: string
   ): { success: boolean; error?: string; bot?: GamePlayerInfo; table?: GameTableData } {
     const active = this.tables.get(tableId);
     if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
-    if (active.data.host_id !== hostUserId && !active.data.players.some((p) => p.user_id === hostUserId)) {
+    if (hostUserId && active.data.host_id !== hostUserId && !active.data.players.some((p) => p.user_id === hostUserId)) {
       return { success: false, error: 'Hanya pemain di meja yang bisa menambah bot.' };
     }
     if (active.data.status !== 'waiting') return { success: false, error: 'Permainan sudah dimulai.' };
@@ -419,9 +419,12 @@ export class TableManager {
       return { success: false, error: 'Hanya host atau pemain yang semua siap yang dapat memulai permainan.' };
     }
 
-    // Auto-fill bots if table hasn't reached min_players
-    while (active.data.players.length < active.data.min_players) {
-      this.addBot(tableId);
+    // Auto-fill bots if table hasn't reached min_players (capped to prevent any loop freeze)
+    let fillAttempts = 0;
+    while (active.data.players.length < active.data.min_players && fillAttempts < 8) {
+      fillAttempts++;
+      const res = this.addBot(tableId, hostUserId || active.data.host_id);
+      if (!res.success) break;
     }
 
     active.data.players.forEach((p) => {

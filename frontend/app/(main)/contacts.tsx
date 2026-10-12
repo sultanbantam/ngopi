@@ -304,7 +304,7 @@ export default function ContactsScreen() {
   const shareProfileToSocial = async () => {
     const name = editDisplayName || currentUsername || 'Kawan Warkop';
     const targetUrl = profileLink || 'https://ngopi.top';
-    const hookText = `☕ Yuk ngopi bareng gue (${name}) di Ngopi (https://ngopi.top)! 🚀\n\nNongkrong seru di warung kopi virtual nusantara: mabar Gapleh Domino, Catur, UNO, Pokemon duel, Mahyong & Billiard, dengerin Jukebox musik bareng, kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gabung & mabar bareng gue di sini: ${targetUrl} ☕🎉`;
+    const hookText = `☕ Yuk ngopi bareng gue (${name}) di Ngopi (https://ngopi.top)! 🚀\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng gue sekarang, klik: ${targetUrl} ☕🚀`;
 
     if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
       if (navigator.share) {

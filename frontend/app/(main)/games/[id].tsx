@@ -643,9 +643,9 @@ export default function GameTableScreen() {
 
   // Share Victory to Social Media
   const handleShareVictory = async () => {
-    const gameLabel = (table?.game_type || 'Game Warkop').toUpperCase();
-    const winnerName = currentUsername || 'Saya';
-    const hookText = `☕🔥 Mantap Jiwa! Baru aja menang mabar di game ${gameLabel} di Ngopi (https://ngopi.top)! 🏆✨\n\nNongkrong santai warkop digital: mabar Domino Gapleh, Catur, UNO, Pokemon duel, Mahyong, Karambol & Billiard! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas mabar bareng ${winnerName} sekarang: https://ngopi.top ☕🚀`;
+    const gameLabel = (table?.game_type || 'GAPLEH').toUpperCase();
+    const winnerName = currentUsername || 'albantani';
+    const hookText = `menang maen ${gameLabel} sambil Ngopi! 🏆✨\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng ${winnerName} sekarang, klik: https://ngopi.top ☕🚀`;
 
     if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
       if (navigator.share) {

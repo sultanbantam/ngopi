@@ -117,6 +117,7 @@ export default function GamesLobbyScreen() {
       const res = await axios.get(`${API_URL}/games/tables`, {
         params: { type: selectedTab },
         headers,
+        timeout: 6000,
       });
       if (res.data?.success) {
         setTables(res.data.tables || []);
