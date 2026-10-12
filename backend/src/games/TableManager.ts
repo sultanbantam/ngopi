@@ -19,6 +19,7 @@ import { TrufGame } from './truf/TrufGame';
 import { UnoGame } from './uno/UnoGame';
 import { SnakeLadderGame } from './snake_ladder/SnakeLadderGame';
 import { MonopolyGame } from './monopoly/MonopolyGame';
+import { PokemonGame } from './pokemon/PokemonGame';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -33,6 +34,7 @@ GameRegistry.register('truf', TrufGame);
 GameRegistry.register('uno', UnoGame);
 GameRegistry.register('snake_ladder', SnakeLadderGame);
 GameRegistry.register('monopoly', MonopolyGame);
+GameRegistry.register('pokemon', PokemonGame);
 
 interface ActiveTable {
   data: GameTableData;

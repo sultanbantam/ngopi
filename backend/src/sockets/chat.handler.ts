@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import { prisma } from '../utils/prisma';
 import { checkTokenGate } from '../middleware/tokenGating.middleware';
 import { EncryptionService } from '../services/encryption.service';
+import { moderationService } from '../services/moderation.service';
 
 const getSenderSelect = () => ({
   id: true,
@@ -49,6 +50,13 @@ const emitGroupAccessError = (socket: Socket, member: any) => {
 
 export const handleChatEvents = (io: Server, socket: Socket, user: { id: string; username: string }) => {
   socket.on('join_room', async (roomId: string) => {
+    // Check rate limit for warung joins
+    const joinLimit = moderationService.checkRateLimit(user.id, 'warung_join');
+    if (!joinLimit.allowed) {
+      socket.emit('error', { message: joinLimit.reason });
+      return;
+    }
+
     const { group, member } = await getActiveGroupMember(roomId, user.id);
     if (group) {
       if (emitGroupAccessError(socket, member)) return;
@@ -67,6 +75,21 @@ export const handleChatEvents = (io: Server, socket: Socket, user: { id: string;
   socket.on('send_message', async (data: { room_id: string; receiver_id?: string; content?: string; type?: string; attachment_url?: string; parent_message_id?: string }) => {
     try {
       const { room_id, receiver_id, content, type = 'text', attachment_url, parent_message_id } = data;
+
+      // Sprint 9: 5-Layer Defense-in-Depth Moderation Check
+      if (content) {
+        const modResult = await moderationService.moderateMessage(user.id, content, room_id);
+        if (!modResult.allowed) {
+          socket.emit('moderation_blocked', {
+            reason: modResult.reason,
+            actionTaken: modResult.actionTaken,
+            classification: modResult.classification,
+          });
+          socket.emit('error', { message: modResult.reason || 'Pesan diblokir oleh sistem moderasi.' });
+          return;
+        }
+      }
+
       const { group, member } = await getActiveGroupMember(room_id, user.id);
 
       if (group) {

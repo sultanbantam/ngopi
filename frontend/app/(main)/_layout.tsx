@@ -7,6 +7,10 @@ import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { OnboardingModal } from '../../src/components/OnboardingModal';
 import { GlobalAudioBar } from '../../src/components/GlobalAudioBar';
+import OfflineBanner from '../../src/components/OfflineBanner';
+import MeshPeerModal from '../../src/components/MeshPeerModal';
+import ConsentBannerModal from '../../src/components/ConsentBannerModal';
+import ModerationAlertModal from '../../src/components/ModerationAlertModal';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -66,6 +70,7 @@ export default function MainLayout() {
   const [toastTarget, setToastTarget] = useState<AppNotification['target']>();
   const [callAlertMode, setCallAlertMode] = useState<CallAlertMode>('ringtone');
   const [activeIncomingCall, setActiveIncomingCall] = useState<ActiveIncomingCall | null>(null);
+  const [meshModalVisible, setMeshModalVisible] = useState(false);
 
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -577,18 +582,29 @@ export default function MainLayout() {
   if (isLargeScreen) {
     return (
       <View style={styles.singleContainer}>
+        <OfflineBanner onPressPeers={() => setMeshModalVisible(true)} />
         <Slot />
         {renderIncomingCallModal()}
         {renderToast()}
         {renderNotificationCenter()}
         <OnboardingModal />
         <GlobalAudioBar />
+        <MeshPeerModal
+          visible={meshModalVisible}
+          onClose={() => setMeshModalVisible(false)}
+          onOpenChatWithPeer={(peerId) => {
+            setMeshModalVisible(false);
+            router.push({ pathname: '/(main)/chat/[id]' as any, params: { id: peerId } });
+          }}
+        />
+        <ConsentBannerModal />
       </View>
     );
   }
 
   return (
     <View style={{ flex: 1 }}>
+      <OfflineBanner onPressPeers={() => setMeshModalVisible(true)} />
       <Stack screenOptions={{
         headerStyle: { backgroundColor: coffee.surface },
         headerTintColor: coffee.text,
@@ -609,6 +625,16 @@ export default function MainLayout() {
       {renderNotificationCenter()}
       <OnboardingModal />
       <GlobalAudioBar />
+      <MeshPeerModal
+        visible={meshModalVisible}
+        onClose={() => setMeshModalVisible(false)}
+        onOpenChatWithPeer={(peerId) => {
+          setMeshModalVisible(false);
+          router.push({ pathname: '/(main)/chat/[id]' as any, params: { id: peerId } });
+        }}
+      />
+      <ConsentBannerModal />
+      <ModerationAlertModal />
     </View>
   );
 }

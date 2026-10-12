@@ -343,6 +343,41 @@ export default function GameTableScreen() {
     });
   };
 
+  // Pokemon Battle Actions
+  const handlePokemonAttack = (isSkill = false) => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action: isSkill ? 'skill' : 'attack',
+        payload: {},
+      },
+      (res: any) => {
+        if (!res?.success) {
+          Alert.alert('Langkah Gagal', res?.error || 'Gagal melancarkan serangan.');
+        }
+      }
+    );
+  };
+
+  const handlePokemonSwitch = (index: number) => {
+    if (!isMyTurn || !socketRef.current || !tableId) return;
+    socketRef.current.emit(
+      'game:action',
+      {
+        tableId,
+        action: 'switch',
+        payload: { index },
+      },
+      (res: any) => {
+        if (!res?.success) {
+          Alert.alert('Gagal Ganti', res?.error || 'Gagal mengganti monster.');
+        }
+      }
+    );
+  };
+
   const renderMonopolyTile = (sqId: number) => {
     const sq = gameState?.squares?.[sqId] || { name: `Kotak ${sqId}`, type: 'property' };
     const prop = gameState?.properties?.[sqId];
@@ -1705,6 +1740,232 @@ export default function GameTableScreen() {
                   )}
                 </View>
               </View>
+            ) : table.game_type === 'pokemon' ? (
+              /* Pokemon Monster TCG Battle Stadium */
+              (() => {
+                const pOrder = gameState?.playerOrder || [];
+                const oppId = pOrder.find((uid: string) => uid !== currentUserId) || pOrder[1];
+                const meId = currentUserId;
+
+                const oppState = gameState?.players?.[oppId];
+                const myState = gameState?.players?.[meId];
+
+                const oppActiveMon = oppState?.team?.[oppState?.activeIndex ?? 0];
+                const myActiveMon = myState?.team?.[myState?.activeIndex ?? 0];
+
+                const oppHpPct = oppActiveMon ? Math.max(0, Math.min(100, Math.round((oppActiveMon.currentHp / oppActiveMon.maxHp) * 100))) : 0;
+                const myHpPct = myActiveMon ? Math.max(0, Math.min(100, Math.round((myActiveMon.currentHp / myActiveMon.maxHp) * 100))) : 0;
+
+                const getHpColor = (pct: number) => (pct > 50 ? '#22c55e' : pct > 20 ? '#eab308' : '#ef4444');
+
+                return (
+                  <View style={{ width: '100%', maxWidth: 360, alignItems: 'center', paddingVertical: 4 }}>
+                    {/* Opponent Active Monster Card (Top) */}
+                    <View
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#26150c',
+                        borderRadius: 12,
+                        padding: 10,
+                        borderWidth: 1.5,
+                        borderColor: '#78350f',
+                        marginBottom: 6,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 11, color: coffee.muted, fontWeight: '700' }}>
+                            👤 @{oppState?.username || 'Lawan'}
+                          </Text>
+                          {/* Bench Indicators */}
+                          <View style={{ flexDirection: 'row', gap: 3 }}>
+                            {oppState?.team?.map((m: any, idx: number) => (
+                              <Text key={idx} style={{ fontSize: 9 }}>
+                                {m.isFainted ? '💀' : idx === oppState?.activeIndex ? '🔴' : '⚪'}
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: '900' }}>
+                          {oppActiveMon?.type?.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      {/* Opponent Monster Row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+                        <View
+                          style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: '#3d1f11',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 1,
+                            borderColor: coffee.accent,
+                          }}
+                        >
+                          <Text style={{ fontSize: 26 }}>{oppActiveMon?.icon || '🐾'}</Text>
+                        </View>
+
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>
+                              {oppActiveMon?.name || 'Monster Lawan'}
+                              {oppActiveMon?.isShiny ? ' ✨' : ''}
+                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: getHpColor(oppHpPct) }}>
+                              {oppActiveMon?.currentHp}/{oppActiveMon?.maxHp} HP
+                            </Text>
+                          </View>
+
+                          {/* HP Bar */}
+                          <View
+                            style={{
+                              height: 8,
+                              backgroundColor: '#171411',
+                              borderRadius: 4,
+                              overflow: 'hidden',
+                              marginTop: 4,
+                              borderWidth: 0.5,
+                              borderColor: '#4a3319',
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: `${oppHpPct}%`,
+                                height: '100%',
+                                backgroundColor: getHpColor(oppHpPct),
+                              }}
+                            />
+                          </View>
+
+                          <Text style={{ fontSize: 9, color: coffee.muted, marginTop: 3 }}>
+                            ATK {oppActiveMon?.attack || 0} | DEF {oppActiveMon?.defense || 0}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* Middle Clash & Live Battle Announcer */}
+                    <View
+                      style={{
+                        width: '100%',
+                        backgroundColor: 'rgba(212, 163, 115, 0.15)',
+                        borderWidth: 1,
+                        borderColor: coffee.border,
+                        borderRadius: 8,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        marginVertical: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          color: coffee.accent,
+                          fontSize: 10,
+                          fontWeight: '700',
+                          textAlign: 'center',
+                        }}
+                        numberOfLines={2}
+                      >
+                        {gameState?.lastAction?.message || gameState?.battleLog?.[0]?.message || '⚔️ Pertarungan sedang berlangsung!'}
+                      </Text>
+                    </View>
+
+                    {/* Player Active Monster Card (Bottom) */}
+                    <View
+                      style={{
+                        width: '100%',
+                        backgroundColor: '#1f130a',
+                        borderRadius: 12,
+                        padding: 10,
+                        borderWidth: 1.5,
+                        borderColor: isMyTurn ? coffee.accent : '#5c3d24',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 11, color: coffee.accent, fontWeight: '900' }}>
+                            👑 Anda (@{currentUsername})
+                          </Text>
+                          {/* Bench Indicators */}
+                          <View style={{ flexDirection: 'row', gap: 3 }}>
+                            {myState?.team?.map((m: any, idx: number) => (
+                              <Text key={idx} style={{ fontSize: 9 }}>
+                                {m.isFainted ? '💀' : idx === myState?.activeIndex ? '🟢' : '⚪'}
+                              </Text>
+                            ))}
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: '900' }}>
+                          {myActiveMon?.type?.toUpperCase()}
+                        </Text>
+                      </View>
+
+                      {/* Player Monster Row */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6 }}>
+                        <View
+                          style={{
+                            width: 50,
+                            height: 50,
+                            borderRadius: 25,
+                            backgroundColor: '#3b2214',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                            borderWidth: 1.5,
+                            borderColor: myActiveMon?.isShiny ? '#fbbf24' : coffee.accent,
+                          }}
+                        >
+                          <Text style={{ fontSize: 26 }}>{myActiveMon?.icon || '🐾'}</Text>
+                        </View>
+
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                            <Text style={{ color: '#fff', fontWeight: '900', fontSize: 13 }}>
+                              {myActiveMon?.name || 'Monster Anda'}
+                              {myActiveMon?.isShiny ? ' ✨' : ''}
+                            </Text>
+                            <Text style={{ fontSize: 11, fontWeight: 'bold', color: getHpColor(myHpPct) }}>
+                              {myActiveMon?.currentHp}/{myActiveMon?.maxHp} HP
+                            </Text>
+                          </View>
+
+                          {/* HP Bar */}
+                          <View
+                            style={{
+                              height: 8,
+                              backgroundColor: '#171411',
+                              borderRadius: 4,
+                              overflow: 'hidden',
+                              marginTop: 4,
+                              borderWidth: 0.5,
+                              borderColor: '#4a3319',
+                            }}
+                          >
+                            <View
+                              style={{
+                                width: `${myHpPct}%`,
+                                height: '100%',
+                                backgroundColor: getHpColor(myHpPct),
+                              }}
+                            />
+                          </View>
+
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>
+                            <Text style={{ fontSize: 9, color: coffee.muted }}>
+                              ATK {myActiveMon?.attack || 0} | DEF {myActiveMon?.defense || 0}
+                            </Text>
+                            <Text style={{ fontSize: 9, color: '#fef08a', fontWeight: '700' }}>
+                              ⚡ {myActiveMon?.skillName} ({myActiveMon?.skillPower})
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })()
             ) : (
               /* Bridge & Truf Current Trick and Trump */
               <View style={{ alignItems: 'center', gap: 8, paddingVertical: 10 }}>
@@ -1885,6 +2146,52 @@ export default function GameTableScreen() {
           </View>
         )}
 
+        {/* Pokemon Battle Action Controls */}
+        {table.game_type === 'pokemon' && isPlaying && !isSpectator && (
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+            {isMyTurn ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.passBtn, { backgroundColor: '#b91c1c', minWidth: 90 }]}
+                  onPress={() => handlePokemonAttack(false)}
+                >
+                  <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 12 }]}>🗡️ Serang</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.passBtn, { backgroundColor: '#ea580c', minWidth: 110 }]}
+                  onPress={() => handlePokemonAttack(true)}
+                >
+                  <Text style={[styles.passBtnText, { fontWeight: '900', fontSize: 12 }]}>
+                    ✨ Jurus Elemen
+                  </Text>
+                </TouchableOpacity>
+
+                {gameState?.players?.[currentUserId]?.team?.map((benchMon: any, bIdx: number) => {
+                  if (bIdx === gameState?.players?.[currentUserId]?.activeIndex || benchMon.isFainted) return null;
+                  return (
+                    <TouchableOpacity
+                      key={bIdx}
+                      style={[styles.passBtn, { backgroundColor: '#0284c7', minWidth: 85 }]}
+                      onPress={() => handlePokemonSwitch(bIdx)}
+                    >
+                      <Text style={[styles.passBtnText, { fontWeight: '800', fontSize: 11 }]}>
+                        🔄 {benchMon.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </>
+            ) : (
+              <View style={{ paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 11, color: coffee.muted, fontStyle: 'italic' }}>
+                  ⏳ Giliran pelatih lawan...
+                </Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {isMyTurn && table.game_type === 'catur' && (
           <TouchableOpacity
             style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]}
@@ -1917,6 +2224,8 @@ export default function GameTableScreen() {
                 ? `Posisi Pion Anda: Kotak ${gameState?.players?.[currentUserId]?.position ?? 1} / 100`
                 : table.game_type === 'monopoly'
                 ? `Aset Monopoli Anda (Saldo: Rp ${gameState?.players?.[currentUserId]?.money ?? 0})`
+                : table.game_type === 'pokemon'
+                ? `Monster Anda: Klik Cadangan untuk Bertukar (${gameState?.players?.[currentUserId]?.team?.filter((m: any) => !m.isFainted).length ?? 0}/3 Siap)`
                 : `Kartu di Tangan Anda (${table.game_type === 'gapleh' ? myHand.length : myCards.length})`}
             </Text>
             {isMyTurn && (
@@ -2069,6 +2378,47 @@ export default function GameTableScreen() {
                 </View>
               )}
             </View>
+          ) : table.game_type === 'pokemon' ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
+            >
+              {gameState?.players?.[currentUserId]?.team?.map((mon: any, idx: number) => {
+                const isActive = idx === gameState?.players?.[currentUserId]?.activeIndex;
+                const isFainted = mon.isFainted;
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    disabled={isActive || isFainted || !isMyTurn}
+                    onPress={() => handlePokemonSwitch(idx)}
+                    style={{
+                      backgroundColor: isActive ? '#3b1c11' : isFainted ? '#27272a' : '#1c1917',
+                      borderColor: isActive ? coffee.accent : isFainted ? '#52525b' : coffee.border,
+                      borderWidth: isActive ? 2 : 1,
+                      borderRadius: 10,
+                      padding: 8,
+                      width: 120,
+                      alignItems: 'center',
+                      opacity: isFainted ? 0.5 : 1,
+                    }}
+                  >
+                    <Text style={{ fontSize: 24 }}>{mon.icon || '🐾'}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginTop: 2 }} numberOfLines={1}>
+                      {mon.name}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: isFainted ? '#ef4444' : isActive ? '#22c55e' : coffee.accent, marginTop: 2, fontWeight: '700' }}>
+                      {isFainted ? '💀 Pingsan' : isActive ? '🟢 Aktif' : `HP ${mon.currentHp}/${mon.maxHp}`}
+                    </Text>
+                    {!isActive && !isFainted && isMyTurn && (
+                      <View style={{ marginTop: 4, backgroundColor: '#0284c7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 9, color: '#fff', fontWeight: 'bold' }}>Pilih Ganti</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           ) : table.game_type !== 'catur' ? (
             <ScrollView
               horizontal

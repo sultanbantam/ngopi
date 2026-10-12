@@ -17,6 +17,7 @@ import { API_URL } from '../../../src/utils/session';
 
 import { EmptyState } from '../../../src/components/EmptyState';
 import { formatMessageTime } from '../../../src/utils/dateFormat';
+import { meshManager } from '../../../src/utils/meshManager';
 
 const NoTranslateText = Text as any;
 const API_ORIGIN = 'https://api.ngopi.top';
@@ -587,8 +588,18 @@ function PrivateChatRoomScreen() {
       reply_to_id: replyingToMessageId
     };
 
-    if (socketService.socket) {
+    const targetPeerOrRoomId = isGroupChat ? 'BROADCAST' : (Array.isArray(roomId) ? roomId[0] : roomId || '');
+
+    if (meshManager.isOffline()) {
+      meshManager.sendOfflineMessage(targetPeerOrRoomId, ciphertext);
+    } else if (socketService.socket && socketService.socket.connected) {
       socketService.socket.emit('send_message', messageData);
+    } else {
+      // Offline fallback: send via Bluetooth Mesh
+      meshManager.sendOfflineMessage(targetPeerOrRoomId, ciphertext);
+      if (socketService.socket) {
+        socketService.socket.emit('send_message', messageData);
+      }
     }
 
     // Add locally for optimistic UI

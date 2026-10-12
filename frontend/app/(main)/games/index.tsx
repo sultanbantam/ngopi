@@ -21,10 +21,13 @@ import { getAuthHeaders } from '../../../src/utils/api';
 import * as SecureStore from '../../../src/utils/storage';
 
 import LeaderboardModal from '../../../src/components/LeaderboardModal';
+import PokemonHubModal from '../../../src/components/PokemonHubModal';
+import GameEventModal from '../../../src/components/GameEventModal';
+import PointsHubModal from '../../../src/components/PointsHubModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
-type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'remi' | 'poker' | 'bridge' | 'truf';
+type GameType = 'gapleh' | 'catur' | 'uno' | 'snake_ladder' | 'monopoly' | 'pokemon' | 'remi' | 'poker' | 'bridge' | 'truf';
 
 interface GameTable {
   id: string;
@@ -51,6 +54,7 @@ const GAME_TABS: Array<{ id: GameType; label: string; icon: string; count?: numb
   { id: 'uno', label: 'UNO', icon: 'cards-playing-outline' },
   { id: 'snake_ladder', label: 'Ular Tangga', icon: 'dice-multiple' },
   { id: 'monopoly', label: 'Monopoli', icon: 'home-city-outline' },
+  { id: 'pokemon', label: 'Monster TCG', icon: 'sword-cross' },
   { id: 'remi', label: 'Remi', icon: 'cards-playing-outline' },
   { id: 'poker', label: 'Poker', icon: 'cards-spade' },
   { id: 'bridge', label: 'Bridge', icon: 'bridge' },
@@ -79,6 +83,9 @@ export default function GamesLobbyScreen() {
   const [gaplehRuleset, setGaplehRuleset] = useState<'kampung' | 'tournament'>('kampung');
   const [targetScore, setTargetScore] = useState<number>(250);
   const [gaplehRulesModalVisible, setGaplehRulesModalVisible] = useState<boolean>(false);
+  const [pokemonHubVisible, setPokemonHubVisible] = useState<boolean>(false);
+  const [eventModalVisible, setEventModalVisible] = useState<boolean>(false);
+  const [pointsHubVisible, setPointsHubVisible] = useState<boolean>(false);
 
   // Join password modal state
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -438,6 +445,30 @@ export default function GamesLobbyScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.headerIconBtn, { backgroundColor: '#381e11', borderColor: '#d97706', borderWidth: 1 }]}
+          onPress={() => setPokemonHubVisible(true)}
+          accessibilityLabel="Binder & Booster Kartu Monster"
+        >
+          <Text style={{ fontSize: 16 }}>🎴</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.headerIconBtn, { backgroundColor: '#172554', borderColor: '#3b82f6', borderWidth: 1 }]}
+          onPress={() => setEventModalVisible(true)}
+          accessibilityLabel="Agenda Main Bareng & Undangan"
+        >
+          <Ionicons name="calendar" size={18} color="#60a5fa" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.headerIconBtn, { backgroundColor: '#451a03', borderColor: '#f59e0b', borderWidth: 1 }]}
+          onPress={() => setPointsHubVisible(true)}
+          accessibilityLabel="Ekonomi Poin Ngopi & Token BMC"
+        >
+          <Text style={{ fontSize: 16 }}>🪙</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={styles.headerIconBtn}
           onPress={onRefresh}
           accessibilityLabel="Refresh daftar meja"
@@ -517,6 +548,30 @@ export default function GamesLobbyScreen() {
           )}
         </TouchableOpacity>
       </View>
+
+      {selectedTab === 'pokemon' && (
+        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              backgroundColor: '#3b1c11',
+              borderColor: '#f59e0b',
+              borderWidth: 1,
+              borderRadius: 10,
+              paddingVertical: 10,
+            }}
+            onPress={() => setPokemonHubVisible(true)}
+          >
+            <Text style={{ fontSize: 16 }}>🎴</Text>
+            <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
+              Buka Binder Koleksi & Booster Pack (Gacha) ✨
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Table List */}
       <View style={{ flex: 1 }}>
@@ -936,6 +991,33 @@ export default function GamesLobbyScreen() {
       <LeaderboardModal
         visible={leaderboardVisible}
         onClose={() => setLeaderboardVisible(false)}
+      />
+
+      {/* Pokemon Hub Modal */}
+      <PokemonHubModal
+        visible={pokemonHubVisible}
+        onClose={() => setPokemonHubVisible(false)}
+        onStartBattle={() => {
+          setPokemonHubVisible(false);
+          setSelectedTab('pokemon');
+          handleQuickMatch();
+        }}
+      />
+
+      {/* Game Event Modal */}
+      <GameEventModal
+        visible={eventModalVisible}
+        onClose={() => setEventModalVisible(false)}
+        onEventStarted={(tableId) => {
+          setEventModalVisible(false);
+          router.push({ pathname: '/(main)/games/[id]' as any, params: { id: tableId } });
+        }}
+      />
+
+      {/* Points & BMC Economy Modal */}
+      <PointsHubModal
+        visible={pointsHubVisible}
+        onClose={() => setPointsHubVisible(false)}
       />
     </View>
   );

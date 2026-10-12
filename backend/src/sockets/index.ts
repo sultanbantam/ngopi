@@ -100,7 +100,12 @@ const broadcastOnlineList = async (io: Server) => {
   }
 };
 
+let ioInstance: Server | null = null;
+
+export const getSocketIO = (): Server | null => ioInstance;
+
 export const setupSocket = (io: Server) => {
+  ioInstance = io;
   const recentCallEvents = new Map<string, number>();
   // Start scheduled ecosystem platform messages and BambooChat usage tips for Bambupedia room
   startBambupediaEcosystemInfo(io);
