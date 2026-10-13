@@ -37,12 +37,34 @@ export class PointsManager {
     return userPoints.get(key) || 0;
   }
 
+  public static setPoints(key: string, balance: number): number {
+    if (!key) return 0;
+    const finalBalance = Math.max(0, balance);
+    userPoints.set(key, finalBalance);
+    savePoints(userPoints);
+    return finalBalance;
+  }
+
   public static addPoints(key: string, amount: number): number {
     if (!key) return 0;
     const current = userPoints.get(key) || 0;
     const updated = Math.max(0, current + amount);
     userPoints.set(key, updated);
     savePoints(userPoints);
+
+    // Sync to pointsEconomyService if available
+    try {
+      const { pointsEconomyService } = require('../services/points.service');
+      if (pointsEconomyService && typeof pointsEconomyService.addDirectPoints === 'function') {
+        pointsEconomyService.addDirectPoints(
+          key,
+          amount,
+          amount > 0 ? 'game_won' : 'custom_reward',
+          amount > 0 ? 'Poin aktivitas permainan/tebak-tebakan warkop' : 'Pengurangan poin'
+        );
+      }
+    } catch (_) {}
+
     return updated;
   }
 

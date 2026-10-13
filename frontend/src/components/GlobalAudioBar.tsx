@@ -46,8 +46,17 @@ export const GlobalAudioBar: React.FC = () => {
     router.push('/(main)/warkop' as any);
   };
 
-  // On mobile phone in chat screen, position bar under top header so it never covers bottom typing area
-  const dockAtTop = !isLargeScreen && isChatPage;
+  const [positionOverride, setPositionOverride] = useState<'top' | 'bottom' | null>(null);
+
+  // On mobile phone in chat screen or games screen, position bar under top header so it never covers cards or typing area
+  const isGamePage = pathname.includes('/games');
+  const defaultDockAtTop = !isLargeScreen && (isChatPage || isGamePage);
+  const dockAtTop = positionOverride ? positionOverride === 'top' : defaultDockAtTop;
+
+  const handleTogglePosition = (e: any) => {
+    e?.stopPropagation?.();
+    setPositionOverride(dockAtTop ? 'bottom' : 'top');
+  };
 
   if (isMinimized) {
     return (
@@ -67,6 +76,14 @@ export const GlobalAudioBar: React.FC = () => {
             hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
           >
             <Ionicons name={isPlaying ? 'pause' : 'play'} size={14} color={coffee.accent} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.miniControlBtn}
+            onPress={handleTogglePosition}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            accessibilityLabel={dockAtTop ? 'Pindah ke Bawah' : 'Pindah ke Atas'}
+          >
+            <Ionicons name={dockAtTop ? 'arrow-down' : 'arrow-up'} size={14} color={coffee.accent} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.miniControlBtn}
@@ -146,6 +163,16 @@ export const GlobalAudioBar: React.FC = () => {
                 color={coffee.accent}
               />
             )}
+          </TouchableOpacity>
+
+          {/* Toggle Top/Bottom Docking position */}
+          <TouchableOpacity
+            style={styles.closeBtn}
+            onPress={handleTogglePosition}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={dockAtTop ? 'Pindah ke Bawah' : 'Pindah ke Atas'}
+          >
+            <Ionicons name={dockAtTop ? 'arrow-down' : 'arrow-up'} size={16} color={coffee.accent} />
           </TouchableOpacity>
 
           {/* Minimize / Collapse Button to never block screen */}

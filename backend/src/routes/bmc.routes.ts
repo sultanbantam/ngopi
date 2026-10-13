@@ -22,10 +22,12 @@ router.get('/airdrop/history', getAirdropHistory);
 router.get('/points/me', (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id || (req.query.user_id as string);
+    const username = (req as any).user?.username || (req.query.username as string);
     if (!userId) {
       res.status(401).json({ error: 'Unauthorized: User ID required' });
       return;
     }
+    pointsEconomyService.syncWithPointsManager(userId, username);
     const up = pointsEconomyService.getOrCreateUserPoints(userId);
     const sub = pointsEconomyService.getSubscription(userId);
     res.json({ success: true, points: up, subscription: sub });

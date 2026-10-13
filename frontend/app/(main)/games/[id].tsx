@@ -653,7 +653,6 @@ export default function GameTableScreen() {
           await navigator.share({
             title: 'Kemenangan di Ngopi.top!',
             text: hookText,
-            url: 'https://ngopi.top',
           });
           return;
         } catch {
@@ -672,7 +671,6 @@ export default function GameTableScreen() {
       try {
         await Share.share({
           message: hookText,
-          url: 'https://ngopi.top',
         });
       } catch (e) {
         console.warn(e);

@@ -216,7 +216,6 @@ export default function GameEventModal({ visible, onClose, onEventStarted }: Gam
           await (navigator as any).share({
             title: evt.title,
             text: message,
-            url: 'https://ngopi.top/games',
           });
         } else if (typeof navigator !== 'undefined' && navigator.clipboard) {
           await navigator.clipboard.writeText(message);

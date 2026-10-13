@@ -312,7 +312,6 @@ export default function ContactsScreen() {
           await navigator.share({
             title: `Profil ${name} di Ngopi.top`,
             text: hookText,
-            url: targetUrl,
           });
           return;
         } catch {
@@ -331,7 +330,6 @@ export default function ContactsScreen() {
       try {
         await Share.share({
           message: hookText,
-          url: targetUrl,
         });
       } catch (e) {
         console.warn(e);

@@ -152,16 +152,15 @@ export class PointsEconomyService {
     if (!up) {
       up = {
         user_id: userId,
-        balance: 100, // Starter bonus: 100 poin
-        lifetime: 100,
-        streak_days: 1,
+        balance: 0, // Starts at 0
+        lifetime: 0,
+        streak_days: 0,
         last_login_date: today,
         daily_chat_count: 0,
         daily_reaction_count: 0,
         updated_at: Date.now(),
       };
       this.userPoints.set(userId, up);
-      this.recordTransaction(userId, 100, 'daily_mission', null, 'Bonus selamat datang anggota warkop');
     } else {
       // Check date rollover for daily caps
       if (up.last_login_date !== today) {
@@ -175,6 +174,43 @@ export class PointsEconomyService {
 
   public getUserPoints(userId: string): UserPoints | undefined {
     return this.userPoints.get(userId);
+  }
+
+  public syncWithPointsManager(userId: string, username?: string): void {
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (!PointsManager) return;
+      const ptsById = PointsManager.getPoints(userId);
+      const ptsByName = username ? PointsManager.getPoints(username) : 0;
+      const maxPts = Math.max(ptsById, ptsByName);
+      if (maxPts > 0) {
+        const up = this.getOrCreateUserPoints(userId);
+        if (maxPts > up.balance) {
+          up.balance = maxPts;
+          up.lifetime = Math.max(up.lifetime, maxPts);
+          up.updated_at = Date.now();
+          this.saveToDisk();
+        }
+      }
+    } catch (_) {}
+  }
+
+  public addDirectPoints(
+    userId: string,
+    amount: number,
+    type: PointsTransactionType = 'daily_mission',
+    description?: string,
+    reference?: string | null
+  ): number {
+    const up = this.getOrCreateUserPoints(userId);
+    up.balance = Math.max(0, up.balance + amount);
+    if (amount > 0) {
+      up.lifetime += amount;
+    }
+    up.updated_at = Date.now();
+    this.recordTransaction(userId, amount, type, reference, description || 'Penambahan poin aktivitas warkop');
+    this.saveToDisk();
+    return up.balance;
   }
 
   private recordTransaction(
@@ -413,6 +449,13 @@ export class PointsEconomyService {
     const txType = txTypeMap[featureId] || 'purchase_sticker';
     this.recordTransaction(userId, -feature.price_points, txType, featureId, `Membeli fitur: ${feature.name}`);
 
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager && typeof PointsManager.setPoints === 'function') {
+        PointsManager.setPoints(userId, up.balance);
+      }
+    } catch (_) {}
+
     // Update active subscriptions
     let sub = this.subscriptions.get(userId);
     if (!sub) {
@@ -468,6 +511,13 @@ export class PointsEconomyService {
       txHash,
       `Konversi ${req.points_to_convert} Poin ke ${bmcAwarded} Token BMC (Tx: ${txHash.slice(0, 10)}...)`
     );
+
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager && typeof PointsManager.setPoints === 'function') {
+        PointsManager.setPoints(req.user_id, up.balance);
+      }
+    } catch (_) {}
 
     this.saveToDisk();
 

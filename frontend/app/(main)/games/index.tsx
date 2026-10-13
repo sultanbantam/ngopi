@@ -416,21 +416,9 @@ export default function GamesLobbyScreen() {
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => {
-            if (Platform.OS === 'web') {
-              if (typeof window !== 'undefined' && window.history && window.history.length > 1) {
-                router.back();
-              } else {
-                router.replace('/(main)/warkop' as any);
-              }
-            } else {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/(main)/warkop' as any);
-              }
-            }
+            router.replace('/(main)/warkop' as any);
           }}
-          accessibilityLabel="Kembali"
+          accessibilityLabel="Kembali ke Warung Kopi"
         >
           <Ionicons name="arrow-back" size={22} color={coffee.text} />
         </TouchableOpacity>

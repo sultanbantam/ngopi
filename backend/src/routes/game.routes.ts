@@ -2,6 +2,7 @@ import { Request, Response, Router } from 'express';
 import { TableManager } from '../games/TableManager';
 import { GameType } from '../games/engine/types';
 import { PointsManager } from '../utils/pointsManager';
+import { pointsEconomyService } from '../services/points.service';
 import jwt from 'jsonwebtoken';
 
 const router = Router();
@@ -49,7 +50,12 @@ const getUserFromReq = (req: Request) => {
 // GET /api/games/points
 router.get('/points', (req: Request, res: Response) => {
   const user = getUserFromReq(req);
-  const points = PointsManager.getPoints(user.username) || PointsManager.getPoints(user.id);
+  if (user.id && user.id !== 'guest_user') {
+    pointsEconomyService.syncWithPointsManager(user.id, user.username);
+  }
+  const ptsEconomy = pointsEconomyService.getUserPoints(user.id)?.balance || 0;
+  const ptsManager = PointsManager.getPoints(user.username) || PointsManager.getPoints(user.id);
+  const points = Math.max(ptsEconomy, ptsManager);
   res.status(200).json({ success: true, points, username: user.username });
 });
 
