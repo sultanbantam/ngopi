@@ -11,6 +11,7 @@ import OfflineBanner from '../../src/components/OfflineBanner';
 import MeshPeerModal from '../../src/components/MeshPeerModal';
 import ConsentBannerModal from '../../src/components/ConsentBannerModal';
 import ModerationAlertModal from '../../src/components/ModerationAlertModal';
+import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -588,7 +589,9 @@ export default function MainLayout() {
         {renderToast()}
         {renderNotificationCenter()}
         <OnboardingModal />
-        <GlobalAudioBar />
+        <ErrorBoundary name="GlobalAudioBar" fallback={null}>
+          <GlobalAudioBar />
+        </ErrorBoundary>
         <MeshPeerModal
           visible={meshModalVisible}
           onClose={() => setMeshModalVisible(false)}
@@ -624,7 +627,9 @@ export default function MainLayout() {
       {renderToast()}
       {renderNotificationCenter()}
       <OnboardingModal />
-      <GlobalAudioBar />
+      <ErrorBoundary name="GlobalAudioBar" fallback={null}>
+        <GlobalAudioBar />
+      </ErrorBoundary>
       <MeshPeerModal
         visible={meshModalVisible}
         onClose={() => setMeshModalVisible(false)}

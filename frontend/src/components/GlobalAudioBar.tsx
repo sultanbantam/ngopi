@@ -13,6 +13,7 @@ export const GlobalAudioBar: React.FC = () => {
   const isChatPage = pathname === '/chat' || pathname.includes('/chat/');
   const [audioState, setAudioState] = useState<GlobalAudioState>(() => globalAudioPlayer.getState());
   const [isMinimized, setIsMinimized] = useState(false);
+  const [positionOverride, setPositionOverride] = useState<'top' | 'bottom' | null>(null);
 
   useEffect(() => {
     const unsubscribe = globalAudioPlayer.subscribe((state) => {
@@ -20,6 +21,16 @@ export const GlobalAudioBar: React.FC = () => {
     });
     return unsubscribe;
   }, []);
+
+  // On mobile phone in chat screen or games screen, position bar under top header so it never covers cards or typing area
+  const isGamePage = pathname.includes('/games');
+  const defaultDockAtTop = !isLargeScreen && (isChatPage || isGamePage);
+  const dockAtTop = positionOverride ? positionOverride === 'top' : defaultDockAtTop;
+
+  const handleTogglePosition = (e: any) => {
+    e?.stopPropagation?.();
+    setPositionOverride(dockAtTop ? 'bottom' : 'top');
+  };
 
   // Do not show the floating bar if user is currently on the warkop page,
   // since JukeboxWidget is already visible and interactive on warkop page.
@@ -44,18 +55,6 @@ export const GlobalAudioBar: React.FC = () => {
 
   const handleGoToWarkop = () => {
     router.push('/(main)/warkop' as any);
-  };
-
-  const [positionOverride, setPositionOverride] = useState<'top' | 'bottom' | null>(null);
-
-  // On mobile phone in chat screen or games screen, position bar under top header so it never covers cards or typing area
-  const isGamePage = pathname.includes('/games');
-  const defaultDockAtTop = !isLargeScreen && (isChatPage || isGamePage);
-  const dockAtTop = positionOverride ? positionOverride === 'top' : defaultDockAtTop;
-
-  const handleTogglePosition = (e: any) => {
-    e?.stopPropagation?.();
-    setPositionOverride(dockAtTop ? 'bottom' : 'top');
   };
 
   if (isMinimized) {
