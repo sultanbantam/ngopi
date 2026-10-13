@@ -493,6 +493,7 @@ export class PointsEconomyService {
       throw new Error('Konversi harus dalam kelipatan 1000 Poin Ngopi (1000 Poin = 1 BMC).');
     }
 
+    this.syncWithPointsManager(req.user_id);
     const up = this.getOrCreateUserPoints(req.user_id);
     if (up.balance < req.points_to_convert) {
       throw new Error(`Saldo poin Anda (${up.balance}) tidak mencukupi untuk konversi ${req.points_to_convert} poin.`);

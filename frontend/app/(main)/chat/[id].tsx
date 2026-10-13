@@ -347,7 +347,7 @@ function PrivateChatRoomScreen() {
           if (meInDirectory && meInDirectory.public_key !== myKeyPair.publicKey) {
             axios.post(`${API_URL}/auth/profile`, { public_key: myKeyPair.publicKey }, {
               headers: { Authorization: `Bearer ${token}` }
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }
         setSecretKey(encryptionSecret);
@@ -492,7 +492,7 @@ function PrivateChatRoomScreen() {
                   content: decodeMessageContent(m.rawContent || m.content, m.type, refreshedSecret, roomKey),
                 })));
               }
-            } catch {}
+            } catch { }
           }
         };
 
@@ -531,7 +531,7 @@ function PrivateChatRoomScreen() {
     try {
       const token = (await SecureStore.getItemAsync('token')) || (Platform.OS === 'web' ? localStorage.getItem('token') : '');
       const myKeyPair = await getOrEnsureDeviceKeyPair();
-      
+
       const res = await axios.post(`${API_ORIGIN}/api/keys/renegotiate`, {
         targetUserId: roomId,
         public_key: myKeyPair.publicKey,
@@ -852,7 +852,7 @@ function PrivateChatRoomScreen() {
           allowsRecordingIOS: true,
           playsInSilentModeIOS: true,
         });
-        const { recording } = await Audio.Recording.createAsync( Audio.RecordingOptionsPresets.HIGH_QUALITY );
+        const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
         setRecording(recording);
         setIsRecording(true);
       }
@@ -1647,7 +1647,7 @@ function PrivateChatRoomScreen() {
                     <Text style={styles.avatarText}>{item.display_name.charAt(0)}</Text>
                   )}
                 </View>
-                <Text style={{color: coffee.secondary, fontSize: 10, textAlign: 'center', width: 44}} numberOfLines={1}>{item.display_name.split(' ')[0]}</Text>
+                <Text style={{ color: coffee.secondary, fontSize: 10, textAlign: 'center', width: 44 }} numberOfLines={1}>{item.display_name.split(' ')[0]}</Text>
               </TouchableOpacity>
             )}
           />
@@ -2273,7 +2273,7 @@ const styles = StyleSheet.create({
     color: coffee.text,
     fontSize: 12,
     fontWeight: '800',
-  },  contactItem: {
+  }, contactItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: coffee.background,

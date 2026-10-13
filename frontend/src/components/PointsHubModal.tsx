@@ -229,104 +229,117 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
     }
   }, [visible]);
 
+  const showAlert = (title: string, msg: string) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.alert(`${title}\n\n${msg}`);
+    } else {
+      Alert.alert(title, msg);
+    }
+  };
+
+  const showConfirm = (title: string, msg: string, onConfirm: () => void) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const ok = window.confirm(`${title}\n\n${msg}`);
+      if (ok) {
+        onConfirm();
+      }
+    } else {
+      Alert.alert(title, msg, [
+        { text: 'Batal', style: 'cancel' },
+        { text: 'Konfirmasi', onPress: onConfirm },
+      ]);
+    }
+  };
+
   const handleClaimStreak = async () => {
     try {
       const headers = await getAuthHeaders();
       const res = await axios.post(`${API_URL}/bmc/points/streak/claim`, {}, { headers });
       if (res.data?.success) {
-        Alert.alert('Streak Diklaim! 🔥', res.data.message || `+${res.data.pointsAdded} Poin ditambahkan!`);
+        showAlert('Streak Diklaim! 🔥', res.data.message || `+${res.data.pointsAdded} Poin ditambahkan!`);
         fetchEconomyData();
       } else {
-        Alert.alert('Info', res.data?.message || 'Streak hari ini sudah diklaim.');
+        showAlert('Info', res.data?.message || 'Streak hari ini sudah diklaim.');
       }
     } catch (err: any) {
-      Alert.alert('Info', err.response?.data?.error || 'Streak hari ini sudah diklaim.');
+      showAlert('Info', err.response?.data?.error || 'Streak hari ini sudah diklaim.');
     }
   };
 
   const handlePurchaseFeature = async (feature: PremiumFeatureItem) => {
-    Alert.alert(
+    showConfirm(
       'Konfirmasi Pembelian',
       `Beli "${feature.name}" seharga ${feature.price_points} Poin Ngopi?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Beli Sekarang',
-          onPress: async () => {
-            try {
-              const headers = await getAuthHeaders();
-              const res = await axios.post(
-                `${API_URL}/bmc/premium/buy`,
-                { feature_id: feature.id },
-                { headers }
-              );
-              if (res.data?.success) {
-                Alert.alert('Berhasil! 🎉', `Fitur "${feature.name}" berhasil diaktifkan.`);
-                fetchEconomyData();
-              }
-            } catch (err: any) {
-              Alert.alert('Gagal Membeli', err.response?.data?.error || 'Poin tidak mencukupi.');
-            }
-          },
-        },
-      ]
+      async () => {
+        try {
+          const headers = await getAuthHeaders();
+          const res = await axios.post(
+            `${API_URL}/bmc/premium/buy`,
+            { feature_id: feature.id },
+            { headers }
+          );
+          if (res.data?.success) {
+            showAlert('Berhasil! 🎉', `Fitur "${feature.name}" berhasil diaktifkan.`);
+            fetchEconomyData();
+          }
+        } catch (err: any) {
+          showAlert('Gagal Membeli', err.response?.data?.error || 'Poin tidak mencukupi.');
+        }
+      }
     );
   };
 
   const handleConvertBmc = async () => {
-    if (!walletAddress || !walletAddress.startsWith('0x') || walletAddress.length !== 42) {
-      Alert.alert('Alamat Dompet Tidak Valid', 'Masukkan alamat dompet BaMbooChain (0x... 42 karakter).');
+    const cleanWallet = (walletAddress || '').trim();
+    if (!cleanWallet || !cleanWallet.startsWith('0x') || cleanWallet.length !== 42) {
+      showAlert('Alamat Dompet Tidak Valid', 'Masukkan alamat dompet BaMbooChain (0x... 42 karakter).');
       return;
     }
 
     if (convertPointsAmount < 1000 || convertPointsAmount % 1000 !== 0) {
-      Alert.alert('Jumlah Tidak Valid', 'Konversi harus dalam kelipatan 1.000 Poin (1.000 Poin = 1 BMC).');
+      showAlert('Jumlah Tidak Valid', 'Konversi harus dalam kelipatan 1.000 Poin (1.000 Poin = 1 BMC).');
       return;
     }
 
     const bmcToReceive = convertPointsAmount / 1000;
 
-    Alert.alert(
+    showConfirm(
       'Konfirmasi Konversi On-Chain',
-      `Tukar ${convertPointsAmount.toLocaleString()} Poin menjadi ${bmcToReceive} Token BMC ke alamat:\n${walletAddress}?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Konversi Sekarang',
-          onPress: async () => {
-            try {
-              setIsConverting(true);
-              const headers = await getAuthHeaders();
-              const res = await axios.post(
-                `${API_URL}/bmc/points/convert`,
-                {
-                  points_to_convert: convertPointsAmount,
-                  wallet_address: walletAddress,
-                },
-                { headers }
-              );
+      `Tukar ${convertPointsAmount.toLocaleString()} Poin menjadi ${bmcToReceive} Token BMC ke alamat:\n${cleanWallet}?`,
+      async () => {
+        try {
+          setIsConverting(true);
+          const headers = await getAuthHeaders();
+          const res = await axios.post(
+            `${API_URL}/bmc/points/convert`,
+            {
+              points_to_convert: convertPointsAmount,
+              wallet_address: cleanWallet,
+            },
+            { headers }
+          );
 
-              if (res.data?.success) {
-                Alert.alert(
-                  'Konversi Berhasil! 🚀',
-                  `Berhasil mencetak ${res.data.bmc_awarded} Token BMC!\nHash Transaksi: ${res.data.tx_hash.slice(0, 14)}...`
-                );
-                fetchEconomyData();
-              }
-            } catch (err: any) {
-              Alert.alert('Gagal Konversi', err.response?.data?.error || 'Terjadi kesalahan.');
-            } finally {
-              setIsConverting(false);
-            }
-          },
-        },
-      ]
+          if (res.data?.success) {
+            showAlert(
+              'Konversi Berhasil! 🚀',
+              `Berhasil mencetak ${res.data.bmc_awarded} Token BMC!\nHash Transaksi: ${res.data.tx_hash ? res.data.tx_hash.slice(0, 16) + '...' : 'Terkonfirmasi'}`
+            );
+            fetchEconomyData();
+          } else {
+            showAlert('Gagal Konversi', res.data?.error || 'Terjadi kesalahan saat memproses konversi.');
+          }
+        } catch (err: any) {
+          showAlert('Gagal Konversi', err.response?.data?.error || err.message || 'Terjadi kesalahan saat konversi.');
+        } finally {
+          setIsConverting(false);
+        }
+      }
     );
   };
 
   const handleCreateWatchParty = async () => {
     if (!cinemaTitle.trim() || !cinemaUrl.trim()) {
-      Alert.alert('Data Belum Lengkap', 'Masukkan judul dan link YouTube/video.');
+      showAlert('Data Belum Lengkap', 'Masukkan judul dan link YouTube/video.');
       return;
     }
 
@@ -343,7 +356,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
       );
 
       if (res.data?.success) {
-        Alert.alert('Ruang Bioskop Dibuka! 🎬', 'Ruang nonton bareng telah aktif.');
+        showAlert('Ruang Bioskop Dibuka! 🎬', 'Ruang nonton bareng telah aktif.');
         setCinemaTitle('');
         setCinemaUrl('');
         fetchEconomyData();
@@ -353,7 +366,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
         }
       }
     } catch (err: any) {
-      Alert.alert('Gagal Membuat Ruang', err.response?.data?.error || 'Poin tidak mencukupi (100 Poin).');
+      showAlert('Gagal Membuat Ruang', err.response?.data?.error || 'Poin tidak mencukupi (100 Poin).');
     } finally {
       setIsCreatingCinema(false);
     }
