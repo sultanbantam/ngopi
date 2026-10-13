@@ -185,6 +185,7 @@ function PrivateChatRoomScreen() {
   const [selectedMemberId, setSelectedMemberId] = useState('');
 
   const flatListRef = useRef<FlatList>(null);
+  const renegotiateKeysRef = useRef<((silent?: boolean) => Promise<void>) | null>(null);
   const router = useRouter();
   const currentRoomId = Array.isArray(roomId) ? roomId[0] : (roomId as string);
   const partnerProfile = allUsers.find(user => user.id === currentRoomId);
@@ -376,7 +377,16 @@ function PrivateChatRoomScreen() {
         setMessages(history);
         setHasMoreMessages(data.hasMore ?? false);
         setNextCursor(data.nextCursor ?? undefined);
-        // Auto-scroll will be triggered by onContentSizeChange
+
+        // Auto-heal: renegotiate keys in background if any message has decryption failure
+        const hasDecryptionIssue = history.some((m: any) =>
+          m.content && (m.content.includes('*(Pesan tidak bisa') || m.content.includes('*(Gagal mendekripsi'))
+        );
+        if (hasDecryptionIssue && !isGroupChat) {
+          setTimeout(() => {
+            renegotiateKeysRef.current?.(true);
+          }, 300);
+        }
       } catch (err) {
         console.error('Failed to fetch history', err);
       }
@@ -391,11 +401,12 @@ function PrivateChatRoomScreen() {
           if (data.sender_id === myId) return;
 
           const messageType = data.type || 'text';
+          const decoded = decodeMessageContent(data.content, messageType, encryptionSecret, roomKey);
           setMessages(prev => [...prev, {
             id: data.id || Math.random().toString(),
             sender_id: data.sender_id,
             rawContent: data.content,
-            content: decodeMessageContent(data.content, messageType, encryptionSecret, roomKey),
+            content: decoded,
             isMine: false,
             timestamp: new Date().toISOString(),
             type: messageType,
@@ -406,6 +417,12 @@ function PrivateChatRoomScreen() {
           }]);
           // Auto-scroll to bottom on new message
           setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+
+          if (decoded && (decoded.includes('*(Pesan tidak bisa') || decoded.includes('*(Gagal mendekripsi')) && !isGroupChat) {
+            setTimeout(() => {
+              renegotiateKeysRef.current?.(true);
+            }, 300);
+          }
 
           socket.emit('mark_messages_read', { sender_id: data.sender_id, room_id: roomKey });
         };
@@ -510,7 +527,7 @@ function PrivateChatRoomScreen() {
     };
   }, [roomId]);
 
-  const handleRenegotiateKeys = async () => {
+  const handleRenegotiateKeys = async (silent: boolean = false) => {
     try {
       const token = (await SecureStore.getItemAsync('token')) || (Platform.OS === 'web' ? localStorage.getItem('token') : '');
       const myKeyPair = await getOrEnsureDeviceKeyPair();
@@ -542,11 +559,16 @@ function PrivateChatRoomScreen() {
         });
       }
 
-      alert('Kunci enkripsi berhasil disinkronkan kembali. ☕');
+      if (!silent) {
+        alert('Kunci enkripsi berhasil disinkronkan kembali. ☕');
+      }
     } catch (err: any) {
-      alert('Gagal menyinkronkan kunci: ' + (err.response?.data?.error || err.message));
+      if (!silent) {
+        alert('Gagal menyinkronkan kunci: ' + (err.response?.data?.error || err.message));
+      }
     }
   };
+  renegotiateKeysRef.current = handleRenegotiateKeys;
 
   const sendMessage = () => {
     if (!inputText.trim()) return;
