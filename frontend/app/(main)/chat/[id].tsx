@@ -12,6 +12,7 @@ import { Audio } from 'expo-av';
 import axios from 'axios';
 import BambupediaRoom from '../warkop';
 import { Ionicons } from '@expo/vector-icons';
+import HTWalkieTalkieModal from '../../../src/components/HTWalkieTalkieModal';
 import { getMimeType } from '../../../src/utils/fileHelpers';
 import { API_URL } from '../../../src/utils/session';
 
@@ -139,6 +140,7 @@ function PrivateChatRoomScreen() {
   const [inputText, setInputText] = useState('');
   const [secretKey, setSecretKey] = useState('');
   const [actualRoomId, setActualRoomId] = useState('');
+  const [htModalVisible, setHtModalVisible] = useState(false);
 
   // Pagination state
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -1181,6 +1183,13 @@ function PrivateChatRoomScreen() {
               ) : null}
             </View>
             <View style={styles.headerRightIcons}>
+              <TouchableOpacity
+                style={[styles.headerIconButton, { backgroundColor: 'rgba(16, 185, 129, 0.12)', borderRadius: 16 }]}
+                onPress={() => setHtModalVisible(true)}
+                accessibilityLabel="HT Radio Walkie-Talkie"
+              >
+                <Ionicons name="radio" size={19} color="#10b981" />
+              </TouchableOpacity>
               <TouchableOpacity style={styles.headerIconButton} onPress={() => setIsSearchMode(true)}>
                 <Ionicons name="search" size={22} color={coffee.text} />
               </TouchableOpacity>
@@ -1653,6 +1662,12 @@ function PrivateChatRoomScreen() {
           />
         </View>
       )}
+
+      {/* HT Walkie-Talkie Modal */}
+      <HTWalkieTalkieModal
+        visible={htModalVisible}
+        onClose={() => setHtModalVisible(false)}
+      />
 
     </KeyboardAvoidingView>
   );

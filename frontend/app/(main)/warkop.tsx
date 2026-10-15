@@ -32,6 +32,7 @@ import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan';
 import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 import LeaderboardModal from '../../src/components/LeaderboardModal';
+import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -248,6 +249,7 @@ export default function BambupediaRoom() {
   const [currentUsername, setCurrentUsername] = useState<string | null>(null);
   const [userPoints, setUserPoints] = useState<number>(0);
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
+  const [htModalVisible, setHtModalVisible] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [suasanaExpanded, setSuasanaExpanded] = useState(false);
@@ -957,32 +959,74 @@ export default function BambupediaRoom() {
 
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Menu Tambahan</Text>
-            <View style={styles.menuGrid}>
-              <TouchableOpacity style={[styles.menuTile, { backgroundColor: coffee.accentWash, borderColor: coffee.accent }]} onPress={() => {
-                if (Platform.OS === 'web') {
-                  window.location.assign('/alihbahasa');
-                } else {
-                  router.push('/(main)/alihbahasa' as any);
-                }
-              }}>
-                <Ionicons name="mic" size={18} color={coffee.accent} />
-                <Text style={[styles.menuTileText, { color: coffee.accent, fontWeight: 'bold' }]}>Alih Bahasa</Text>
+            {/* Featured HT Radio Card */}
+            <TouchableOpacity
+              style={styles.featuredHtCard}
+              onPress={() => {
+                setDrawerVisible(false);
+                setHtModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.featuredHtIconBox}>
+                <Ionicons name="radio" size={22} color="#10b981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>HT Radio (Walkie-Talkie)</Text>
+                  <View style={styles.offlineBadge}>
+                    <Text style={styles.offlineBadgeText}>OFFLINE OK</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Komunikasi radio VHF/UHF & modem akustik tanpa internet</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
+
+            {/* Grid 2-Kolom Rapi & User Friendly */}
+            <View style={styles.menuGrid2Col}>
+              <TouchableOpacity
+                style={[styles.menuTile2Col, { backgroundColor: coffee.accentWash, borderColor: coffee.accent }]}
+                onPress={() => {
+                  if (Platform.OS === 'web') {
+                    window.location.assign('/alihbahasa');
+                  } else {
+                    router.push('/(main)/alihbahasa' as any);
+                  }
+                }}
+              >
+                <View style={[styles.menuIconCircle, { backgroundColor: 'rgba(212, 163, 115, 0.2)' }]}>
+                  <Ionicons name="mic" size={15} color={coffee.accent} />
+                </View>
+                <Text style={[styles.menuTileText2Col, { color: coffee.accent, fontWeight: '800' }]} numberOfLines={1}>Alih Bahasa</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/(main)/help-center')}>
-                <Ionicons name="headset-outline" size={18} color={coffee.accent} />
-                <Text style={styles.menuTileText}>Pusat Bantuan</Text>
+
+              <TouchableOpacity style={styles.menuTile2Col} onPress={() => router.push('/(main)/help-center')}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="headset-outline" size={15} color={coffee.accent} />
+                </View>
+                <Text style={styles.menuTileText2Col} numberOfLines={1}>Pusat Bantuan</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/(main)/contacts')}>
-                <Ionicons name="people-outline" size={18} color={coffee.accent} />
-                <Text style={styles.menuTileText}>Kontak</Text>
+
+              <TouchableOpacity style={styles.menuTile2Col} onPress={() => router.push('/(main)/contacts')}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="people-outline" size={15} color={coffee.accent} />
+                </View>
+                <Text style={styles.menuTileText2Col} numberOfLines={1}>Kontak</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/privacy')}>
-                <Ionicons name="shield-checkmark-outline" size={18} color={coffee.accent} />
-                <Text style={styles.menuTileText}>Privasi</Text>
+
+              <TouchableOpacity style={styles.menuTile2Col} onPress={() => router.push('/privacy')}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="shield-checkmark-outline" size={15} color={coffee.accent} />
+                </View>
+                <Text style={styles.menuTileText2Col} numberOfLines={1}>Privasi</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.menuTile} onPress={() => router.push('/terms')}>
-                <Ionicons name="document-text-outline" size={18} color={coffee.accent} />
-                <Text style={styles.menuTileText}>Ketentuan</Text>
+
+              <TouchableOpacity style={styles.menuTile2Col} onPress={() => router.push('/terms')}>
+                <View style={styles.menuIconCircle}>
+                  <Ionicons name="document-text-outline" size={15} color={coffee.accent} />
+                </View>
+                <Text style={styles.menuTileText2Col} numberOfLines={1}>Ketentuan</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1043,6 +1087,16 @@ export default function BambupediaRoom() {
             accessibilityLabel={`Poin Kopi: ${userPoints}`}
           >
             <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+          </TouchableOpacity>
+
+          {/* HT Radio Walkie-Talkie Button */}
+          <TouchableOpacity
+            style={styles.htRadioHeaderBtn}
+            onPress={() => setHtModalVisible(true)}
+            accessibilityLabel="Buka HT Radio Walkie-Talkie"
+          >
+            <Ionicons name="radio" size={16} color="#10b981" />
+            <Text style={styles.htRadioHeaderBtnText}>HT Radio</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1181,8 +1235,16 @@ export default function BambupediaRoom() {
             </View>
           )}
 
-          {/* Quick Action Chips Bar (Tebak-tebakan, Poin, Sapa) */}
+          {/* Quick Action Chips Bar (HT Radio, Tebak-tebakan, Poin, Sapa) */}
           <View style={styles.quickChipsBar}>
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}
+              onPress={() => setHtModalVisible(true)}
+              accessibilityLabel="Buka HT Radio Walkie-Talkie"
+            >
+              <Text style={[styles.quickChipText, { color: '#10b981', fontWeight: '800' }]}>📻 HT Radio</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.quickChipBtn}
               onPress={() => {
@@ -1271,6 +1333,12 @@ export default function BambupediaRoom() {
       <LeaderboardModal
         visible={leaderboardVisible}
         onClose={() => setLeaderboardVisible(false)}
+      />
+
+      {/* HT Walkie-Talkie Modal */}
+      <HTWalkieTalkieModal
+        visible={htModalVisible}
+        onClose={() => setHtModalVisible(false)}
       />
     </View>
   );
@@ -1485,6 +1553,103 @@ const styles = StyleSheet.create({
   presenceDotOnline: { backgroundColor: coffee.success },
   presenceDotOffline: { backgroundColor: coffee.muted },
   emptyMembers: { color: coffee.muted, fontSize: 12, textAlign: 'center', marginTop: 18 },
+  featuredHtCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    borderWidth: 1.5,
+    borderColor: '#10b981',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    gap: 12,
+  },
+  featuredHtIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featuredHtTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+  },
+  featuredHtTitle: {
+    color: coffee.text,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  offlineBadge: {
+    backgroundColor: '#10b981',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  offlineBadgeText: {
+    color: '#000',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  featuredHtDesc: {
+    color: coffee.secondary,
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
+  },
+  menuGrid2Col: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  menuTile2Col: {
+    width: '48.5%',
+    minHeight: 46,
+    borderRadius: 10,
+    backgroundColor: coffee.surface,
+    borderWidth: 1,
+    borderColor: coffee.raised,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  menuIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: coffee.raised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuTileText2Col: {
+    color: coffee.text,
+    fontSize: 12,
+    fontWeight: '700',
+    flexShrink: 1,
+  },
+  htRadioHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderWidth: 1,
+    borderColor: '#10b981',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 4,
+  },
+  htRadioHeaderBtnText: {
+    color: '#10b981',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   menuGrid: { flexDirection: 'row', gap: 8 },
   menuTile: { flex: 1, minHeight: 42, borderRadius: 8, backgroundColor: coffee.surface, borderWidth: 1, borderColor: coffee.raised, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingHorizontal: 8 },
   menuTileText: { color: coffee.text, fontSize: 13, fontWeight: '800' },
