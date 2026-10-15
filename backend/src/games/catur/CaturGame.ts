@@ -148,6 +148,14 @@ export class CaturGame extends BaseGame {
       capturedBlack: [] as string[],
       winnerId: null as string | null,
       isFinished: false,
+      castling: {
+        wK: true,
+        wR_k: true,
+        wR_q: true,
+        bK: true,
+        bR_k: true,
+        bR_q: true,
+      },
     };
   }
 
@@ -226,6 +234,61 @@ export class CaturGame extends BaseGame {
       this.state.board[toRow]![toCol] = piece;
       this.state.board[fromRow]![fromCol] = null;
 
+      // Handle Castling (Lokir / Rokade) - Move the corresponding Rook simultaneously
+      const isCastling = (piece === 'wK' || piece === 'bK') && Math.abs(toCol - fromCol) === 2;
+      if (isCastling) {
+        if (piece === 'wK') {
+          if (toCol === 6) {
+            // White Kingside (O-O): Rook at (7, 7) moves to (7, 5)
+            this.state.board[7]![5] = 'wR';
+            this.state.board[7]![7] = null;
+            this.state.moveHistory.push('wK O-O (Rokade Sayap Raja)');
+          } else if (toCol === 2) {
+            // White Queenside (O-O-O): Rook at (7, 0) moves to (7, 3)
+            this.state.board[7]![3] = 'wR';
+            this.state.board[7]![0] = null;
+            this.state.moveHistory.push('wK O-O-O (Rokade Sayap Ratu)');
+          }
+        } else if (piece === 'bK') {
+          if (toCol === 6) {
+            // Black Kingside (O-O): Rook at (0, 7) moves to (0, 5)
+            this.state.board[0]![5] = 'bR';
+            this.state.board[0]![7] = null;
+            this.state.moveHistory.push('bK O-O (Rokade Sayap Raja)');
+          } else if (toCol === 2) {
+            // Black Queenside (O-O-O): Rook at (0, 0) moves to (0, 3)
+            this.state.board[0]![3] = 'bR';
+            this.state.board[0]![0] = null;
+            this.state.moveHistory.push('bK O-O-O (Rokade Sayap Ratu)');
+          }
+        }
+      }
+
+      // Update castling rights
+      if (!this.state.castling) {
+        this.state.castling = { wK: true, wR_k: true, wR_q: true, bK: true, bR_k: true, bR_q: true };
+      }
+      if (piece === 'wK') {
+        this.state.castling.wK = false;
+        this.state.castling.wR_k = false;
+        this.state.castling.wR_q = false;
+      } else if (piece === 'bK') {
+        this.state.castling.bK = false;
+        this.state.castling.bR_k = false;
+        this.state.castling.bR_q = false;
+      } else if (piece === 'wR') {
+        if (fromRow === 7 && fromCol === 7) this.state.castling.wR_k = false;
+        if (fromRow === 7 && fromCol === 0) this.state.castling.wR_q = false;
+      } else if (piece === 'bR') {
+        if (fromRow === 0 && fromCol === 7) this.state.castling.bR_k = false;
+        if (fromRow === 0 && fromCol === 0) this.state.castling.bR_q = false;
+      }
+      // If a Rook is captured on its home square
+      if (toRow === 7 && toCol === 7) this.state.castling.wR_k = false;
+      if (toRow === 7 && toCol === 0) this.state.castling.wR_q = false;
+      if (toRow === 0 && toCol === 7) this.state.castling.bR_k = false;
+      if (toRow === 0 && toCol === 0) this.state.castling.bR_q = false;
+
       // Pawn promotion to Queen on opposite baseline
       if (piece === 'wP' && toRow === 0) {
         this.state.board[toRow]![toCol] = 'wQ';
@@ -233,7 +296,9 @@ export class CaturGame extends BaseGame {
         this.state.board[toRow]![toCol] = 'bQ';
       }
 
-      this.state.moveHistory.push(`${piece} (${fromRow},${fromCol}) -> (${toRow},${toCol})`);
+      if (!isCastling) {
+        this.state.moveHistory.push(`${piece} (${fromRow},${fromCol}) -> (${toRow},${toCol})`);
+      }
 
       // Switch turn
       if (!this.state.isFinished) {
@@ -346,8 +411,20 @@ export class CaturGame extends BaseGame {
       const originalDest: ChessPiece = board[move.toRow]?.[move.toCol] ?? null;
       const movingPiece: ChessPiece = board[move.fromRow]?.[move.fromCol] ?? null;
 
+      const isCastling = (movingPiece === 'wK' || movingPiece === 'bK') && Math.abs(move.toCol - move.fromCol) === 2;
+      let rookFromCol = -1;
+      let rookToCol = -1;
+      if (isCastling) {
+        if (move.toCol === 6) { rookFromCol = 7; rookToCol = 5; }
+        else if (move.toCol === 2) { rookFromCol = 0; rookToCol = 3; }
+      }
+
       board[move.toRow]![move.toCol] = movingPiece;
       board[move.fromRow]![move.fromCol] = null;
+      if (isCastling && rookFromCol !== -1) {
+        board[move.fromRow]![rookToCol] = board[move.fromRow]![rookFromCol] ?? null;
+        board[move.fromRow]![rookFromCol] = null;
+      }
 
       // Ensure King is not under check after this move
       if (!this.isKingInCheck(board, color)) {
@@ -357,6 +434,10 @@ export class CaturGame extends BaseGame {
       // Revert simulation
       board[move.fromRow]![move.fromCol] = movingPiece;
       board[move.toRow]![move.toCol] = originalDest;
+      if (isCastling && rookFromCol !== -1) {
+        board[move.fromRow]![rookFromCol] = board[move.fromRow]![rookToCol] ?? null;
+        board[move.fromRow]![rookToCol] = null;
+      }
     }
 
     return legalMoves;
@@ -605,6 +686,65 @@ export class CaturGame extends BaseGame {
               if (!target || target.charAt(0) === oppColor) {
                 moves.push({ fromRow: r, fromCol: c, toRow: nr, toCol: nc });
               }
+            }
+          }
+
+          // --- CASTLING (LOKIR / ROKADE) ---
+          const cRights = this.state?.castling ?? { wK: true, wR_k: true, wR_q: true, bK: true, bR_k: true, bR_q: true };
+
+          if (color === 'w' && r === 7 && c === 4 && cRights.wK) {
+            // White Kingside (O-O): (7,5) and (7,6) empty, and (7,4), (7,5), (7,6) not attacked
+            if (
+              cRights.wR_k &&
+              board[7]![7] === 'wR' &&
+              !board[7]![5] &&
+              !board[7]![6] &&
+              !this.isSquareAttacked(board, 7, 4, 'b') &&
+              !this.isSquareAttacked(board, 7, 5, 'b') &&
+              !this.isSquareAttacked(board, 7, 6, 'b')
+            ) {
+              moves.push({ fromRow: 7, fromCol: 4, toRow: 7, toCol: 6 });
+            }
+
+            // White Queenside (O-O-O): (7,1), (7,2), (7,3) empty, and (7,4), (7,3), (7,2) not attacked
+            if (
+              cRights.wR_q &&
+              board[7]![0] === 'wR' &&
+              !board[7]![1] &&
+              !board[7]![2] &&
+              !board[7]![3] &&
+              !this.isSquareAttacked(board, 7, 4, 'b') &&
+              !this.isSquareAttacked(board, 7, 3, 'b') &&
+              !this.isSquareAttacked(board, 7, 2, 'b')
+            ) {
+              moves.push({ fromRow: 7, fromCol: 4, toRow: 7, toCol: 2 });
+            }
+          } else if (color === 'b' && r === 0 && c === 4 && cRights.bK) {
+            // Black Kingside (O-O): (0,5) and (0,6) empty, and (0,4), (0,5), (0,6) not attacked
+            if (
+              cRights.bR_k &&
+              board[0]![7] === 'bR' &&
+              !board[0]![5] &&
+              !board[0]![6] &&
+              !this.isSquareAttacked(board, 0, 4, 'w') &&
+              !this.isSquareAttacked(board, 0, 5, 'w') &&
+              !this.isSquareAttacked(board, 0, 6, 'w')
+            ) {
+              moves.push({ fromRow: 0, fromCol: 4, toRow: 0, toCol: 6 });
+            }
+
+            // Black Queenside (O-O-O): (0,1), (0,2), (0,3) empty, and (0,4), (0,3), (0,2) not attacked
+            if (
+              cRights.bR_q &&
+              board[0]![0] === 'bR' &&
+              !board[0]![1] &&
+              !board[0]![2] &&
+              !board[0]![3] &&
+              !this.isSquareAttacked(board, 0, 4, 'w') &&
+              !this.isSquareAttacked(board, 0, 3, 'w') &&
+              !this.isSquareAttacked(board, 0, 2, 'w')
+            ) {
+              moves.push({ fromRow: 0, fromCol: 4, toRow: 0, toCol: 2 });
             }
           }
         }

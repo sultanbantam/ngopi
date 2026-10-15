@@ -62,4 +62,45 @@ if (botResp) {
   assert(botM !== null, `Difficulty ${diff} evaluated a valid bot move`);
 });
 
+// 6. Test Castling (Lokir / Rokade) Kingside (O-O) & Queenside (O-O-O)
+const p2: GamePlayerInfo = { id: 'p2', user_id: 'user_2', username: 'PlayerTwo', display_name: 'Player Two', seat_number: 1, is_ready: true, is_active: true };
+const gameCastle = new CaturGame([pWhite, p2], { preferredColor: 'white' });
+const rawB = gameCastle.getRawState().board;
+
+// Clear path for White Kingside: clear (7, 5) Bishop and (7, 6) Knight
+rawB[7][5] = null;
+rawB[7][6] = null;
+
+// Generate valid moves for White King at (7, 4)
+const validMovesW = gameCastle.getValidMoves('user_1');
+const canCastleKingside = validMovesW.some(m => m.fromRow === 7 && m.fromCol === 4 && m.toRow === 7 && m.toCol === 6);
+assert(canCastleKingside === true, 'White King can perform Kingside Castling (O-O) when path is clear');
+
+// Execute Kingside Castling
+const castleRes = gameCastle.handleAction('user_1', 'move', { fromRow: 7, fromCol: 4, toRow: 7, toCol: 6 });
+assert(castleRes.success === true, 'Kingside Castling executed successfully');
+assert(gameCastle.getRawState().board[7][6] === 'wK', 'White King moved to (7, 6)');
+assert(gameCastle.getRawState().board[7][5] === 'wR', 'White Rook moved to (7, 5)');
+assert(gameCastle.getRawState().board[7][4] === null, 'Starting King square (7, 4) is now empty');
+assert(gameCastle.getRawState().board[7][7] === null, 'Starting Rook square (7, 7) is now empty');
+
+// 7. Test Black Queenside Castling (O-O-O)
+// Clear Black Queenside path: (0, 1), (0, 2), (0, 3)
+const rawBBlack = gameCastle.getRawState().board;
+rawBBlack[0][1] = null;
+rawBBlack[0][2] = null;
+rawBBlack[0][3] = null;
+
+const validMovesB = gameCastle.getValidMoves('user_2');
+const canCastleQueensideBlack = validMovesB.some(m => m.fromRow === 0 && m.fromCol === 4 && m.toRow === 0 && m.toCol === 2);
+assert(canCastleQueensideBlack === true, 'Black King can perform Queenside Castling (O-O-O) when path is clear');
+
+const blackCastleRes = gameCastle.handleAction('user_2', 'move', { fromRow: 0, fromCol: 4, toRow: 0, toCol: 2 });
+assert(blackCastleRes.success === true, 'Black Queenside Castling executed successfully');
+assert(gameCastle.getRawState().board[0][2] === 'bK', 'Black King moved to (0, 2)');
+assert(gameCastle.getRawState().board[0][3] === 'bR', 'Black Rook moved to (0, 3)');
+assert(gameCastle.getRawState().board[0][4] === null, 'Black King start square (0, 4) is now empty');
+assert(gameCastle.getRawState().board[0][0] === null, 'Black Rook start square (0, 0) is now empty');
+
 console.log('--- ALL CATUR TESTS PASSED SUCCESSFULLY! ---');
+

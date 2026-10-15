@@ -692,6 +692,35 @@ export default function GameTableScreen() {
         setSelectedChessSquare({ row, col });
       }
     } else {
+      const selectedPiece = gameState?.board?.[selectedChessSquare.row]?.[selectedChessSquare.col];
+
+      // Castling Shortcut: If King is selected and player clicks their own Rook on the same row
+      const isKingSelected = selectedPiece === `${myColor}K`;
+      const isClickingOwnRook = isKingSelected && row === selectedChessSquare.row && piece === `${myColor}R`;
+
+      if (isClickingOwnRook) {
+        const fromRow = selectedChessSquare.row;
+        const fromCol = selectedChessSquare.col;
+        const targetCol = col === 7 ? 6 : col === 0 ? 2 : col;
+        setSelectedChessSquare(null);
+        if (socketRef.current && tableId) {
+          socketRef.current.emit(
+            'game:action',
+            {
+              tableId,
+              action: 'move',
+              payload: { fromRow, fromCol, toRow: fromRow, toCol: targetCol },
+            },
+            (res: any) => {
+              if (!res?.success) {
+                Alert.alert('Langkah Gagal', res?.error || 'Langkah rokade (lokir) tidak sah.');
+              }
+            }
+          );
+        }
+        return;
+      }
+
       if (piece && piece.startsWith(myColor)) {
         setSelectedChessSquare({ row, col });
         return;
