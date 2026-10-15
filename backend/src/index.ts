@@ -28,6 +28,7 @@ import eventRoutes from './routes/event.routes';
 import meshRoutes from './routes/mesh.routes';
 import complianceRoutes from './routes/compliance.routes';
 import moderationRoutes from './routes/moderation.routes';
+import htRoutes from './routes/ht.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -109,6 +110,7 @@ app.use('/api/mesh', meshRoutes);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/user', complianceRoutes);
 app.use('/api/moderation', moderationRoutes);
+app.use('/api/ht', htRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

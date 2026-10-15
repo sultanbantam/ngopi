@@ -6,7 +6,7 @@
   "main": "index.js",
   "scripts": {
     "dev": "nodemon --exec ts-node src/index.ts",
-    "test": "tsx tests/points_economy.test.ts && tsx tests/catur.test.ts && tsx tests/gapleh_partnership.test.ts && tsx tests/uno.test.ts && tsx tests/snake_ladder.test.ts && tsx tests/monopoly.test.ts && tsx tests/pokemon.test.ts && tsx tests/event.test.ts && tsx tests/mesh.test.ts && tsx tests/moderation.test.ts && tsx tests/compliance.test.ts",
+    "test": "tsx tests/points_economy.test.ts && tsx tests/catur.test.ts && tsx tests/gapleh_partnership.test.ts && tsx tests/uno.test.ts && tsx tests/snake_ladder.test.ts && tsx tests/monopoly.test.ts && tsx tests/pokemon.test.ts && tsx tests/event.test.ts && tsx tests/mesh.test.ts && tsx tests/moderation.test.ts && tsx tests/compliance.test.ts && tsx tests/ht.test.ts",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed"
   },

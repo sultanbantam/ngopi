@@ -37,6 +37,7 @@ model User {
   ticketAuditLogs     TicketAuditLog[]
   refreshTokens       RefreshToken[]
   gamePlayers         GamePlayer[]
+  htProfile           HTProfile?
 }
 
 model Message {
@@ -454,5 +455,63 @@ model GameHistory {
 
   @@map("game_histories")
 }
+
+// ==========================================
+// MODUL HT (HANDY TALKY) & RADIO AMATIR
+// ==========================================
+
+model HTProfile {
+  id                  String   @id @default(uuid())
+  user_id             String   @unique @map("user_id")
+  callsign            String?
+  license_type        String?  @default("none") // "IAR", "KRAP", "ORARI", "none"
+  license_number      String?
+  default_freq        Float?   @default(144.390) // MHz
+  default_ctcss       String?  @default("88.5")
+  aprs_ssid           String?  @default("7")
+  power_watts         Float    @default(1.0)
+  emergency_contact   String?
+  is_verified         Boolean  @default(false)
+  disclaimer_accepted Boolean  @default(false)
+  created_at          DateTime @default(now())
+  updated_at          DateTime @updatedAt
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("ht_profiles")
+}
+
+model HTMessage {
+  id           String    @id @default(uuid())
+  sender_id    String    @map("sender_id")
+  recipient_id String?   @map("recipient_id") // null = broadcast
+  content      String    // Terenkripsi
+  freq         Float     // Frekuensi yang digunakan (MHz)
+  protocol     String    @default("AFSK") // "APRS", "DMR", "AFSK"
+  status       String    @default("pending") // "pending", "sent", "delivered", "failed"
+  created_at   DateTime  @default(now())
+  sent_at      DateTime?
+  delivered_at DateTime?
+
+  @@index([freq])
+  @@index([sender_id])
+  @@map("ht_messages")
+}
+
+model HTGroup {
+  id          String   @id @default(uuid())
+  name        String
+  freq        Float
+  ctcss       String?
+  protocol    String   @default("AFSK") // "APRS", "DMR", "AFSK"
+  creator_id  String   @map("creator_id")
+  members     Json     @default("[]") // [{ user_id, callsign }]
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now())
+
+  @@index([freq])
+  @@map("ht_groups")
+}
+
 
 

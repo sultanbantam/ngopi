@@ -14,12 +14,14 @@ import { uploadProfileAvatar, profileSaveError } from '../../src/utils/profileUp
 import { profileSlug } from '../../src/utils/profileLink';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useNightMode } from '../../src/theme/nightMode';
+import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
 export default function ContactsScreen() {
   const { openMenu, createWarkop, editWarkop } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string }>();
   const [loading, setLoading] = useState(true);
+  const [isHtModalVisible, setHtModalVisible] = useState(false);
   const [currentUser, setCurrentUser] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
   const [currentBmcId, setCurrentBmcId] = useState('');
@@ -598,9 +600,28 @@ export default function ContactsScreen() {
             </TouchableOpacity>
           </View>
         </View>
-        <TouchableOpacity onPress={() => setDropdownVisible(true)}>
-          <Text style={styles.logoutText}>Menu</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              backgroundColor: '#78350F',
+              paddingHorizontal: 10,
+              paddingVertical: 6,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: '#D97706',
+            }}
+            onPress={() => setHtModalVisible(true)}
+          >
+            <Ionicons name="radio" size={14} color="#F59E0B" />
+            <Text style={{ color: '#FEF3C7', fontSize: 12, fontWeight: 'bold' }}>HT Radio 📻</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setDropdownVisible(true)}>
+            <Text style={styles.logoutText}>Menu</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.searchContainer}>
@@ -611,6 +632,13 @@ export default function ContactsScreen() {
         <TouchableOpacity style={styles.gameLobbyButton} onPress={() => router.push('/(main)/games' as any)}>
           <Ionicons name="game-controller-outline" size={18} color={coffee.accent} />
           <Text style={styles.gameLobbyButtonText}>Meja Warkop 🎮</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.gameLobbyButton, { borderColor: '#D97706', backgroundColor: '#292524' }]}
+          onPress={() => setHtModalVisible(true)}
+        >
+          <Ionicons name="radio-outline" size={18} color="#F59E0B" />
+          <Text style={[styles.gameLobbyButtonText, { color: '#F59E0B' }]}>HT Radio 📻</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.helpCenterButton} onPress={openHelpCenter}>
           <Ionicons name="help-circle-outline" size={18} color={coffee.text} />
@@ -972,6 +1000,17 @@ export default function ContactsScreen() {
                 Mode Ngobrol Malam 🌙: <Text style={{ color: coffee.accent, fontWeight: '700' }}>{nightSetting.toUpperCase()}</Text>
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                setDropdownVisible(false);
+                setHtModalVisible(true);
+              }}
+            >
+              <Text style={[styles.actionSheetText, { color: '#F59E0B', fontWeight: 'bold' }]}>
+                📻 Mode HT Radio (Handy Talky)
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); router.push('/privacy'); }}>
               <Text style={styles.actionSheetText}>Kebijakan Privasi</Text>
             </TouchableOpacity>
@@ -984,6 +1023,12 @@ export default function ContactsScreen() {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* HT Walkie-Talkie Tactical Modal */}
+      <HTWalkieTalkieModal
+        visible={isHtModalVisible}
+        onClose={() => setHtModalVisible(false)}
+      />
     </View>
   );
 }
