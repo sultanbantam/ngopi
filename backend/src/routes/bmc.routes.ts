@@ -69,10 +69,14 @@ router.post('/points/streak/claim', (req: Request, res: Response) => {
 // POST /api/bmc/points/earn — Trigger activity reward
 router.post('/points/earn', (req: Request, res: Response) => {
   try {
-    const userId = (req as any).user?.id || req.body.user_id;
+    const userId = (req as any).user?.id;
     const { activity_type, reference } = req.body;
-    if (!userId || !activity_type) {
-      res.status(400).json({ error: 'userId and activity_type are required' });
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized: User authentication required' });
+      return;
+    }
+    if (!activity_type) {
+      res.status(400).json({ error: 'activity_type is required' });
       return;
     }
 
@@ -87,18 +91,16 @@ router.post('/points/earn', (req: Request, res: Response) => {
       case 'helper':
         result = pointsEconomyService.earnHelperReward(userId, reference);
         break;
-      case 'game_played':
-        result = pointsEconomyService.earnGamePlayed(userId, reference);
-        break;
-      case 'game_won':
-        result = pointsEconomyService.earnGameWon(userId, reference);
-        break;
-      case 'referral':
-        result = pointsEconomyService.earnReferralReward(userId, reference || 'friend');
-        break;
       case 'daily_mission':
         result = pointsEconomyService.claimDailyMission(userId, reference || 'Misi Warkop');
         break;
+      case 'game_won':
+      case 'game_played':
+        res.status(403).json({ error: 'Poin permainan hanya dapat diberikan secara otomatis oleh server meja permainan (anti-cheat).' });
+        return;
+      case 'referral':
+        res.status(403).json({ error: 'Poin referral hanya diproses saat teman mendaftar melalui tautan resmi.' });
+        return;
       default:
         res.status(400).json({ error: `Unknown activity_type: ${activity_type}` });
         return;

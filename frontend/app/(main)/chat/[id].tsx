@@ -1209,7 +1209,7 @@ function PrivateChatRoomScreen() {
       {messages.some(m => m.content && (m.content.includes('*(Pesan tidak bisa didekripsi') || m.content.includes('*(Gagal mendekripsi)'))) && (
         <View style={styles.renegotiateBanner}>
           <Text style={styles.renegotiateBannerText}>⚠️ Kunci enkripsi perlu diperbarui.</Text>
-          <TouchableOpacity style={styles.renegotiateBannerBtn} onPress={handleRenegotiateKeys}>
+          <TouchableOpacity style={styles.renegotiateBannerBtn} onPress={() => handleRenegotiateKeys()}>
             <Text style={styles.renegotiateBannerBtnText}>🔄 Muat Ulang Kunci</Text>
           </TouchableOpacity>
         </View>
@@ -1301,7 +1301,7 @@ function PrivateChatRoomScreen() {
                   <NoTranslateText style={styles.messageText} className="notranslate" translate="no">{item.content}</NoTranslateText>
                   {item.is_edited && <Text style={styles.editedText}>(edited)</Text>}
                   {isDecryptionError && (
-                    <TouchableOpacity style={styles.retryKeyInlineBtn} onPress={handleRenegotiateKeys}>
+                    <TouchableOpacity style={styles.retryKeyInlineBtn} onPress={() => handleRenegotiateKeys()}>
                       <Text style={styles.retryKeyInlineText}>🔄 Muat Ulang Kunci</Text>
                     </TouchableOpacity>
                   )}

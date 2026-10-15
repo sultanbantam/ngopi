@@ -7,26 +7,26 @@ function runPointsEconomyTests() {
   const economy = new PointsEconomyService();
   economy.resetForTesting();
 
-  // TEST 1: Initial User Points & Welcome Bonus
-  console.log('Test 1: User Points Creation & Welcome Bonus');
+  // TEST 1: Initial User Points (Starts at 0)
+  console.log('Test 1: User Points Creation (0 Starter Balance)');
   const userA = economy.getOrCreateUserPoints('user_andi_01');
   assert.strictEqual(userA.user_id, 'user_andi_01', 'User ID matches');
-  assert.strictEqual(userA.balance, 100, 'Initial starter balance is 100 points');
-  assert.strictEqual(userA.lifetime, 100, 'Lifetime points is 100');
-  console.log('  ✅ PASS: Initial user points and welcome bonus verified');
+  assert.strictEqual(userA.balance, 0, 'Initial starter balance is 0 points');
+  assert.strictEqual(userA.lifetime, 0, 'Lifetime points is 0');
+  console.log('  ✅ PASS: Initial user points verified at 0');
 
   // TEST 2: Chat Rewards & Daily Limit (Max 50/day)
   console.log('Test 2: Chat Activity Reward (+1, Max 50/hari)');
   const chat1 = economy.earnChatReward('user_andi_01');
   assert.strictEqual(chat1.awarded, true, 'First chat awarded');
   assert.strictEqual(chat1.pointsAdded, 1, '+1 point added');
-  assert.strictEqual(chat1.newBalance, 101, 'Balance is now 101');
+  assert.strictEqual(chat1.newBalance, 1, 'Balance is now 1');
 
   // Fast forward to daily limit
   for (let i = 2; i <= 50; i++) {
     economy.earnChatReward('user_andi_01');
   }
-  assert.strictEqual(economy.getOrCreateUserPoints('user_andi_01').balance, 150, '50 chat points accrued');
+  assert.strictEqual(economy.getOrCreateUserPoints('user_andi_01').balance, 50, '50 chat points accrued');
 
   // 51st chat attempt
   const chat51 = economy.earnChatReward('user_andi_01');
@@ -39,12 +39,12 @@ function runPointsEconomyTests() {
   const react1 = economy.earnReactionReward('user_andi_01');
   assert.strictEqual(react1.awarded, true, 'First reaction awarded');
   assert.strictEqual(react1.pointsAdded, 2, '+2 points added');
-  assert.strictEqual(react1.newBalance, 152, 'Balance is now 152');
+  assert.strictEqual(react1.newBalance, 52, 'Balance is now 52');
 
   for (let i = 2; i <= 20; i++) {
     economy.earnReactionReward('user_andi_01');
   }
-  assert.strictEqual(economy.getOrCreateUserPoints('user_andi_01').balance, 190, '20 reactions added 40 points');
+  assert.strictEqual(economy.getOrCreateUserPoints('user_andi_01').balance, 90, '20 reactions added 40 points');
 
   const react21 = economy.earnReactionReward('user_andi_01');
   assert.strictEqual(react21.awarded, false, '21st reaction rejected by daily cap');
@@ -60,7 +60,7 @@ function runPointsEconomyTests() {
 
   const wonRes = economy.earnGameWon('user_andi_01', 'game_gapleh_01');
   assert.strictEqual(wonRes.pointsAdded, 25, '+25 for winning game');
-  assert.strictEqual(wonRes.newBalance, 230, 'Balance is now 230');
+  assert.strictEqual(wonRes.newBalance, 130, 'Balance is now 130');
   console.log('  ✅ PASS: Helper (+5), game played (+10), and game won (+25) verified');
 
   // TEST 5: Referral (+50) & Daily Mission (+20)
@@ -70,37 +70,42 @@ function runPointsEconomyTests() {
 
   const missionRes = economy.claimDailyMission('user_andi_01', 'Ngopi Pagi 3 Chat');
   assert.strictEqual(missionRes.pointsAdded, 20, '+20 for daily mission');
-  assert.strictEqual(missionRes.newBalance, 300, 'Balance reached 300');
+  assert.strictEqual(missionRes.newBalance, 200, 'Balance reached 200');
   console.log('  ✅ PASS: Referral (+50) and mission (+20) rewards verified');
 
   // TEST 6: Daily Streak (+5 * streak)
   console.log('Test 6: Daily Streak Logic');
-  // First claim today was already initialized with streak 1
+  // First claim today awards day 1 streak (1 point)
   const streakClaim1 = economy.claimDailyStreak('user_andi_01');
-  assert.strictEqual(streakClaim1.awarded, false, 'Duplicate streak claim on same day prevented');
+  assert.strictEqual(streakClaim1.awarded, true, 'First streak claim awarded');
+  assert.strictEqual(streakClaim1.pointsAdded, 1, 'Day 1 awards 1 point');
+
+  // Duplicate claim on same cycle day prevented
+  const streakClaimDup = economy.claimDailyStreak('user_andi_01');
+  assert.strictEqual(streakClaimDup.awarded, false, 'Duplicate streak claim on same day prevented');
 
   // Simulate user_budi logging in with yesterday as last login
   const budi = economy.getOrCreateUserPoints('user_budi_02');
-  budi.last_login_date = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  budi.last_checkin_cycle_day = economy.getWarkopCycleDay() - 1;
   budi.streak_days = 2;
 
   const streakClaimBudi = economy.claimDailyStreak('user_budi_02');
   assert.strictEqual(streakClaimBudi.awarded, true, 'Streak claimed for Budi');
   assert.strictEqual(streakClaimBudi.streak, 3, 'Streak incremented to 3');
-  assert.strictEqual(streakClaimBudi.pointsAdded, 15, '+15 points awarded (5 * 3)');
-  console.log('  ✅ PASS: Daily streak increment and point multiplier verified');
+  assert.strictEqual(streakClaimBudi.pointsAdded, 5, '+5 points awarded for day 3');
+  console.log('  ✅ PASS: Daily streak increment and point cycle verified');
 
   // TEST 7: Premium Feature Purchase with Points
   console.log('Test 7: Purchase Feature with Points');
-  // Try purchasing beta access (2000 pts) with only 300 pts -> Fail
+  // Try purchasing beta access (2000 pts) with only 200 pts -> Fail
   const failPurchase = economy.purchaseFeatureWithPoints('user_andi_01', 'beta_access');
   assert.strictEqual(failPurchase.success, false, 'Cannot buy expensive feature without enough points');
   assert.ok(failPurchase.error?.includes('tidak mencukupi'), 'Error mentions insufficient points');
 
-  // Buy sticker pack (50 pts) with 300 pts -> Success
+  // Buy sticker pack (50 pts) with 201 pts -> Success
   const successPurchase = economy.purchaseFeatureWithPoints('user_andi_01', 'sticker_pack');
   assert.strictEqual(successPurchase.success, true, 'Sticker pack purchased');
-  assert.strictEqual(successPurchase.newBalance, 250, '300 - 50 = 250 points left');
+  assert.strictEqual(successPurchase.newBalance, 151, '201 - 50 = 151 points left');
 
   const sub = economy.getSubscription('user_andi_01');
   assert.ok(sub?.active_features.includes('sticker_pack'), 'Sticker pack active in user subscription');
@@ -110,7 +115,7 @@ function runPointsEconomyTests() {
   console.log('Test 8: Points to BMC Conversion (On-Chain Bridge)');
   // Top up user points to 2250 to test conversion
   const andi = economy.getOrCreateUserPoints('user_andi_01');
-  andi.balance += 2000; // 2250 points
+  andi.balance += 2099; // 151 + 2099 = 2250 points
 
   // 1. Invalid wallet address
   assert.throws(() => {

@@ -58,7 +58,9 @@ export const setupGameSocket = (io: Server) => {
         const player = table?.players?.find((p) => p.user_id === winnerId);
         if (player && !player.is_bot) {
           const newPts = PointsManager.addPoints(player.username, pts);
-          PointsManager.addPoints(player.user_id, pts);
+          if (player.user_id && player.user_id !== player.username) {
+            PointsManager.setPoints(player.user_id, newPts);
+          }
           awardedMap[player.user_id] = newPts;
         }
       }

@@ -101,6 +101,8 @@ let currentRiddle: TebakTebakan | null = null;
 let riddleAnswered = false;
 let fastestWinner: string | null = null;
 let winnerAnsweredAt = 0;
+let riddleBroadcastedAt = 0;
+const dailyRiddleWins = new Map<string, { count: number; date: string }>();
 let riddleTimeout: ReturnType<typeof setTimeout> | null = null;
 let riddleInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -241,6 +243,7 @@ export const emitWarkopRiddle = (io: Server) => {
   riddleAnswered = false;
   fastestWinner = null;
   winnerAnsweredAt = 0;
+  riddleBroadcastedAt = Date.now();
 
   const message = createSystemMessage('sys-tebak', 'system', formatRiddleMessage(riddle), 'WarkopBot');
   io.to(BAMBUPEDIA_ROOM).emit('system_message', message);
@@ -408,19 +411,37 @@ export const handleBambupediaEvents = (io: Server, socket: Socket, user: Bambupe
 
       if (isMatch) {
         if (!riddleAnswered) {
+          // Anti-bot script check (minimum 1.2s human reaction time)
+          if (riddleBroadcastedAt > 0 && Date.now() - riddleBroadcastedAt < 1200) {
+            console.warn(`[AntiCheat] Riddle answer from ${member.username} rejected (too fast: ${Date.now() - riddleBroadcastedAt}ms)`);
+            return;
+          }
+
           // Penjawab TERCEPAT!
           riddleAnswered = true;
           fastestWinner = member.username;
           winnerAnsweredAt = Date.now();
 
-          const newPts = PointsManager.addPoints(member.username, 10);
+          const today = new Date().toISOString().slice(0, 10);
+          const userWins = dailyRiddleWins.get(member.username) || { count: 0, date: today };
+          if (userWins.date !== today) {
+            userWins.count = 0;
+            userWins.date = today;
+          }
 
-          const winMsg = createSystemMessage(
-            'sys-tebak-win',
-            'system',
-            `🎉 SELAMAT @${member.username}! Kamu adalah yang TERCEPAT menjawab dengan benar!\n✅ Jawaban: "${currentRiddle.answer}" ☕\n⭐ +10 Poin Kopi berhasil dicatat di akunmu! (Total Poin Kamu: ${newPts} Poin)\n\nTebak-tebakan baru akan segera hadir!`,
-            'WarkopBot'
-          );
+          let newPts = PointsManager.getPoints(member.username);
+          let winMsgText = '';
+
+          if (userWins.count < 5) {
+            userWins.count++;
+            dailyRiddleWins.set(member.username, userWins);
+            newPts = PointsManager.addPoints(member.username, 10);
+            winMsgText = `🎉 SELAMAT @${member.username}! Kamu adalah yang TERCEPAT menjawab dengan benar!\n✅ Jawaban: "${currentRiddle.answer}" ☕\n⭐ +10 Poin Kopi berhasil dicatat di akunmu! (Tebak-tebakan ke-${userWins.count}/5 hari ini. Total: ${newPts} Poin)\n\nTebak-tebakan baru akan segera hadir!`;
+          } else {
+            winMsgText = `🎉 SELAMAT @${member.username}! Kamu adalah yang TERCEPAT menjawab dengan benar!\n✅ Jawaban: "${currentRiddle.answer}" ☕\nℹ️ Batas reward tebak-tebakan (5x / 50 poin per hari) telah tercapai hari ini. Poin disimpan permanen: ${newPts} Poin.\n\nTebak-tebakan baru akan segera hadir!`;
+          }
+
+          const winMsg = createSystemMessage('sys-tebak-win', 'system', winMsgText, 'WarkopBot');
           io.to(BAMBUPEDIA_ROOM).emit('bambupedia_message', winMsg);
 
           io.to(BAMBUPEDIA_ROOM).emit('warkop_user_points', {
