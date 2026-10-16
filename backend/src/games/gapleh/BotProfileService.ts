@@ -27,7 +27,7 @@ export const BOT_LEVEL_POINTS: Record<number, { win: number; lose: number; draw:
 export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   {
     bot_id: 'gapleh_2_budi',
-    name: 'Budi',
+    name: 'Gelideg',
     title: 'Kelas Bulu',
     personality: 'Pemalu, sering salah',
     level: 1,
@@ -38,7 +38,7 @@ export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   },
   {
     bot_id: 'gapleh_2_asep',
-    name: 'Asep',
+    name: 'Mangmad',
     title: 'Kelas Warung',
     personality: 'Ramah, main santai',
     level: 2,
@@ -49,7 +49,7 @@ export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   },
   {
     bot_id: 'gapleh_2_rudi',
-    name: 'Rudi',
+    name: 'Mangsante',
     title: 'Kelas Kampung',
     personality: 'Serius, kadang blunder',
     level: 3,
@@ -60,7 +60,7 @@ export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   },
   {
     bot_id: 'gapleh_2_deni',
-    name: 'Deni',
+    name: 'Hamlihi',
     title: 'Kelas Kota',
     personality: 'Cerdas, sering jebakan',
     level: 4,
@@ -71,7 +71,7 @@ export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   },
   {
     bot_id: 'gapleh_2_jago',
-    name: 'Bang Jago',
+    name: 'Sodung',
     title: 'Kelas Jagal',
     personality: 'Agresif, susah ditebak',
     level: 5,
@@ -82,7 +82,7 @@ export const INITIAL_BOT_PROFILES: BotProfileData[] = [
   },
   {
     bot_id: 'gapleh_2_maestro',
-    name: 'Sang Maestro',
+    name: 'Daman',
     title: 'Kelas Dunia',
     personality: 'Tenang, mematikan',
     level: 6,
@@ -347,7 +347,7 @@ export const BOT_BANTERS: Record<string, BotBanterData> = {
     ],
     winQuotes: [
       'Kemenangan adalah sebuah kepastian. Permainan yang indah. 👑🎯',
-      'Sang Maestro menutup simfoni gapleh hari ini.',
+      'Daman menutup simfoni gapleh hari ini.',
     ],
     passQuotes: [
       'Lewat. Kesabaran adalah bagian dari strategi agung.',

@@ -76,12 +76,12 @@ export interface GaplehBotItem {
 }
 
 export const GAPLEH_BOTS: GaplehBotItem[] = [
-  { id: 'gapleh_2_budi', name: 'Budi', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
-  { id: 'gapleh_2_asep', name: 'Asep', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
-  { id: 'gapleh_2_rudi', name: 'Rudi', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
-  { id: 'gapleh_2_deni', name: 'Deni', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
-  { id: 'gapleh_2_jago', name: 'Bang Jago', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
-  { id: 'gapleh_2_maestro', name: 'Sang Maestro', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
+  { id: 'gapleh_2_budi', name: 'Gelideg', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
+  { id: 'gapleh_2_asep', name: 'Mangmad', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
+  { id: 'gapleh_2_rudi', name: 'Mangsante', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
+  { id: 'gapleh_2_deni', name: 'Hamlihi', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
+  { id: 'gapleh_2_jago', name: 'Sodung', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
+  { id: 'gapleh_2_maestro', name: 'Daman', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
 ];
 
 export default function GamesLobbyScreen() {

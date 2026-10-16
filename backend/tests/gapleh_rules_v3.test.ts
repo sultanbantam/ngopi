@@ -186,8 +186,8 @@ console.log('\nTest 5: Bot Profile, Bot Leveling & Bot Points (Task 4 & 5)');
 BotProfileService.initProfiles();
 
 const budi = BotProfileService.getBotProfile('gapleh_2_budi');
-assert(budi.name === 'Budi', 'Bot Budi terdaftar');
-assert(budi.level === 1, 'Bot Budi awal di Level 1 (Kelas Bulu)');
+assert(budi.name === 'Gelideg', 'Bot Gelideg terdaftar');
+assert(budi.level === 1, 'Bot Gelideg awal di Level 1 (Kelas Bulu)');
 
 const budiWin1 = BotProfileService.recordBotMatch('gapleh_2_budi', 'win');
 assert(budiWin1.pointsAwarded === BOT_LEVEL_POINTS[1]!.win, 'Budi Level 1 menang dapat 10 poin');

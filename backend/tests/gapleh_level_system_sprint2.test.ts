@@ -51,9 +51,9 @@ async function runTests() {
   assert(botBudi, 'Bot Budi harus duduk di meja');
   assert(botAsep, 'Bot Asep harus duduk di meja');
   assert(botDeni, 'Bot Deni harus duduk di meja');
-  assert(botBudi.display_name.includes('Budi (Kelas Bulu)'), 'Display name Budi memuat title');
-  assert(botAsep.display_name.includes('Asep (Kelas Warung)'), 'Display name Asep memuat title');
-  assert(botDeni.display_name.includes('Deni (Kelas Kota)'), 'Display name Deni memuat title');
+  assert(botBudi.display_name.includes('Gelideg (Kelas Bulu)'), 'Display name Gelideg memuat title');
+  assert(botAsep.display_name.includes('Mangmad (Kelas Warung)'), 'Display name Mangmad memuat title');
+  assert(botDeni.display_name.includes('Hamlihi (Kelas Kota)'), 'Display name Hamlihi memuat title');
   console.log('  ✅ PASS: Nama dan title karakter bot tampil sempurna di kursi');
 
   // Test 3: Pembagian 28 Kartu Habis (7 Kartu per Pemain, 0 Deck Sisa)
@@ -82,15 +82,15 @@ async function runTests() {
   });
 
   const addJago = TableManager.addBot(tableManualBot.id, hostUser.id, 'gapleh_2_jago');
-  assert(addJago.success, 'Berhasil menambahkan Bang Jago');
+  assert(addJago.success, 'Berhasil menambahkan Sodung');
   assert.strictEqual(addJago.bot?.user_id, 'gapleh_2_jago');
-  assert(addJago.bot?.display_name.includes('Bang Jago (Kelas Jagal)'));
+  assert(addJago.bot?.display_name.includes('Sodung (Kelas Jagal)'));
 
   const addMaestro = TableManager.addBot(tableManualBot.id, hostUser.id, 'gapleh_2_maestro');
-  assert(addMaestro.success, 'Berhasil menambahkan Sang Maestro');
+  assert(addMaestro.success, 'Berhasil menambahkan Daman');
   assert.strictEqual(addMaestro.bot?.user_id, 'gapleh_2_maestro');
-  assert(addMaestro.bot?.display_name.includes('Sang Maestro (Kelas Dunia)'));
-  console.log('  ✅ PASS: Host dapat memilih spesifik karakter bot (Bang Jago, Sang Maestro)');
+  assert(addMaestro.bot?.display_name.includes('Daman (Kelas Dunia)'));
+  console.log('  ✅ PASS: Host dapat memilih spesifik karakter bot (Sodung, Daman)');
 
   // Test 5: Bot Banter & Personality
   console.log('\nTest 5: Validasi Bot Banter & Emote Berdasarkan Karakter');
@@ -123,7 +123,7 @@ async function runTests() {
   assert(botIds.includes('gapleh_2_deni'));
   assert(botIds.includes('gapleh_2_jago'));
   assert(botIds.includes('gapleh_2_maestro'));
-  console.log('  ✅ PASS: 6 Karakter Bot terdaftar lengkap: Budi, Asep, Rudi, Deni, Bang Jago, Sang Maestro');
+  console.log('  ✅ PASS: 6 Karakter Bot terdaftar lengkap: Gelideg, Mangmad, Mangsante, Hamlihi, Sodung, Daman');
 
   console.log('\n================================================================');
   console.log('🎉 SPRINT 2 (LEVEL 1 & LEVEL 2 SYSTEM + BOT SELECTION) 100% PASS!');
