@@ -729,15 +729,22 @@ export default function GamesLobbyScreen() {
         onRequestClose={() => setCreateModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
+          <View style={styles.modalCardScrollable}>
+            <View style={styles.modalHeaderPinned}>
               <Text style={styles.modalTitle}>Buka Meja Warkop Baru</Text>
-              <TouchableOpacity onPress={() => setCreateModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setCreateModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={22} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={{ gap: 14 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 18, gap: 14 }}
+              showsVerticalScrollIndicator={true}
+            >
               <View>
                 <Text style={styles.inputLabel}>Nama Meja</Text>
                 <TextInput
@@ -1074,7 +1081,9 @@ export default function GamesLobbyScreen() {
                   />
                 </View>
               )}
+            </ScrollView>
 
+            <View style={styles.modalFooterPinned}>
               <TouchableOpacity
                 style={[styles.submitCreateBtn, isCreating && { opacity: 0.6 }]}
                 onPress={handleCreateTable}
@@ -1086,7 +1095,7 @@ export default function GamesLobbyScreen() {
                   <Text style={styles.submitCreateBtnText}>Buka Meja & Masuk</Text>
                 )}
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1142,18 +1151,25 @@ export default function GamesLobbyScreen() {
         onRequestClose={() => setGaplehRulesModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { maxHeight: '85%' }]}>
-            <View style={styles.modalHeader}>
+          <View style={styles.modalCardScrollable}>
+            <View style={styles.modalHeaderPinned}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>📖 Aturan Gapleh Berpasangan</Text>
                 <Text style={styles.modalSub}>Sistem 2 vs 2: Tim A vs Tim B</Text>
               </View>
-              <TouchableOpacity onPress={() => setGaplehRulesModalVisible(false)}>
+              <TouchableOpacity
+                onPress={() => setGaplehRulesModalVisible(false)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
                 <Ionicons name="close" size={22} color={coffee.secondary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={{ gap: 14, paddingVertical: 4 }}>
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={{ padding: 18, gap: 14 }}
+              showsVerticalScrollIndicator={true}
+            >
               {/* Seating Order */}
               <View style={{ backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
                 <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 13, marginBottom: 4 }}>
@@ -1195,12 +1211,14 @@ export default function GamesLobbyScreen() {
               </View>
             </ScrollView>
 
-            <TouchableOpacity
-              style={[styles.submitCreateBtn, { marginTop: 12 }]}
-              onPress={() => setGaplehRulesModalVisible(false)}
-            >
-              <Text style={styles.submitCreateBtnText}>Paham & Tutup</Text>
-            </TouchableOpacity>
+            <View style={styles.modalFooterPinned}>
+              <TouchableOpacity
+                style={styles.submitCreateBtn}
+                onPress={() => setGaplehRulesModalVisible(false)}
+              >
+                <Text style={styles.submitCreateBtnText}>Paham & Tutup</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -1573,12 +1591,43 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 480,
+    maxHeight: '90%',
     backgroundColor: coffee.surface,
     borderRadius: 16,
     padding: 18,
     borderWidth: 1,
     borderColor: coffee.border,
+  },
+  modalCardScrollable: {
+    width: '100%',
+    maxWidth: 520,
+    maxHeight: '90%',
+    backgroundColor: coffee.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: coffee.border,
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+  },
+  modalHeaderPinned: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: coffee.border,
+    backgroundColor: coffee.surface,
+  },
+  modalFooterPinned: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: coffee.border,
+    backgroundColor: coffee.surface,
   },
   modalHeader: {
     flexDirection: 'row',
