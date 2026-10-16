@@ -1011,6 +1011,39 @@ export default function ContactsScreen() {
                 📻 Mode HT Radio (Handy Talky)
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                setDropdownVisible(false);
+                router.push('/(main)/guides/ht' as any);
+              }}
+            >
+              <Text style={[styles.actionSheetText, { color: '#F59E0B' }]}>
+                📖 Panduan HT (Handy Talky)
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                setDropdownVisible(false);
+                router.push('/(main)/guides/first-aid' as any);
+              }}
+            >
+              <Text style={[styles.actionSheetText, { color: '#ef4444', fontWeight: 'bold' }]}>
+                🚨 Panduan P3K & Darurat
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.actionSheetItem}
+              onPress={() => {
+                setDropdownVisible(false);
+                router.push('/(main)/games' as any);
+              }}
+            >
+              <Text style={styles.actionSheetText}>
+                🁫 Gapleh (Level 1 & Level 2)
+              </Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.actionSheetItem} onPress={() => { setDropdownVisible(false); router.push('/privacy'); }}>
               <Text style={styles.actionSheetText}>Kebijakan Privasi</Text>
             </TouchableOpacity>

@@ -1,7 +1,7 @@
 import { BaseGame } from '../engine/BaseGame';
 import { ActionResult, GamePlayerInfo, GameResult } from '../engine/types';
 import { GaplehRules } from './GaplehRules';
-import { DominoCard, GaplehMove, GaplehState, GaplehGameMode, GaplehRuleset } from './types';
+import { DominoCard, GaplehMove, GaplehState, GaplehGameMode, GaplehRuleset, GaplehWinType, GaplehPointsCalculation } from './types';
 
 export class GaplehGame extends BaseGame {
   readonly gameType = 'gapleh';
@@ -9,12 +9,15 @@ export class GaplehGame extends BaseGame {
   readonly maxPlayers = 4;
 
   protected declare state: GaplehState;
+  private playerStats: Record<string, { streakCount?: number; hasNutupBefore?: boolean }> = {};
 
   initializeState(config: any): GaplehState {
     const isPartnership = config?.gaplehMode === 'partnership';
     const gameMode: GaplehGameMode = isPartnership ? 'partnership' : 'individual';
     const ruleset: GaplehRuleset = config?.gaplehRuleset === 'tournament' ? 'tournament' : 'kampung';
     const targetScore = typeof config?.targetScore === 'number' ? config.targetScore : 250;
+    const level: 1 | 2 = config?.level === 2 ? 2 : 1;
+    this.playerStats = config?.playerStats || {};
 
     // Sort players by seat_number to ensure correct seating alternation:
     // Seat 0 (A1), Seat 1 (B1), Seat 2 (A2), Seat 3 (B2)
@@ -30,7 +33,7 @@ export class GaplehGame extends BaseGame {
     }
 
     const { hands } = GaplehRules.dealCards(playerIds);
-    const { startingPlayerId } = GaplehRules.findStartingPlayer(hands, playerIds);
+    const { startingPlayerId } = GaplehRules.findStartingPlayer(hands, playerIds, level);
 
     return {
       board: {
@@ -43,11 +46,13 @@ export class GaplehGame extends BaseGame {
       turnOrder: [...playerIds],
       passCount: 0,
       lastAction: null,
+      lastPlayedCards: {},
       isFinished: false,
       winnerId: null,
       deadlock: false,
       scores: {},
       round: 1,
+      level,
 
       // Partnership configuration and tracking
       gameMode,
@@ -83,7 +88,7 @@ export class GaplehGame extends BaseGame {
         return { success: false, error: 'Format kartu tidak valid.' };
       }
 
-      const validation = GaplehRules.validateMove(card, side, currentHand, this.state.board);
+      const validation = GaplehRules.validateMove(card, side, currentHand, this.state.board, this.state.level);
       if (!validation.valid || !validation.orientedCard) {
         return { success: false, error: validation.error || 'Langkah kartu tidak sah.' };
       }
@@ -123,6 +128,11 @@ export class GaplehGame extends BaseGame {
       this.state.board.rightEnd = validation.newRightEnd!;
       this.state.passCount = 0; // Reset pass streak
 
+      if (!this.state.lastPlayedCards) {
+        this.state.lastPlayedCards = {};
+      }
+      this.state.lastPlayedCards[userId] = oriented;
+
       this.state.lastAction = {
         userId,
         action: 'play',
@@ -144,6 +154,21 @@ export class GaplehGame extends BaseGame {
         };
       }
 
+      // Check if board reached digapleh after play (Level 2 only checks automatic deadlock)
+      if (this.state.level === 2 && GaplehRules.checkDigapleh(this.state.hands, this.state.board)) {
+        this.state.isFinished = true;
+        this.state.deadlock = true;
+        this.finishWithDeadlock();
+
+        return {
+          success: true,
+          action: 'play',
+          data: { card: oriented, side, remaining: currentHand.length },
+          finished: true,
+          results: this.getResults(),
+        };
+      }
+
       // Advance turn
       const nextTurn = this.advanceTurn();
       return {
@@ -154,7 +179,7 @@ export class GaplehGame extends BaseGame {
       };
     } else if (action === 'pass') {
       // Validate that player truly cannot move
-      const validMoves = GaplehRules.getValidMoves(currentHand, this.state.board);
+      const validMoves = GaplehRules.getValidMoves(currentHand, this.state.board, this.state.level);
       if (validMoves.length > 0) {
         return {
           success: false,
@@ -168,8 +193,12 @@ export class GaplehGame extends BaseGame {
         action: 'pass',
       };
 
-      // Check deadlock condition: all players passed consecutively
-      if (this.state.passCount >= this.players.length) {
+      // Check deadlock condition: all players passed consecutively (or Level 2 checkDigapleh)
+      const isDeadlock =
+        this.state.passCount >= this.players.length ||
+        (this.state.level === 2 && GaplehRules.checkDigapleh(this.state.hands, this.state.board));
+
+      if (isDeadlock) {
         this.state.isFinished = true;
         this.state.deadlock = true;
         this.finishWithDeadlock();
@@ -233,6 +262,36 @@ export class GaplehGame extends BaseGame {
     } else {
       // Individual mode
       this.state.winnerId = userId;
+      if (this.state.level === 2) {
+        // Level 2 (Gapleh Rame) new scoring v3
+        const lastCard = this.state.lastPlayedCards?.[userId];
+        let winType: GaplehWinType = 'gapleh_biasa';
+        if (lastCard) {
+          if (lastCard[0] === 6 && lastCard[1] === 6) {
+            winType = 'nutup_balak6';
+          } else if (lastCard[0] === 0 && lastCard[1] === 0) {
+            winType = 'nutup_balak0';
+          }
+        }
+        this.state.winType = winType;
+
+        const playerStat = this.playerStats[userId] || {};
+        const streakCount = playerStat.streakCount || 0;
+        const isFirstNutup = !playerStat.hasNutupBefore && (winType === 'nutup_balak6' || winType === 'nutup_balak0');
+
+        const pointsCalc = GaplehRules.calculatePoints({
+          winType,
+          streakCount,
+          isFirstNutup,
+          opponentHands: this.state.hands,
+          winnerId: userId,
+        });
+
+        this.state.pointsDetails = pointsCalc;
+      } else {
+        // Level 1 (Gapleh Klasik - sistem lama tidak diubah)
+        this.state.winType = 'gapleh_biasa';
+      }
       this.calculateFinalScores(userId, false);
     }
   }
@@ -276,9 +335,25 @@ export class GaplehGame extends BaseGame {
       }
     } else {
       // Individual mode
-      const { winnerId } = GaplehRules.resolveDeadlock(this.state.hands, playerIds);
-      this.state.winnerId = winnerId;
-      this.calculateFinalScores(winnerId, true);
+      if (this.state.level === 2) {
+        // Level 2 (Gapleh Rame): Digapleh (buntu, pemenang kartu paling sedikit, flat 75 poin)
+        const { winnerId, scores, summary } = GaplehRules.determineDigaplehWinner(this.state.hands, playerIds);
+        this.state.winnerId = winnerId;
+        this.state.winType = 'digapleh';
+        this.state.scores = scores;
+
+        const pointsCalc = GaplehRules.calculatePoints({
+          winType: 'digapleh',
+          winnerId,
+        });
+        this.state.pointsDetails = pointsCalc;
+      } else {
+        // Level 1 (Gapleh Klasik - sistem lama tidak diubah): resolveDeadlock by lowest pips
+        const { winnerId } = GaplehRules.resolveDeadlock(this.state.hands, playerIds);
+        this.state.winnerId = winnerId;
+        this.state.winType = 'digapleh';
+        this.calculateFinalScores(winnerId, true);
+      }
     }
   }
 
@@ -330,6 +405,8 @@ export class GaplehGame extends BaseGame {
       lastAction: this.state.lastAction,
       isFinished: this.state.isFinished,
       winnerId: this.state.winnerId,
+      winType: this.state.winType,
+      pointsDetails: this.state.pointsDetails,
       deadlock: this.state.deadlock,
       scores: this.state.isFinished ? this.state.scores : undefined,
       // Partnership extras
@@ -364,6 +441,8 @@ export class GaplehGame extends BaseGame {
       lastAction: this.state.lastAction,
       isFinished: this.state.isFinished,
       winnerId: this.state.winnerId,
+      winType: this.state.winType,
+      pointsDetails: this.state.pointsDetails,
       deadlock: this.state.deadlock,
       scores: this.state.isFinished ? this.state.scores : undefined,
       // Partnership extras
@@ -432,8 +511,39 @@ export class GaplehGame extends BaseGame {
     // Individual mode (standard)
     const winnerId = this.state.winnerId || (this.players[0] ? this.players[0].user_id : '');
     const losers = this.players.map((p) => p.user_id).filter((id) => id !== winnerId);
-
     const winnerPlayer = this.players.find((p) => p.user_id === winnerId);
+
+    // Level 2 (Gapleh Rame): New rules & dynamic v3 points
+    if (this.state.level === 2) {
+      const winType = this.state.winType || (this.state.deadlock ? 'digapleh' : 'gapleh_biasa');
+      const pointsCalc = this.state.pointsDetails || GaplehRules.calculatePoints({
+        winType,
+        opponentHands: this.state.hands,
+        winnerId,
+      });
+
+      let summary = '';
+      if (this.state.deadlock) {
+        summary = `Digapleh! Permainan buntu dimenangkan oleh ${winnerPlayer?.display_name || 'Pemain'} (+${pointsCalc.totalPoints} poin).`;
+      } else if (winType === 'nutup_balak6') {
+        summary = `Luar Biasa! ${winnerPlayer?.display_name || 'Pemain'} berhasil Nutup Balak 6 (+${pointsCalc.totalPoints} poin)! 🔥`;
+      } else if (winType === 'nutup_balak0') {
+        summary = `Fantastis! ${winnerPlayer?.display_name || 'Pemain'} berhasil Nutup Balak 0 (+${pointsCalc.totalPoints} poin)! 🎯`;
+      } else {
+        summary = `Selamat! ${winnerPlayer?.display_name || 'Pemain'} berhasil menghabiskan semua kartu (+${pointsCalc.totalPoints} poin)!`;
+      }
+
+      return {
+        winners: [winnerId],
+        losers,
+        scores: this.state.scores,
+        summary,
+        pointsAwarded: pointsCalc.totalPoints,
+        pointsDetails: pointsCalc,
+      };
+    }
+
+    // Level 1 (Gapleh Klasik): 100% sistem lama tidak diubah
     const summary = this.state.deadlock
       ? `Gaple Buntu! Pemenang poin terendah adalah ${winnerPlayer?.display_name || 'Pemain'}.`
       : `Selamat! ${winnerPlayer?.display_name || 'Pemain'} berhasil menghabiskan semua kartu!`;
@@ -449,7 +559,7 @@ export class GaplehGame extends BaseGame {
 
   getValidMoves(userId: string): GaplehMove[] {
     const hand = this.state.hands[userId] || [];
-    return GaplehRules.getValidMoves(hand, this.state.board);
+    return GaplehRules.getValidMoves(hand, this.state.board, this.state.level);
   }
 
   handleTimeout(userId: string): ActionResult {

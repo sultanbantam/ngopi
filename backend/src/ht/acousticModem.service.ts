@@ -254,4 +254,92 @@ export class AcousticModem {
     const wav = this.samplesToWav(samples, config.sampleRate);
     return `data:audio/wav;base64,${wav.toString('base64')}`;
   }
+
+  // --- Task 5.6.1 Methods from update1.md ---
+
+  /**
+   * Detect dominant frequency using Zero-crossing detection (Task 5.6.1)
+   */
+  public static detectFrequency(samples: Float32Array, sampleRate = 44100): number {
+    let crossings = 0;
+    for (let i = 1; i < samples.length; i++) {
+      if (samples[i - 1]! < 0 && samples[i]! >= 0) crossings++;
+    }
+    if (samples.length === 0) return 0;
+    return (crossings * sampleRate) / samples.length;
+  }
+
+  /**
+   * Convert text characters to 8-bit array (Task 5.6.1)
+   */
+  public static textToBits(text: string): number[] {
+    const bits: number[] = [];
+    for (const char of text) {
+      const code = char.charCodeAt(0);
+      for (let i = 7; i >= 0; i--) {
+        bits.push((code >> i) & 1);
+      }
+    }
+    return bits;
+  }
+
+  /**
+   * Convert bits array back to text string (Task 5.6.1)
+   */
+  public static bitsToText(bits: number[]): string {
+    let text = '';
+    for (let i = 0; i < bits.length; i += 8) {
+      if (i + 8 > bits.length) break;
+      const byte = bits.slice(i, i + 8).reduce((acc, bit) => (acc << 1) | bit, 0);
+      if (byte > 0 && byte < 128) {
+        text += String.fromCharCode(byte);
+      }
+    }
+    return text;
+  }
+
+  /**
+   * Synthesize raw Float32 samples from bitstream using continuous phase 1200/2200 Hz FSK (Task 5.6.1)
+   */
+  public static encodeSimple(text: string, sampleRate = 44100): Float32Array {
+    const bitstream = this.textToBits(text);
+    const samplesPerBit = Math.round(sampleRate / 1200);
+    const totalSamples = bitstream.length * samplesPerBit;
+    const samples = new Float32Array(totalSamples);
+
+    let phase = 0.0;
+    let sampleIndex = 0;
+    for (const bit of bitstream) {
+      const freq = bit === 1 ? 1200 : 2200;
+      const phaseInc = (2.0 * Math.PI * freq) / sampleRate;
+      for (let i = 0; i < samplesPerBit; i++) {
+        samples[sampleIndex++] = Math.sin(phase);
+        phase += phaseInc;
+        if (phase > 2.0 * Math.PI) {
+          phase -= 2.0 * Math.PI;
+        }
+      }
+    }
+
+    return samples;
+  }
+
+  /**
+   * Decode raw Float32 samples to text using FSK demodulation (Task 5.6.1)
+   */
+  public static decodeSimple(samples: Float32Array, sampleRate = 44100): string {
+    const samplesPerBit = Math.round(sampleRate / 1200);
+    const bitstream: number[] = [];
+
+    for (let i = 0; i < samples.length; i += samplesPerBit) {
+      const segment = samples.slice(i, i + samplesPerBit);
+      if (segment.length < samplesPerBit) break;
+      const markEnergy = this.goertzel(segment, 0, segment.length, 1200, sampleRate);
+      const spaceEnergy = this.goertzel(segment, 0, segment.length, 2200, sampleRate);
+      bitstream.push(markEnergy >= spaceEnergy ? 1 : 0);
+    }
+
+    return this.bitsToText(bitstream);
+  }
 }
+

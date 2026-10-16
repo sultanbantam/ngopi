@@ -25,6 +25,12 @@ const tags = `
 <meta name="twitter:title" content="${title}">
 <meta name="twitter:description" content="${description}">
 <meta name="twitter:image" content="${image}">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#8B5E3C">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Ngopi">
+<link rel="apple-touch-icon" href="/icons/icon-192.png">
 `;
 if (!html.includes('</head>')) throw new Error('Exported HTML has no head element');
 fs.writeFileSync(target, html.replace('</head>', tags + '</head>'));

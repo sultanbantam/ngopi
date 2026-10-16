@@ -66,6 +66,24 @@ const GAME_TABS: Array<{ id: GameType; label: string; icon: string; count?: numb
   { id: 'billiard', label: 'Billiard', icon: 'billiards' },
 ];
 
+export interface GaplehBotItem {
+  id: string;
+  name: string;
+  title: string;
+  personality: string;
+  difficulty: string;
+  avatar: string;
+}
+
+export const GAPLEH_BOTS: GaplehBotItem[] = [
+  { id: 'gapleh_2_budi', name: 'Budi', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
+  { id: 'gapleh_2_asep', name: 'Asep', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
+  { id: 'gapleh_2_rudi', name: 'Rudi', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
+  { id: 'gapleh_2_deni', name: 'Deni', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
+  { id: 'gapleh_2_jago', name: 'Bang Jago', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
+  { id: 'gapleh_2_maestro', name: 'Sang Maestro', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
+];
+
 export default function GamesLobbyScreen() {
   const [selectedTab, setSelectedTab] = useState<GameType>('gapleh');
   const [tables, setTables] = useState<GameTable[]>([]);
@@ -84,6 +102,8 @@ export default function GamesLobbyScreen() {
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [chessColor, setChessColor] = useState<'white' | 'black' | 'random'>('white');
   const [botDifficulty, setBotDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
+  const [gaplehLevel, setGaplehLevel] = useState<1 | 2>(1);
+  const [selectedBotIds, setSelectedBotIds] = useState<string[]>(['gapleh_2_budi', 'gapleh_2_asep', 'gapleh_2_deni']);
   const [gaplehMode, setGaplehMode] = useState<'individual' | 'partnership'>('individual');
   const [gaplehRuleset, setGaplehRuleset] = useState<'kampung' | 'tournament'>('kampung');
   const [targetScore, setTargetScore] = useState<number>(250);
@@ -145,19 +165,34 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
+      const isLevel2 = selectedTab === 'gapleh' && gaplehLevel === 2;
       const config = selectedTab === 'catur'
         ? { preferredColor: chessColor, botDifficulty }
         : selectedTab === 'gapleh'
-        ? { gaplehMode, gaplehRuleset, targetScore }
+        ? {
+            level: gaplehLevel,
+            gaplehMode,
+            gaplehRuleset,
+            targetScore,
+            selectedBotIds: isLevel2 ? ['gapleh_2_budi', 'gapleh_2_asep', 'gapleh_2_deni'] : undefined,
+          }
         : undefined;
+
+      const maxP = ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab)
+        ? 2
+        : (isLevel2 || gaplehMode === 'partnership')
+        ? 4
+        : 4;
+      const minP = isLevel2 || gaplehMode === 'partnership' ? 4 : 2;
+
       // 1. Create table
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
-          name: `Meja Santai @${currentUsername || 'Ngopikawan'}`,
-          maxPlayers: ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab) ? 2 : (gaplehMode === 'partnership' ? 4 : 4),
-          minPlayers: gaplehMode === 'partnership' ? 4 : 2,
+          name: isLevel2 ? `Meja Gapleh Rame (Lvl 2) @${currentUsername || 'Ngopikawan'}` : `Meja Santai @${currentUsername || 'Ngopikawan'}`,
+          maxPlayers: maxP,
+          minPlayers: minP,
           isPrivate: false,
           config,
         },
@@ -166,11 +201,13 @@ export default function GamesLobbyScreen() {
 
       if (res.data?.success && res.data.table) {
         const tableId = res.data.table.id;
-        // 2. Add a friendly bot so user can play immediately!
-        try {
-          await axios.post(`${API_URL}/games/tables/${tableId}/bot`, {}, { headers });
-        } catch (botErr) {
-          console.warn('Auto bot add warning:', botErr);
+        // 2. If not level 2 (which already auto-seated 3 bots), add 1 friendly bot
+        if (!isLevel2) {
+          try {
+            await axios.post(`${API_URL}/games/tables/${tableId}/bot`, {}, { headers });
+          } catch (botErr) {
+            console.warn('Auto bot add warning:', botErr);
+          }
         }
 
         // 3. Navigate to game room
@@ -200,18 +237,33 @@ export default function GamesLobbyScreen() {
     setIsCreating(true);
     try {
       const headers = await getAuthHeaders();
+      const isLevel2 = selectedTab === 'gapleh' && gaplehLevel === 2;
       const config = selectedTab === 'catur'
         ? { preferredColor: chessColor, botDifficulty }
         : selectedTab === 'gapleh'
-        ? { gaplehMode, gaplehRuleset, targetScore }
+        ? {
+            level: gaplehLevel,
+            gaplehMode,
+            gaplehRuleset,
+            targetScore,
+            selectedBotIds: isLevel2 ? selectedBotIds : undefined,
+          }
         : undefined;
+
+      const maxP = ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab)
+        ? 2
+        : (isLevel2 || gaplehMode === 'partnership')
+        ? 4
+        : maxPlayers;
+      const minP = isLevel2 || gaplehMode === 'partnership' ? 4 : 2;
+
       const res = await axios.post(
         `${API_URL}/games/tables`,
         {
           gameType: selectedTab,
           name: tableName.trim(),
-          maxPlayers: ['catur', 'pokemon', 'daku', 'billiard'].includes(selectedTab) ? 2 : (gaplehMode === 'partnership' ? 4 : maxPlayers),
-          minPlayers: gaplehMode === 'partnership' ? 4 : 2,
+          maxPlayers: maxP,
+          minPlayers: minP,
           isPrivate,
           password: isPrivate ? password.trim() : undefined,
           config,
@@ -314,6 +366,23 @@ export default function GamesLobbyScreen() {
             <Text style={styles.tableSubText}>
               Host: {item.players[0]?.display_name || 'Ngopikawan'}
             </Text>
+            {(item as any).config?.level === 2 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                <View style={{ backgroundColor: 'rgba(249, 115, 22, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#f97316' }}>
+                  <Text style={{ color: '#fb923c', fontSize: 10, fontWeight: '800' }}>
+                    🔥 Gapleh Rame (Level 2) • 4 Pemain WAJIB
+                  </Text>
+                </View>
+              </View>
+            ) : item.game_type === 'gapleh' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: coffee.accent }}>
+                  <Text style={{ color: coffee.accent, fontSize: 10, fontWeight: '700' }}>
+                    ☕ Gapleh Klasik (Level 1)
+                  </Text>
+                </View>
+              </View>
+            ) : null}
             {(item as any).config?.gaplehMode === 'partnership' && (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
                 <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.2)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: coffee.accent }}>
@@ -530,11 +599,43 @@ export default function GamesLobbyScreen() {
       <View style={styles.quickBanner}>
         <View style={{ flex: 1 }}>
           <Text style={styles.quickBannerTitle}>
-            Mau langsung main {selectedTab.toUpperCase()}?
+            Mau langsung main {selectedTab === 'gapleh' ? (gaplehLevel === 2 ? 'GAPLEH RAME (Lvl 2)' : 'GAPLEH KLASIK (Lvl 1)') : selectedTab.toUpperCase()}?
           </Text>
           <Text style={styles.quickBannerSub}>
-            Buat meja instan lengkap dengan Bot cerdas siap tanding!
+            {selectedTab === 'gapleh' && gaplehLevel === 2
+              ? 'Wajib 4 pemain, otomatis ditemani 3 bot karakter pilihan!'
+              : 'Buat meja instan lengkap dengan Bot cerdas siap tanding!'}
           </Text>
+          {selectedTab === 'gapleh' && (
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+              <TouchableOpacity
+                style={[
+                  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+                  gaplehLevel === 1
+                    ? { backgroundColor: coffee.accent, borderColor: coffee.accent }
+                    : { backgroundColor: 'rgba(212, 163, 115, 0.15)', borderColor: coffee.border },
+                ]}
+                onPress={() => setGaplehLevel(1)}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: gaplehLevel === 1 ? coffee.buttonText : coffee.text }}>
+                  ☕ Level 1 (Klasik)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+                  gaplehLevel === 2
+                    ? { backgroundColor: '#ea580c', borderColor: '#ea580c' }
+                    : { backgroundColor: 'rgba(234, 88, 12, 0.15)', borderColor: '#c2410c' },
+                ]}
+                onPress={() => setGaplehLevel(2)}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: gaplehLevel === 2 ? '#ffffff' : '#fb923c' }}>
+                  🔥 Level 2 (Rame 4 Pemain)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         <TouchableOpacity
           style={styles.quickMatchBtn}
@@ -652,29 +753,37 @@ export default function GamesLobbyScreen() {
                 <View>
                   <Text style={styles.inputLabel}>Jumlah Maksimal Pemain</Text>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
-                    {[2, 3, 4].map((num) => (
-                      <TouchableOpacity
-                        key={num}
-                        style={[
-                          styles.numberOption,
-                          (gaplehMode === 'partnership' ? num === 4 : maxPlayers === num) && styles.numberOptionActive,
-                          gaplehMode === 'partnership' && num !== 4 && { opacity: 0.4 },
-                        ]}
-                        disabled={gaplehMode === 'partnership'}
-                        onPress={() => setMaxPlayers(num)}
-                      >
-                        <Text
+                    {[2, 3, 4].map((num) => {
+                      const isLocked4 = selectedTab === 'gapleh' && (gaplehLevel === 2 || gaplehMode === 'partnership');
+                      return (
+                        <TouchableOpacity
+                          key={num}
                           style={[
-                            styles.numberOptionText,
-                            (gaplehMode === 'partnership' ? num === 4 : maxPlayers === num) && styles.numberOptionTextActive,
+                            styles.numberOption,
+                            (isLocked4 ? num === 4 : maxPlayers === num) && styles.numberOptionActive,
+                            isLocked4 && num !== 4 && { opacity: 0.4 },
                           ]}
+                          disabled={isLocked4}
+                          onPress={() => setMaxPlayers(num)}
                         >
-                          {num} Pemain
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
+                          <Text
+                            style={[
+                              styles.numberOptionText,
+                              (isLocked4 ? num === 4 : maxPlayers === num) && styles.numberOptionTextActive,
+                            ]}
+                          >
+                            {num} Pemain
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
                   </View>
-                  {gaplehMode === 'partnership' && (
+                  {selectedTab === 'gapleh' && gaplehLevel === 2 && (
+                    <Text style={{ color: '#fb923c', fontSize: 11, marginTop: 4 }}>
+                      *Level 2 (Gapleh Rame) wajib 4 pemain: 28 kartu dibagikan habis (7 kartu/orang).
+                    </Text>
+                  )}
+                  {selectedTab === 'gapleh' && gaplehLevel === 1 && gaplehMode === 'partnership' && (
                     <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 4 }}>
                       *Mode berpasangan wajib 4 pemain (2 vs 2: Tim A vs Tim B).
                     </Text>
@@ -682,9 +791,115 @@ export default function GamesLobbyScreen() {
                 </View>
               )}
 
-              {/* Gapleh Mode & Ruleset Selector */}
+              {/* Gapleh Level, Mode & Bot Selection */}
               {selectedTab === 'gapleh' && (
                 <View style={{ gap: 12, backgroundColor: '#241a12', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                  {/* Level Selection (Task 2) */}
+                  <View>
+                    <Text style={styles.inputLabel}>Level Game Gapleh</Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[styles.numberOption, gaplehLevel === 1 && styles.numberOptionActive]}
+                        onPress={() => setGaplehLevel(1)}
+                      >
+                        <Text style={[styles.numberOptionText, gaplehLevel === 1 && styles.numberOptionTextActive]}>
+                          ☕ Level 1 (Klasik)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.numberOption,
+                          gaplehLevel === 2 && { backgroundColor: '#ea580c', borderColor: '#f97316' },
+                        ]}
+                        onPress={() => {
+                          setGaplehLevel(2);
+                          setMaxPlayers(4);
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.numberOptionText,
+                            gaplehLevel === 2 ? { color: '#ffffff', fontWeight: '800' } : { color: coffee.secondary },
+                          ]}
+                        >
+                          🔥 Level 2 (Rame - 4 Pemain)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 4 }}>
+                      {gaplehLevel === 1
+                        ? 'Level 1: Sistem gapleh klasik yang sudah berjalan di ngopi.top (2-4 pemain). Cocok untuk pemula.'
+                        : 'Level 2: Mode 4 orang sekaligus dengan aturan v3 (nutup 500 poin, digapleh 75 poin, pilihan bot karakter).'}
+                    </Text>
+                  </View>
+
+                  {/* Bot Selection List for Level 2 (Task 2.2) */}
+                  {gaplehLevel === 2 && (
+                    <View style={{ backgroundColor: '#1a120c', padding: 10, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(249, 115, 22, 0.4)', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ color: '#fed7aa', fontWeight: '800', fontSize: 12 }}>
+                          🤖 Pilih Lawan Bot (1 - 3 Bot)
+                        </Text>
+                        <Text style={{ color: '#fb923c', fontSize: 11, fontWeight: '800' }}>
+                          {selectedBotIds.length}/3 Terpilih
+                        </Text>
+                      </View>
+                      <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                        Pilih 1 hingga 3 bot dengan nama karakter untuk mengisi kursi meja. Sisa kursi kosong dapat diisi pemain lain.
+                      </Text>
+                      <View style={{ gap: 6 }}>
+                        {GAPLEH_BOTS.map((bot) => {
+                          const isSelected = selectedBotIds.includes(bot.id);
+                          return (
+                            <TouchableOpacity
+                              key={bot.id}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                backgroundColor: isSelected ? 'rgba(234, 88, 12, 0.15)' : '#231810',
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: isSelected ? '#ea580c' : '#3d2b1f',
+                                gap: 10,
+                              }}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setSelectedBotIds((prev) => prev.filter((id) => id !== bot.id));
+                                } else {
+                                  if (selectedBotIds.length >= 3) {
+                                    Alert.alert('Batas Bot', 'Maksimal memilih 3 bot (1 kursi untuk Anda).');
+                                    return;
+                                  }
+                                  setSelectedBotIds((prev) => [...prev, bot.id]);
+                                }
+                              }}
+                            >
+                              <Ionicons
+                                name={isSelected ? 'checkbox' : 'square-outline'}
+                                size={18}
+                                color={isSelected ? '#f97316' : coffee.secondary}
+                              />
+                              <Text style={{ fontSize: 16 }}>{bot.avatar}</Text>
+                              <View style={{ flex: 1 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <Text style={{ color: coffee.text, fontWeight: '700', fontSize: 12 }}>
+                                    {bot.name} ({bot.title})
+                                  </Text>
+                                  <View style={{ backgroundColor: 'rgba(212, 163, 115, 0.2)', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                                    <Text style={{ color: coffee.accent, fontSize: 9, fontWeight: '700' }}>{bot.difficulty}</Text>
+                                  </View>
+                                </View>
+                                <Text style={{ color: coffee.secondary, fontSize: 10 }}>{bot.personality}</Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
                   <View>
                     <Text style={styles.inputLabel}>Mode Permainan Gapleh</Text>
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
@@ -994,6 +1209,7 @@ export default function GamesLobbyScreen() {
       <LeaderboardModal
         visible={leaderboardVisible}
         onClose={() => setLeaderboardVisible(false)}
+        initialTab="gapleh"
       />
 
       {/* Pokemon Hub Modal */}

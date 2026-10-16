@@ -1,56 +1,101 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { coffee } from '../theme/coffee';
 import { meshManager } from '../utils/meshManager';
 
 interface OfflineBannerProps {
   onPressPeers?: () => void;
+  onPressHT?: () => void;
+  onPressSOS?: () => void;
 }
 
-export default function OfflineBanner({ onPressPeers }: OfflineBannerProps) {
-  const [isOffline, setIsOffline] = useState(meshManager.isOffline());
+export default function OfflineBanner({ onPressPeers, onPressHT, onPressSOS }: OfflineBannerProps) {
+  const [isBrowserOffline, setIsBrowserOffline] = useState(
+    Platform.OS === 'web' && typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+  const [isMeshOffline, setIsMeshOffline] = useState(meshManager.isOffline());
   const [peerCount, setPeerCount] = useState(meshManager.getPeers().length);
   const [unsyncedCount, setUnsyncedCount] = useState(meshManager.getUnsyncedMessages().length);
 
   useEffect(() => {
+    // 1. Mesh Manager subscription
     const unsubscribe = meshManager.subscribe(() => {
-      setIsOffline(meshManager.isOffline());
+      setIsMeshOffline(meshManager.isOffline());
       setPeerCount(meshManager.getPeers().length);
       setUnsyncedCount(meshManager.getUnsyncedMessages().length);
     });
+
+    // 2. Browser online/offline event listeners
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const handleOnline = () => {
+        setIsBrowserOffline(false);
+      };
+      const handleOffline = () => {
+        setIsBrowserOffline(true);
+      };
+
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+
+      return () => {
+        unsubscribe();
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }
+
     return unsubscribe;
   }, []);
 
+  const isOffline = isBrowserOffline || isMeshOffline;
   if (!isOffline) return null;
 
   return (
     <View style={styles.bannerContainer}>
       <View style={styles.leftSection}>
-        <View style={styles.badgeIcon}>
-          <Ionicons name="bluetooth" size={16} color="#FFF" />
+        <View style={styles.badgeWrapper}>
+          <Text style={styles.badgeText}>OFFLINE</Text>
         </View>
         <View style={styles.textCol}>
-          <Text style={styles.bannerTitle}>Mode Offline (Bluetooth Mesh) Aktif</Text>
+          <Text style={styles.bannerTitle}>📡 Mode Offline Aktif — HT Siap</Text>
           <Text style={styles.bannerSubtitle}>
-            {peerCount > 0 ? `${peerCount} perangkat warkop terdeteksi` : 'Mencari perangkat di sekitar...'}
-            {unsyncedCount > 0 ? ` • ${unsyncedCount} pesan pending` : ''}
+            Pesan akan disinkronkan saat online.
+            {peerCount > 0 ? ` • ${peerCount} perangkat warkop terdeteksi` : ' • HT & Bluetooth Mesh Standby'}
+            {unsyncedCount > 0 ? ` • ${unsyncedCount} pending` : ''}
           </Text>
         </View>
       </View>
 
       <View style={styles.actionsRow}>
+        {onPressSOS && (
+          <TouchableOpacity style={styles.sosButton} onPress={onPressSOS}>
+            <Text style={{ fontSize: 13 }}>🚨</Text>
+            <Text style={styles.sosButtonText}>SOS</Text>
+          </TouchableOpacity>
+        )}
+        {onPressHT && (
+          <TouchableOpacity style={styles.htButton} onPress={onPressHT}>
+            <Text style={{ fontSize: 13 }}>📻</Text>
+            <Text style={styles.htButtonText}>HT</Text>
+          </TouchableOpacity>
+        )}
         {onPressPeers && (
           <TouchableOpacity style={styles.peersButton} onPress={onPressPeers}>
-            <Ionicons name="people" size={14} color={coffee.text} />
+            <Ionicons name="people" size={13} color={coffee.text} />
             <Text style={styles.peersButtonText}>Peer ({peerCount})</Text>
           </TouchableOpacity>
         )}
         <TouchableOpacity
           style={styles.modeToggle}
-          onPress={() => meshManager.setOfflineMode(false)}
+          onPress={() => {
+            meshManager.setOfflineMode(false);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && navigator.onLine) {
+              window.location.reload();
+            }
+          }}
         >
-          <Ionicons name="globe-outline" size={14} color="#FFF" />
+          <Ionicons name="globe-outline" size={13} color="#FFF" />
           <Text style={styles.modeToggleText}>Online</Text>
         </TouchableOpacity>
       </View>
@@ -76,13 +121,53 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 10,
   },
-  badgeIcon: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#0288D1', // Bluetooth blue
+  badgeWrapper: {
+    backgroundColor: '#b91c1c', // Warning Red
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  sosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#b91c1c',
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  sosButtonText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  htButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 163, 115, 0.25)',
+    borderWidth: 1,
+    borderColor: coffee.accent,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    gap: 4,
+  },
+  htButtonText: {
+    color: coffee.accent,
+    fontSize: 11,
+    fontWeight: '700',
   },
   textCol: {
     flex: 1,

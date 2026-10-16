@@ -3,6 +3,8 @@ import { TableManager } from '../games/TableManager';
 import { GameType } from '../games/engine/types';
 import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
+import { BotProfileService } from '../games/gapleh/BotProfileService';
+import { GaplehShareService } from '../games/gapleh/GaplehShareService';
 import jwt from 'jsonwebtoken';
 
 const router = Router();
@@ -115,11 +117,52 @@ router.post('/tables/:id/join', (req: Request, res: Response) => {
   res.status(200).json(result);
 });
 
+// GET /api/games/gapleh/bots - List bots for Level 2 (Gapleh Rame) selection
+router.get('/gapleh/bots', (_req: Request, res: Response) => {
+  const bots = BotProfileService.getAllProfiles();
+  res.status(200).json({ success: true, bots });
+});
+
+// POST /api/games/gapleh/share or POST /api/gapleh/share (Task 3.4)
+router.post(['/gapleh/share', '/share'], (req: Request, res: Response) => {
+  const user = getUserFromReq(req);
+  const {
+    win_type = 'gapleh_biasa',
+    username = user.username,
+    points = 50,
+    streak = 0,
+    is_first_nutup = false,
+    hook_template_id,
+    design_template = 'neon_cyberpunk',
+  } = req.body;
+
+  const shareData = GaplehShareService.generateShareContent({
+    winType: win_type,
+    username: String(username || 'Ngopikawan'),
+    points: Number(points) || 50,
+    streakCount: Number(streak) || 0,
+    isFirstNutup: Boolean(is_first_nutup),
+    hookTemplateId: hook_template_id,
+    designTemplate: design_template,
+  });
+
+  res.status(200).json({
+    success: true,
+    caption: shareData.caption,
+    hooks: shareData.hooks,
+    hashtags: shareData.hashtags,
+    share_links: shareData.shareLinks,
+    design_template: shareData.designTemplate,
+    target_url: shareData.targetUrl,
+  });
+});
+
 // POST /api/games/tables/:id/bot
 router.post('/tables/:id/bot', (req: Request, res: Response) => {
   const tableId = String(req.params.id || '');
   const user = getUserFromReq(req);
-  const result = TableManager.addBot(tableId, user.id);
+  const { botProfileId } = req.body;
+  const result = TableManager.addBot(tableId, user.id, botProfileId);
   if (!result.success) {
     return res.status(400).json(result);
   }

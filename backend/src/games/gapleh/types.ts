@@ -19,6 +19,25 @@ export interface GaplehMove {
 
 export type GaplehGameMode = 'individual' | 'partnership';
 export type GaplehRuleset = 'kampung' | 'tournament';
+export type GaplehWinType = 'gapleh_biasa' | 'digapleh' | 'nutup_balak6' | 'nutup_balak0';
+
+export interface OpponentCardsBreakdown {
+  opponentId: string;
+  cardsLeft: number;
+  points: number;
+}
+
+export interface GaplehPointsCalculation {
+  winType: GaplehWinType;
+  basePoints: number;
+  bonusPoints: number;
+  totalPoints: number;
+  multiplier: number;
+  isFirstNutup: boolean;
+  streakCount: number;
+  opponentCardsBreakdown?: OpponentCardsBreakdown[];
+  breakdownSummary: string;
+}
 
 export interface GaplehState {
   board: GaplehBoard;
@@ -32,11 +51,17 @@ export interface GaplehState {
     card?: DominoCard;
     side?: 'left' | 'right';
   } | null;
+  lastPlayedCards?: Record<string, DominoCard>;
   isFinished: boolean;
   winnerId?: string | null;
   deadlock: boolean;
   scores: Record<string, number>; // Individual hand pips
   round: number;
+  level: 1 | 2; // Level 1 (Klasik - aturan existing tidak diubah) | Level 2 (Rame - aturan baru Sprint 1)
+
+  // Points & victory details (v3)
+  winType?: GaplehWinType;
+  pointsDetails?: GaplehPointsCalculation;
 
   // Partnership-specific fields (optional for backward compatibility with individual mode)
   gameMode: GaplehGameMode;
@@ -51,3 +76,4 @@ export interface GaplehState {
   partnershipSummary?: string | undefined;
   isMatchOver?: boolean | undefined;
 }
+

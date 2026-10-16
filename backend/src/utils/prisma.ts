@@ -16,7 +16,7 @@ try {
 
   prismaClient = new PrismaClient({
     adapter,
-    log: ['warn', 'error'],
+    log: process.env.NODE_ENV === 'test' ? [] : ['warn', 'error'],
   });
 } catch (e) {
   // Mock proxy fallback for test/offline environments

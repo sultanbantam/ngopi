@@ -41,6 +41,8 @@ export interface GameResult {
   scores: Record<string, number>;
   summary: string;
   pointsAwarded?: number | undefined;
+  pointsDetails?: any | undefined;
+  winType?: string | undefined;
 }
 
 export interface TableConfig {
@@ -50,6 +52,8 @@ export interface TableConfig {
   isPrivate?: boolean | undefined;
   password?: string | undefined;
   allowBots?: boolean | undefined;
+  level?: number | undefined; // 1 (Klasik) or 2 (Rame)
+  selectedBotIds?: string[] | undefined;
   gaplehMode?: 'individual' | 'partnership' | undefined;
   gaplehRuleset?: 'kampung' | 'tournament' | undefined;
   targetScore?: number | undefined;

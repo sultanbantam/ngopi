@@ -25,6 +25,21 @@ interface TopPointUser {
   points: number;
 }
 
+export interface TopGaplehItem {
+  id: string;
+  rank: number;
+  username: string;
+  display_name: string;
+  is_bot: boolean;
+  bot_title?: string;
+  level: number;
+  points: number;
+  wins: number;
+  losses: number;
+  badges: string[];
+  avatar_url?: string | null;
+}
+
 interface TopMusicTrack {
   title: string;
   artist: string;
@@ -50,6 +65,7 @@ interface TopGameItem {
 
 interface LeaderboardData {
   top_points: TopPointUser[];
+  top_gapleh?: TopGaplehItem[];
   top_music: TopMusicTrack[];
   top_radio: TopRadioStation[];
   top_games: TopGameItem[];
@@ -59,12 +75,31 @@ interface LeaderboardModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectRadio?: (stationId: string) => void;
+  initialTab?: TabType;
 }
 
-type TabType = 'points' | 'music' | 'radio' | 'games';
+type TabType = 'points' | 'gapleh' | 'music' | 'radio' | 'games';
 
-export default function LeaderboardModal({ visible, onClose, onSelectRadio }: LeaderboardModalProps) {
-  const [activeTab, setActiveTab] = useState<TabType>('points');
+const getBotEmoji = (botId: string) => {
+  if (botId.includes('budi')) return '👶';
+  if (botId.includes('asep')) return '☕';
+  if (botId.includes('rudi')) return '🧢';
+  if (botId.includes('deni')) return '🕶️';
+  if (botId.includes('jago')) return '🔥';
+  if (botId.includes('maestro')) return '👑';
+  return '🤖';
+};
+
+const getBadgeStyle = (badgeName: string) => {
+  if (badgeName === 'Jagal Gapleh') return { backgroundColor: 'rgba(239, 68, 68, 0.25)', borderColor: '#ef4444', color: '#fca5a5' };
+  if (badgeName === 'Nutup Master') return { backgroundColor: 'rgba(245, 158, 11, 0.25)', borderColor: '#f59e0b', color: '#fde047' };
+  if (badgeName === 'Digapleh Hunter') return { backgroundColor: 'rgba(16, 185, 129, 0.25)', borderColor: '#10b981', color: '#86efac' };
+  if (badgeName === 'Bot Legendaris') return { backgroundColor: 'rgba(168, 85, 247, 0.25)', borderColor: '#a855f7', color: '#d8b4fe' };
+  return { backgroundColor: 'rgba(212, 163, 115, 0.15)', borderColor: coffee.accent, color: coffee.accent };
+};
+
+export default function LeaderboardModal({ visible, onClose, onSelectRadio, initialTab }: LeaderboardModalProps) {
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'points');
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -84,9 +119,12 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio }: Le
 
   useEffect(() => {
     if (visible) {
+      if (initialTab) {
+        setActiveTab(initialTab);
+      }
       fetchLeaderboard();
     }
-  }, [visible, fetchLeaderboard]);
+  }, [visible, initialTab, fetchLeaderboard]);
 
   const getRankBadge = (index: number) => {
     if (index === 0) return { icon: '🥇', label: '1st', bg: '#fef3c7', border: '#f59e0b', color: '#b45309' };
@@ -107,7 +145,7 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio }: Le
               </View>
               <View>
                 <Text style={styles.title}>Klasemen Warkop</Text>
-                <Text style={styles.subtitle}>Peringkat Komunitas & Aktivitas Warkop</Text>
+                <Text style={styles.subtitle}>Peringkat Komunitas, Gapleh & Aktivitas</Text>
               </View>
             </View>
             <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
@@ -128,6 +166,16 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio }: Le
               />
               <Text style={[styles.tabText, activeTab === 'points' && styles.tabTextActive]}>
                 Poin
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'gapleh' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('gapleh')}
+            >
+              <Text style={{ fontSize: 13 }}>🁫</Text>
+              <Text style={[styles.tabText, activeTab === 'gapleh' && styles.tabTextActive]}>
+                Gapleh
               </Text>
             </TouchableOpacity>
 
@@ -229,7 +277,95 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio }: Le
                 </View>
               )}
 
-              {/* TAB 2: MUSIK BANYAK DIDENGAR */}
+              {/* TAB 2: GAPLEH TOP 10 (HUMAN + BOT) */}
+              {activeTab === 'gapleh' && (
+                <View style={styles.tabContent}>
+                  <View style={[styles.tabBanner, { borderColor: '#d97706', backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}>
+                    <Text style={[styles.tabBannerTitle, { color: '#fbbf24' }]}>🁫 Klasemen Gapleh Warkop (Top 10)</Text>
+                    <Text style={styles.tabBannerDesc}>
+                      Peringkat gabungan pemain & bot warkop. Bot mendapat poin dan level sesuai performa. Dapatkan badge Jagal Gapleh, Nutup Master, Digapleh Hunter & Bot Legendaris!
+                    </Text>
+                  </View>
+
+                  {data?.top_gapleh && data.top_gapleh.length > 0 ? (
+                    data.top_gapleh.map((item, idx) => {
+                      const badge = getRankBadge(idx);
+                      return (
+                        <View key={item.id + idx} style={[styles.rankCard, item.is_bot && styles.botCard]}>
+                          <View style={[styles.rankBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+                            <Text style={[styles.rankText, { color: badge.color }]}>{badge.icon}</Text>
+                          </View>
+
+                          <View style={[styles.avatarWrap, item.is_bot && styles.botAvatarWrap]}>
+                            {item.is_bot ? (
+                              <Text style={{ fontSize: 18 }}>{getBotEmoji(item.id)}</Text>
+                            ) : item.avatar_url ? (
+                              <Image source={{ uri: item.avatar_url }} style={styles.avatarImg} />
+                            ) : (
+                              <Text style={styles.avatarLetter}>
+                                {(item.display_name || item.username || 'U').charAt(0).toUpperCase()}
+                              </Text>
+                            )}
+                          </View>
+
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={styles.itemName} numberOfLines={1}>
+                                {item.display_name}
+                              </Text>
+                              {item.is_bot ? (
+                                <View style={styles.botTag}>
+                                  <Text style={styles.botTagText}>BOT</Text>
+                                </View>
+                              ) : (
+                                <View style={styles.playerTag}>
+                                  <Text style={styles.playerTagText}>PLAYER</Text>
+                                </View>
+                              )}
+                            </View>
+
+                            <Text style={styles.itemSub} numberOfLines={1}>
+                              {item.is_bot ? `${item.bot_title || 'Kelas Warkop'} • ` : `@${item.username} • `}
+                              {item.wins} Menang • Level {item.level}
+                            </Text>
+
+                            {/* Badges List */}
+                            {item.badges && item.badges.length > 0 && (
+                              <View style={styles.badgesContainer}>
+                                {item.badges.slice(0, 3).map((b, bIdx) => {
+                                  const bStyle = getBadgeStyle(b);
+                                  return (
+                                    <View
+                                      key={bIdx}
+                                      style={[
+                                        styles.badgePill,
+                                        { backgroundColor: bStyle.backgroundColor, borderColor: bStyle.borderColor }
+                                      ]}
+                                    >
+                                      <Text style={[styles.badgePillText, { color: bStyle.color }]}>{b}</Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={styles.pointsPill}>
+                            <Text style={styles.pointsVal}>{item.points.toLocaleString()}</Text>
+                            <Text style={styles.pointsLabel}>Poin</Text>
+                          </View>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <View style={styles.emptyWrap}>
+                      <Text style={styles.emptyText}>Memuat klasemen gapleh...</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* TAB 3: MUSIK BANYAK DIDENGAR */}
               {activeTab === 'music' && (
                 <View style={styles.tabContent}>
                   <View style={styles.tabBanner}>
@@ -643,5 +779,65 @@ const styles = StyleSheet.create({
     color: coffee.secondary,
     fontSize: 11,
     fontWeight: '600',
+  },
+  botCard: {
+    backgroundColor: '#261b14',
+    borderColor: '#4d3221',
+  },
+  botAvatarWrap: {
+    backgroundColor: '#3b2518',
+    borderWidth: 1,
+    borderColor: '#d97706',
+  },
+  botTag: {
+    backgroundColor: 'rgba(245, 158, 11, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#f59e0b',
+  },
+  botTagText: {
+    color: '#fbbf24',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  playerTag: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: '#3b82f6',
+  },
+  playerTagText: {
+    color: '#93c5fd',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  badgesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 4,
+  },
+  badgePill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  badgePillText: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  emptyWrap: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: coffee.muted,
+    fontSize: 12,
   },
 });

@@ -1,6 +1,32 @@
-import { DominoCard, GaplehBoard, GaplehMove } from './types';
+import { DominoCard, GaplehBoard, GaplehMove, GaplehWinType, GaplehPointsCalculation, OpponentCardsBreakdown } from './types';
 
 export class GaplehRules {
+  // Check if a card is Balak 6 or Balak 0
+  public static isRestrictedBalak(card: DominoCard): boolean {
+    return (card[0] === 6 && card[1] === 6) || (card[0] === 0 && card[1] === 0);
+  }
+
+  // Check if player is allowed to play Balak 6 or Balak 0
+  public static canPlayRestrictedBalak(card: DominoCard, hand: DominoCard[], board: GaplehBoard): boolean {
+    if (!this.isRestrictedBalak(card)) return true;
+
+    // First move on empty board cannot use Balak 6 or Balak 0
+    if (board.leftEnd === null || board.rightEnd === null) return false;
+
+    // If only 1 card left in hand, this is the final "nutup" move -> ALLOWED
+    if (hand.length <= 1) return true;
+
+    // Check if there are other playable cards in hand that are NOT restricted balaks
+    const hasOtherPlayable = hand.some((c) => {
+      if (this.isRestrictedBalak(c)) return false;
+      const [a, b] = c;
+      return a === board.leftEnd || b === board.leftEnd || a === board.rightEnd || b === board.rightEnd;
+    });
+
+    // Allowed ONLY IF no other legal move can be made
+    return !hasOtherPlayable;
+  }
+
   // Generate complete standard 28-card domino set
   public static generateDeck(): DominoCard[] {
     const deck: DominoCard[] = [];
@@ -38,12 +64,22 @@ export class GaplehRules {
   }
 
   // Determine starting player: owner of highest balak ([6,6] down to [0,0])
-  public static findStartingPlayer(hands: Record<string, DominoCard[]>, playerIds: string[]): { startingPlayerId: string; startingCard?: DominoCard } {
-    // Check doubles from 6-6 down to 0-0
+  // Level 1: Standard classic rules (startingCard is [balak, balak])
+  // Level 2: Opening move cannot be 6-6 or 0-0, so suggested startingCard is alternative
+  public static findStartingPlayer(hands: Record<string, DominoCard[]>, playerIds: string[], level: 1 | 2 = 1): { startingPlayerId: string; startingCard?: DominoCard } {
+    // Check doubles from 6-6 down to 0-0 to find owner
     for (let balak = 6; balak >= 0; balak--) {
       for (const id of playerIds) {
         const hasBalak = hands[id]?.find(([a, b]) => a === balak && b === balak);
         if (hasBalak) {
+          if (level === 2) {
+            // Level 2: Provide valid opening card (not 6-6 and not 0-0)
+            const validStartingCards = (hands[id] || []).filter((c) => !GaplehRules.isRestrictedBalak(c));
+            validStartingCards.sort((a, b) => (b[0] + b[1]) - (a[0] + a[1]));
+            const startingCard = validStartingCards[0];
+            return { startingPlayerId: id, startingCard };
+          }
+          // Level 1: Standard classic rule unchanged
           return { startingPlayerId: id, startingCard: [balak, balak] };
         }
       }
@@ -56,6 +92,7 @@ export class GaplehRules {
 
     for (const id of playerIds) {
       for (const card of hands[id] || []) {
+        if (level === 2 && GaplehRules.isRestrictedBalak(card)) continue;
         const val = card[0] + card[1];
         if (val > maxVal) {
           maxVal = val;
@@ -71,16 +108,37 @@ export class GaplehRules {
   }
 
   // Find all valid moves for a hand given the current board
-  public static getValidMoves(hand: DominoCard[], board: GaplehBoard): GaplehMove[] {
+  // Level 1: Pure classic rules (semua kartu cocok bisa dimainkan, tidak diubah)
+  // Level 2: Aturan baru (balak 6 & 0 tidak boleh dibuka diawal, terkunci di tengah permainan)
+  public static getValidMoves(hand: DominoCard[], board: GaplehBoard, level: 1 | 2 = 1): GaplehMove[] {
     if (!hand || hand.length === 0) return [];
 
-    // Empty board: any card can be placed
+    // Empty board
     if (board.leftEnd === null || board.rightEnd === null) {
-      return hand.map((card) => ({ card, side: 'left' }));
+      if (level === 2) {
+        // Level 2: cannot open with Balak 6 or Balak 0
+        return hand
+          .filter((card) => !this.isRestrictedBalak(card))
+          .map((card) => ({ card, side: 'left' as const }));
+      }
+      // Level 1: Any card can be placed on empty board
+      return hand.map((card) => ({ card, side: 'left' as const }));
     }
+
+    // Check if player has alternative playable cards other than Balak 6/0 (only for Level 2)
+    const hasAlternativeMoves = level === 2 && hand.some((c) => {
+      if (this.isRestrictedBalak(c)) return false;
+      const [a, b] = c;
+      return a === board.leftEnd || b === board.leftEnd || a === board.rightEnd || b === board.rightEnd;
+    });
 
     const moves: GaplehMove[] = [];
     for (const card of hand) {
+      // Level 2 only: If card is Balak 6 or Balak 0, player has > 1 card, and other moves exist: cannot play it
+      if (level === 2 && this.isRestrictedBalak(card) && hand.length > 1 && hasAlternativeMoves) {
+        continue;
+      }
+
       const [a, b] = card;
 
       // Check left end
@@ -100,11 +158,14 @@ export class GaplehRules {
   }
 
   // Validate a move and determine resulting orientation and updated ends
+  // Level 1: Aturan klasik standar (tidak diubah)
+  // Level 2: Validasi aturan baru Balak 6 & 0
   public static validateMove(
     card: DominoCard,
     side: 'left' | 'right',
     hand: DominoCard[],
-    board: GaplehBoard
+    board: GaplehBoard,
+    level: 1 | 2 = 1
   ): { valid: boolean; error?: string; orientedCard?: DominoCard; newLeftEnd?: number; newRightEnd?: number } {
     // Check if player actually owns this card
     const cardIndex = hand.findIndex(([a, b]) => (a === card[0] && b === card[1]) || (a === card[1] && b === card[0]));
@@ -114,11 +175,25 @@ export class GaplehRules {
 
     // First card on empty board
     if (board.leftEnd === null || board.rightEnd === null) {
+      if (level === 2 && this.isRestrictedBalak(card)) {
+        return {
+          valid: false,
+          error: 'Kartu pertama tidak boleh dibuka dengan Balak 6 (6-6) atau Balak 0 (0-0).',
+        };
+      }
       return {
         valid: true,
         orientedCard: card,
         newLeftEnd: card[0],
         newRightEnd: card[1],
+      };
+    }
+
+    // Mid-game check: Balak 6 and Balak 0 restriction (Level 2 only)
+    if (level === 2 && this.isRestrictedBalak(card) && !this.canPlayRestrictedBalak(card, hand, board)) {
+      return {
+        valid: false,
+        error: 'Balak 6 (6-6) dan Balak 0 (0-0) hanya boleh dimainkan sebagai kartu nutup atau jika tidak ada langkah lain.',
       };
     }
 
@@ -392,5 +467,134 @@ export class GaplehRules {
       pointsAwarded,
     };
   }
+
+  // Check if match reached Digapleh (deadlock where all players still have cards but none can move)
+  public static checkDigapleh(hands: Record<string, DominoCard[]>, board: GaplehBoard): boolean {
+    if (board.leftEnd === null || board.rightEnd === null) return false;
+    const handValues = Object.values(hands);
+    if (handValues.length === 0) return false;
+
+    // All players must still hold at least one card
+    const allHaveCards = handValues.every((h) => (h || []).length > 0);
+    if (!allHaveCards) return false;
+
+    // No player can make a legal move
+    const noMovesPossible = handValues.every((h) => this.getValidMoves(h || [], board).length === 0);
+    return noMovesPossible;
+  }
+
+  // Determine winner in Digapleh: player who played the most cards (fewest remaining cards in hand)
+  // Tiebreaker: player with lowest pip sum
+  public static determineDigaplehWinner(
+    hands: Record<string, DominoCard[]>,
+    playerIds: string[]
+  ): {
+    winnerId: string;
+    scores: Record<string, number>;
+    remainingCardsCount: Record<string, number>;
+    summary: string;
+  } {
+    const scores: Record<string, number> = {};
+    const remainingCardsCount: Record<string, number> = {};
+    let minCardCount = Infinity;
+    let minPips = Infinity;
+    let winnerId = playerIds[0] || '';
+
+    for (const id of playerIds) {
+      const hand = hands[id] || [];
+      const pips = this.calculateHandPips(hand);
+      const cardCount = hand.length;
+
+      scores[id] = pips;
+      remainingCardsCount[id] = cardCount;
+
+      if (cardCount < minCardCount) {
+        minCardCount = cardCount;
+        minPips = pips;
+        winnerId = id;
+      } else if (cardCount === minCardCount) {
+        if (pips < minPips) {
+          minPips = pips;
+          winnerId = id;
+        }
+      }
+    }
+
+    return {
+      winnerId,
+      scores,
+      remainingCardsCount,
+      summary: `Digapleh (Permainan Buntu)! Pemenang adalah pemain dengan kartu tersisa paling sedikit (${minCardCount} kartu tersisa, ${minPips} mata).`,
+    };
+  }
+
+  // Calculate points according to Ngopi Gapleh v3 rules
+  public static calculatePoints(params: {
+    winType: GaplehWinType;
+    streakCount?: number;
+    isFirstNutup?: boolean;
+    opponentHands?: Record<string, DominoCard[]>;
+    winnerId?: string;
+  }): GaplehPointsCalculation {
+    const { winType, streakCount = 0, isFirstNutup = false, opponentHands = {}, winnerId = '' } = params;
+    let basePoints = 50;
+    let bonusPoints = 0;
+    let multiplier = 1;
+    const opponentCardsBreakdown: OpponentCardsBreakdown[] = [];
+
+    if (winType === 'gapleh_biasa') {
+      basePoints = 50;
+      for (const [oppId, hand] of Object.entries(opponentHands)) {
+        if (oppId === winnerId) continue;
+        const count = (hand || []).length;
+        let oppBonus = count * 5; // +5 poin per kartu lawan tersisa
+        if (count > 5) {
+          oppBonus += 10; // +10 poin bonus jika lawan > 5 kartu
+        }
+        bonusPoints += oppBonus;
+        opponentCardsBreakdown.push({
+          opponentId: oppId,
+          cardsLeft: count,
+          points: oppBonus,
+        });
+      }
+    } else if (winType === 'digapleh') {
+      basePoints = 75; // flat 75 poin
+      bonusPoints = 0;
+    } else if (winType === 'nutup_balak6' || winType === 'nutup_balak0') {
+      basePoints = 500;
+      if (isFirstNutup) {
+        multiplier = 3; // First time nutup balak 6/0 -> x3
+      } else if (streakCount >= 3) {
+        multiplier = 1.5; // Streak 3x berturut-turut -> x1.5
+      }
+    }
+
+    const totalPoints = Math.floor((basePoints + bonusPoints) * multiplier);
+
+    let breakdownSummary = '';
+    if (winType === 'gapleh_biasa') {
+      breakdownSummary = `Gapleh Biasa: ${basePoints} base + ${bonusPoints} bonus kartu lawan = ${totalPoints} poin.`;
+    } else if (winType === 'digapleh') {
+      breakdownSummary = `Digapleh: ${basePoints} poin (permainan buntu).`;
+    } else {
+      const balakName = winType === 'nutup_balak6' ? 'Balak 6 (6-6)' : 'Balak 0 (0-0)';
+      const multNote = multiplier > 1 ? ` (x${multiplier} multiplier)` : '';
+      breakdownSummary = `Nutup ${balakName}: ${basePoints} poin${multNote} = ${totalPoints} poin!`;
+    }
+
+    return {
+      winType,
+      basePoints,
+      bonusPoints,
+      totalPoints,
+      multiplier,
+      isFirstNutup,
+      streakCount,
+      opponentCardsBreakdown,
+      breakdownSummary,
+    };
+  }
 }
+
 

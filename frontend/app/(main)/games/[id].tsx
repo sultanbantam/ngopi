@@ -18,6 +18,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { io, Socket } from 'socket.io-client';
 import { coffee } from '../../../src/theme/coffee';
 import { DominoTile } from '../../../src/components/DominoTile';
+import GaplehShareModal from '../../../src/components/GaplehShareModal';
 import axios from 'axios';
 import { getAuthHeaders } from '../../../src/utils/api';
 import * as SecureStore from '../../../src/utils/storage';
@@ -66,6 +67,22 @@ const MONOPOLY_GROUP_COLORS: Record<string, string> = {
   station: '#64748b',
   utility: '#eab308',
 };
+
+const GAPLEH_BOTS: Array<{
+  id: string;
+  name: string;
+  title: string;
+  personality: string;
+  difficulty: string;
+  avatar: string;
+}> = [
+  { id: 'gapleh_2_budi', name: 'Budi', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
+  { id: 'gapleh_2_asep', name: 'Asep', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
+  { id: 'gapleh_2_rudi', name: 'Rudi', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
+  { id: 'gapleh_2_deni', name: 'Deni', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
+  { id: 'gapleh_2_jago', name: 'Bang Jago', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
+  { id: 'gapleh_2_maestro', name: 'Sang Maestro', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
+];
 
 function UnoCardTile({
   card,
@@ -216,6 +233,8 @@ export default function GameTableScreen() {
   // Result modal
   const [resultModalVisible, setResultModalVisible] = useState(false);
   const [gameResult, setGameResult] = useState<any>(null);
+  const [botPickerVisible, setBotPickerVisible] = useState(false);
+  const [shareModalVisible, setShareModalVisible] = useState(false);
 
   // UNO and Catur specialized states
   const [wildPickerCard, setWildPickerCard] = useState<any | null>(null);
@@ -585,6 +604,15 @@ export default function GameTableScreen() {
       if (data?.results) {
         setGameResult(data.results);
         setResultModalVisible(true);
+
+        // Task 3.1: Automatically open share modal when player wins with Nutup Balak 6/0 or Digapleh
+        const isWinner = data.results.winners?.includes(currentUserId);
+        const winType = data.results.winType;
+        if (isWinner && (winType === 'nutup_balak6' || winType === 'nutup_balak0' || winType === 'digapleh')) {
+          setTimeout(() => {
+            setShareModalVisible(true);
+          }, 700);
+        }
       }
     });
 
@@ -606,14 +634,19 @@ export default function GameTableScreen() {
   };
 
   // Action: Add Bot
-  const handleAddBot = () => {
+  const handleAddBot = (botProfileId?: string) => {
     if (!socketRef.current || !tableId) return;
-    socketRef.current.emit('table:add_bot', { tableId }, (res: any) => {
+    if (!botProfileId && table?.game_type === 'gapleh' && table?.config?.level === 2) {
+      setBotPickerVisible(true);
+      return;
+    }
+    socketRef.current.emit('table:add_bot', { tableId, botProfileId }, (res: any) => {
       if (!res?.success) {
         Alert.alert('Gagal', res?.error || 'Gagal menambahkan bot.');
       } else if (res.table) {
         setTable(res.table);
       }
+      setBotPickerVisible(false);
     });
   };
 
@@ -643,6 +676,11 @@ export default function GameTableScreen() {
 
   // Share Victory to Social Media
   const handleShareVictory = async () => {
+    if (table?.game_type === 'gapleh') {
+      setShareModalVisible(true);
+      return;
+    }
+
     const gameLabel = (table?.game_type || 'GAPLEH').toUpperCase();
     const winnerName = currentUsername || 'albantani';
     const hookText = `menang maen ${gameLabel} sambil Ngopi! 🏆✨\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng ${winnerName} sekarang, klik: https://ngopi.top ☕🚀`;
@@ -1004,7 +1042,7 @@ export default function GameTableScreen() {
             {table.name}
           </Text>
           <Text style={styles.headerSub}>
-            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi • {table.game_type?.toUpperCase()}
+            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi • {table.game_type === 'gapleh' ? (table.config?.level === 2 ? '🔥 GAPLEH RAME (LEVEL 2)' : '☕ GAPLEH KLASIK (LEVEL 1)') : table.game_type?.toUpperCase()}
           </Text>
         </View>
 
@@ -1055,7 +1093,7 @@ export default function GameTableScreen() {
 
             {/* Add Bot button for any seated player or host */}
             {(isHost || Boolean(myPlayer)) && table.players?.length < table.max_players && (
-              <TouchableOpacity style={styles.addBotBtn} onPress={handleAddBot}>
+              <TouchableOpacity style={styles.addBotBtn} onPress={() => handleAddBot()}>
                 <Ionicons name="hardware-chip-outline" size={16} color={coffee.accent} />
                 <Text style={styles.addBotBtnText}>+ Tambah Bot</Text>
               </TouchableOpacity>
@@ -1137,16 +1175,22 @@ export default function GameTableScreen() {
                   </Text>
                 </View>
               )}
-              <View
-                style={[
-                  styles.seatAvatar,
-                  isTurn && { borderColor: coffee.accent, borderWidth: 2 },
-                ]}
-              >
-                <Text style={styles.seatAvatarText}>
-                  {player.display_name.charAt(0) || 'U'}
-                </Text>
-              </View>
+              {(() => {
+                const botMeta = player.is_bot ? GAPLEH_BOTS.find((b) => player.user_id.includes(b.id) || player.display_name.toLowerCase().includes(b.name.toLowerCase())) : null;
+                return (
+                  <View
+                    style={[
+                      styles.seatAvatar,
+                      isTurn && { borderColor: coffee.accent, borderWidth: 2 },
+                      botMeta && { backgroundColor: '#3b2414' },
+                    ]}
+                  >
+                    <Text style={[styles.seatAvatarText, botMeta && { fontSize: 16 }]}>
+                      {botMeta ? botMeta.avatar : (player.display_name.charAt(0) || 'U')}
+                    </Text>
+                  </View>
+                );
+              })()}
               <Text style={styles.seatName} numberOfLines={1}>
                 {player.display_name} {isMe ? '(Anda)' : ''} {player.user_id === table.host_id ? '👑' : ''}
               </Text>
@@ -1171,15 +1215,20 @@ export default function GameTableScreen() {
           <TouchableOpacity
             key={`empty_${emptyIdx}`}
             style={[styles.playerSeatCard, { borderStyle: 'dashed', borderColor: coffee.border, borderWidth: 1 }]}
-            onPress={handleTakeSeat}
-            disabled={Boolean(myPlayer)}
+            onPress={() => {
+              if (myPlayer) {
+                handleAddBot();
+              } else {
+                handleTakeSeat();
+              }
+            }}
           >
             <View style={[styles.seatAvatar, { backgroundColor: 'transparent', borderWidth: 1, borderColor: coffee.border, borderStyle: 'dashed' }]}>
               <Text style={{ fontSize: 16, color: coffee.muted }}>＋</Text>
             </View>
             <Text style={[styles.seatName, { color: coffee.muted }]}>Kosong</Text>
-            <Text style={{ fontSize: 10, color: myPlayer ? coffee.muted : coffee.accent, fontWeight: 'bold' }}>
-              {myPlayer ? 'Tersedia' : '+ Duduk'}
+            <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: 'bold' }}>
+              {myPlayer ? '+ Tambah Bot' : '+ Duduk'}
             </Text>
           </TouchableOpacity>
         ))}
@@ -2591,6 +2640,82 @@ export default function GameTableScreen() {
         </View>
       </Modal>
 
+      {/* Bot Selection Modal for Level 2 (Task 2.2) */}
+      <Modal visible={botPickerVisible} transparent animationType="fade" onRequestClose={() => setBotPickerVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 420 }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View>
+                <Text style={styles.modalTitle}>Pilih Karakter Bot 🤖</Text>
+                <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 2 }}>
+                  Gapleh Rame (Level 2) — Pilih lawan tanding
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setBotPickerVisible(false)}>
+                <Ionicons name="close" size={22} color={coffee.secondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 8 }}>
+              {GAPLEH_BOTS.map((bot) => {
+                const isAlreadySeated = table.players?.some((p: any) => p.user_id === bot.id || p.username === bot.id);
+                return (
+                  <TouchableOpacity
+                    key={bot.id}
+                    disabled={isAlreadySeated}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      padding: 10,
+                      backgroundColor: isAlreadySeated ? 'rgba(0,0,0,0.3)' : '#231810',
+                      borderRadius: 8,
+                      borderWidth: 1,
+                      borderColor: isAlreadySeated ? '#3d2b1f' : '#ea580c',
+                      opacity: isAlreadySeated ? 0.4 : 1,
+                      gap: 12,
+                    }}
+                    onPress={() => handleAddBot(bot.id)}
+                  >
+                    <Text style={{ fontSize: 24 }}>{bot.avatar}</Text>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={{ color: coffee.text, fontWeight: '800', fontSize: 13 }}>
+                          {bot.name} ({bot.title})
+                        </Text>
+                        <View style={{ backgroundColor: 'rgba(234, 88, 12, 0.2)', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                          <Text style={{ color: '#fb923c', fontSize: 10, fontWeight: '800' }}>{bot.difficulty}</Text>
+                        </View>
+                      </View>
+                      <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 2 }}>
+                        {isAlreadySeated ? '✓ Sudah ada di meja' : bot.personality}
+                      </Text>
+                    </View>
+                    {!isAlreadySeated && (
+                      <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: '#2a1e15', borderWidth: 1, borderColor: coffee.border, alignItems: 'center' }}
+                onPress={() => handleAddBot()}
+              >
+                <Text style={{ color: coffee.text, fontSize: 12, fontWeight: '700' }}>🎲 Bot Acak</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: coffee.surface, alignItems: 'center' }}
+                onPress={() => setBotPickerVisible(false)}
+              >
+                <Text style={{ color: coffee.secondary, fontSize: 12, fontWeight: '700' }}>Batal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Game Over Results Modal */}
       <Modal visible={resultModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -2754,6 +2879,20 @@ export default function GameTableScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Gapleh Viral Social Media Share Modal (Task 3) */}
+      <GaplehShareModal
+        visible={shareModalVisible}
+        onClose={() => setShareModalVisible(false)}
+        data={{
+          winType: gameResult?.winType || (gameState as any)?.winType || 'gapleh_biasa',
+          username: currentUsername || 'Ngopikawan',
+          pointsEarned: gameResult?.pointsAwarded ?? 50,
+          streakCount: gameResult?.pointsDetails?.streakCount ?? 1,
+          isFirstNutup: Boolean(gameResult?.pointsDetails?.isFirstNutup),
+          totalPoints: gameResult?.playerPoints?.[currentUserId] ?? 500,
+        }}
+      />
 
       {/* In-Game Chat Drawer / Modal */}
       <Modal

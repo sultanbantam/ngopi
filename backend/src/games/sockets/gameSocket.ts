@@ -2,6 +2,7 @@ import { Namespace, Server, Socket } from 'socket.io';
 import { TableManager } from '../TableManager';
 import { prisma } from '../../utils/prisma';
 import { PointsManager } from '../../utils/pointsManager';
+import { BotProfileService } from '../gapleh/BotProfileService';
 
 export const setupGameSocket = (io: Server) => {
   const gamesNamespace: Namespace = io.of('/games');
@@ -47,7 +48,7 @@ export const setupGameSocket = (io: Server) => {
     triggerBotTurnIfNeeded(tableId);
   };
 
-  // Bot AI automated execution
+  // Bot AI automated execution & results notification
   const notifyGameFinished = (tableId: string, results: any) => {
     const table = TableManager.getTable(tableId);
     const awardedMap: Record<string, number> = {};
@@ -62,7 +63,29 @@ export const setupGameSocket = (io: Server) => {
             PointsManager.setPoints(player.user_id, newPts);
           }
           awardedMap[player.user_id] = newPts;
+        } else if (player && player.is_bot) {
+          // Record bot win & points in BotProfile
+          const botRes = BotProfileService.recordBotMatch(player.user_id, 'win');
+          awardedMap[player.user_id] = botRes.profile.total_points;
         }
+      }
+    }
+
+    if (results?.losers && Array.isArray(results.losers)) {
+      for (const loserId of results.losers) {
+        const player = table?.players?.find((p) => p.user_id === loserId);
+        if (player && player.is_bot) {
+          BotProfileService.recordBotMatch(player.user_id, 'lose');
+        }
+      }
+    }
+
+    if (results?.winner) {
+      const winnerPlayer = table?.players?.find((p) => p.user_id === results.winner);
+      if (winnerPlayer?.is_bot) {
+        setTimeout(() => {
+          maybeTriggerBotBanter(tableId, winnerPlayer.user_id, 'win');
+        }, 600);
       }
     }
 
@@ -76,11 +99,47 @@ export const setupGameSocket = (io: Server) => {
     });
   };
 
+  const maybeTriggerBotBanter = (tableId: string, botId: string, type: 'turn' | 'win' | 'pass') => {
+    const table = TableManager.getTable(tableId);
+    if (!table) return;
+    const bot = table.players?.find((p) => p.user_id === botId);
+    if (!bot || !bot.is_bot) return;
+
+    // Banter probability: 85% on win, 40% on pass, 35% on regular turn
+    const chance = type === 'win' ? 0.85 : type === 'pass' ? 0.4 : 0.35;
+    if (Math.random() > chance) return;
+
+    // Random choice: 30% emote (if not win), 70% chat quote
+    const isEmote = Math.random() < 0.3 && type !== 'win';
+    if (isEmote) {
+      const emote = BotProfileService.getRandomEmote(botId);
+      if (emote) {
+        gamesNamespace.to(`table:${tableId}`).emit('game:emote_received', {
+          senderId: bot.user_id,
+          senderName: bot.display_name,
+          emote,
+        });
+      }
+    } else {
+      const quote = BotProfileService.getRandomBanter(botId, type);
+      if (quote) {
+        const msg = TableManager.addChatMessage(
+          tableId,
+          { id: bot.user_id, name: bot.display_name },
+          quote
+        );
+        if (msg) {
+          gamesNamespace.to(`table:${tableId}`).emit('game:chat_message', msg);
+        }
+      }
+    }
+  };
+
   const triggerBotTurnIfNeeded = (tableId: string) => {
     const botActionData = TableManager.getBotAction(tableId);
     if (!botActionData) return;
 
-    // Give bot a natural delay (1200ms - 1800ms)
+    // Natural bot reaction delay (1000ms - 1500ms)
     setTimeout(() => {
       // Re-check if still valid
       const currentBotAction = TableManager.getBotAction(tableId);
@@ -94,13 +153,23 @@ export const setupGameSocket = (io: Server) => {
       );
 
       if (result.success) {
+        // Trigger banter for this bot action
+        maybeTriggerBotBanter(
+          tableId,
+          currentBotAction.botId,
+          currentBotAction.action === 'pass' ? 'pass' : 'turn'
+        );
+
         broadcastGameState(tableId);
 
         if (result.finished && result.results) {
           notifyGameFinished(tableId, result.results);
+        } else {
+          // Check if next turn belongs to another bot
+          triggerBotTurnIfNeeded(tableId);
         }
       }
-    }, 1300);
+    }, 1200);
   };
 
   gamesNamespace.on('connection', async (socket: Socket) => {
@@ -222,8 +291,8 @@ export const setupGameSocket = (io: Server) => {
     );
 
     // Add Bot Player
-    socket.on('table:add_bot', (data: { tableId: string }, callback) => {
-      const res = TableManager.addBot(data.tableId, userId);
+    socket.on('table:add_bot', (data: { tableId: string; botProfileId?: string }, callback) => {
+      const res = TableManager.addBot(data.tableId, userId, data.botProfileId);
       if (res.success && res.table) {
         gamesNamespace.to(`table:${data.tableId}`).emit('table:player_joined', {
           player: res.bot,
@@ -269,6 +338,8 @@ export const setupGameSocket = (io: Server) => {
 
         if (res.finished && res.results) {
           notifyGameFinished(data.tableId, res.results);
+        } else {
+          triggerBotTurnIfNeeded(data.tableId);
         }
       } else {
         if (typeof callback === 'function') callback({ success: false, error: res.error });

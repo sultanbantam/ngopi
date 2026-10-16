@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma';
 import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
 import { TableManager } from '../games/TableManager';
+import { BotProfileService } from '../games/gapleh/BotProfileService';
 import fs from 'fs';
 import path from 'path';
 
@@ -202,6 +203,65 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
       matchesPlayed: info.matches,
     })).sort((a, b) => b.matchesPlayed - a.matchesPlayed);
 
+    // 5. Top 10 Gapleh: Combined Human + Bot Leaderboard (Task 4 & Task 8.2)
+    const bots = BotProfileService.getAllProfiles();
+    const botEntries = bots.map((b) => {
+      const botBadges = [...(b.badges || [])];
+      if (b.level >= 5 && !botBadges.includes('Jagal Gapleh')) botBadges.push('Jagal Gapleh');
+      if (b.level >= 4 && !botBadges.includes('Nutup Master')) botBadges.push('Nutup Master');
+      if (!botBadges.includes('Digapleh Hunter')) botBadges.push('Digapleh Hunter');
+
+      return {
+        id: b.bot_id,
+        username: b.bot_id,
+        display_name: `${b.name} (${b.title})`,
+        is_bot: true,
+        bot_title: b.title,
+        level: b.level,
+        points: b.total_points,
+        wins: b.total_wins,
+        losses: b.total_losses,
+        badges: botBadges,
+        avatar_url: null,
+      };
+    });
+
+    const humanEntries = allUsers.map((user: any) => {
+      const ptsByName = PointsManager.getPoints(user.username);
+      const ptsById = PointsManager.getPoints(user.id);
+      const ptsService = (pointsEconomyService && typeof pointsEconomyService.getUserPoints === 'function')
+        ? (pointsEconomyService.getUserPoints(user.id)?.balance || 0)
+        : 0;
+      const totalPoints = Math.max(ptsByName, ptsById, ptsService);
+
+      const badges: string[] = [];
+      if (totalPoints >= 500) badges.push('Jagal Gapleh');
+      if (totalPoints >= 250) badges.push('Nutup Master');
+      if (totalPoints >= 100) badges.push('Digapleh Hunter');
+
+      return {
+        id: user.id,
+        username: user.username,
+        display_name: user.display_name,
+        is_bot: false,
+        bot_title: undefined,
+        level: totalPoints >= 500 ? 2 : 1,
+        points: totalPoints,
+        wins: Math.floor(totalPoints / 50),
+        losses: 0,
+        badges,
+        avatar_url: user.avatar_url,
+      };
+    });
+
+    const topGapleh = [...botEntries, ...humanEntries]
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 10)
+      .map((item, idx) => ({
+        ...item,
+        rank: idx + 1,
+      }));
+
     res.status(200).json({
       success: true,
       data: {
@@ -209,11 +269,104 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
         top_music: topMusic,
         top_radio: topRadio,
         top_games: topGames,
+        top_gapleh: topGapleh,
       },
     });
   } catch (error: any) {
     console.error('Error fetching leaderboard:', error);
     res.status(500).json({ success: false, error: 'Gagal memuat data klasemen.' });
+  }
+});
+
+// GET /api/leaderboard/gapleh - Dedicated Top 10 Gapleh Human + Bot
+router.get('/gapleh', async (_req: Request, res: Response) => {
+  try {
+    const bots = BotProfileService.getAllProfiles();
+    const botEntries = bots.map((b) => {
+      const botBadges = [...(b.badges || [])];
+      if (b.level >= 5 && !botBadges.includes('Jagal Gapleh')) botBadges.push('Jagal Gapleh');
+      if (b.level >= 4 && !botBadges.includes('Nutup Master')) botBadges.push('Nutup Master');
+      if (!botBadges.includes('Digapleh Hunter')) botBadges.push('Digapleh Hunter');
+
+      return {
+        id: b.bot_id,
+        username: b.bot_id,
+        display_name: `${b.name} (${b.title})`,
+        is_bot: true,
+        bot_title: b.title,
+        level: b.level,
+        points: b.total_points,
+        wins: b.total_wins,
+        losses: b.total_losses,
+        badges: botBadges,
+        avatar_url: null,
+      };
+    });
+
+    // Fetch DB users or fallback to in-memory
+    let dbUsers: any[] = [];
+    try {
+      dbUsers = await prisma.user.findMany({
+        select: {
+          id: true,
+          username: true,
+          display_name: true,
+          avatar_url: true,
+        },
+        take: 25,
+      });
+    } catch {}
+
+    const allUserList = dbUsers.length > 0 ? dbUsers : [
+      { id: 'user_sultan', username: 'sultanbantam', display_name: 'Sultan Bantam', avatar_url: null },
+      { id: 'user_ujang', username: 'ujang_warkop', display_name: 'Ujang Warkop', avatar_url: null },
+      { id: 'user_jawara', username: 'jawara_gapleh', display_name: 'Jawara Gapleh', avatar_url: null },
+      { id: 'user_ngopi', username: 'ngopikawan', display_name: 'Ngopi Kawan', avatar_url: null },
+    ];
+
+    const humanEntries = allUserList.map((user: any) => {
+      const ptsByName = PointsManager.getPoints(user.username);
+      const ptsById = PointsManager.getPoints(user.id);
+      const ptsService = (pointsEconomyService && typeof pointsEconomyService.getUserPoints === 'function')
+        ? (pointsEconomyService.getUserPoints(user.id)?.balance || 0)
+        : 0;
+      const pts = Math.max(ptsByName, ptsById, ptsService, 120);
+
+      const badges: string[] = [];
+      if (pts >= 500) badges.push('Jagal Gapleh');
+      if (pts >= 250) badges.push('Nutup Master');
+      if (pts >= 100) badges.push('Digapleh Hunter');
+
+      return {
+        id: user.id,
+        username: user.username,
+        display_name: user.display_name || user.username,
+        is_bot: false,
+        bot_title: undefined,
+        level: pts >= 500 ? 2 : 1,
+        points: pts,
+        wins: Math.floor(pts / 50),
+        losses: 0,
+        badges,
+        avatar_url: user.avatar_url || null,
+      };
+    });
+
+    const topGapleh = [...botEntries, ...humanEntries]
+      .sort((a, b) => b.points - a.points)
+      .slice(0, 10)
+      .map((item, idx) => ({
+        ...item,
+        rank: idx + 1,
+      }));
+
+    res.status(200).json({
+      success: true,
+      leaderboard: topGapleh,
+      bots,
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 

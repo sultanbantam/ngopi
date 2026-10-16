@@ -116,13 +116,21 @@ router.get('/messages', (req: Request, res: Response) => {
 // POST /api/ht/sync - Store-and-Forward sync when device returns online
 router.post('/sync', (req: Request, res: Response) => {
   try {
-    const { offline_messages } = req.body;
-    if (!Array.isArray(offline_messages)) {
-      res.status(400).json({ error: 'offline_messages array is required' });
+    const body = req.body;
+    let messages: any[] = [];
+
+    if (Array.isArray(body)) {
+      messages = body;
+    } else if (Array.isArray(body.offline_messages)) {
+      messages = body.offline_messages;
+    } else if (body && (body.text || body.content)) {
+      messages = [body];
+    } else {
+      res.status(400).json({ error: 'offline_messages array or message object is required' });
       return;
     }
 
-    const syncResult = htManagerService.syncOfflineBatch(offline_messages);
+    const syncResult = htManagerService.syncOfflineBatch(messages);
     res.json({ success: true, ...syncResult });
   } catch (err: any) {
     res.status(500).json({ error: err.message || 'Sync failed' });

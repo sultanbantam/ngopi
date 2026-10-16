@@ -27,6 +27,7 @@ import {
   KarambolGame,
   BilliardGame,
 } from './engine/GenericWarkopGame';
+import { BotProfileService } from './gapleh/BotProfileService';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -94,10 +95,11 @@ export class TableManager {
     config?: TableConfig;
   }): Promise<GameTableData> {
     const tableId = makeId('tbl');
+    const isLevel2Gapleh = params.gameType === 'gapleh' && params.config?.level === 2;
     const isPartnership = params.config?.gaplehMode === 'partnership';
     const isTwoPlayerOnly = ['catur', 'pokemon', 'daku', 'billiard'].includes(params.gameType);
-    const maxPlayers = isPartnership ? 4 : isTwoPlayerOnly ? 2 : (params.maxPlayers || 4);
-    const minPlayers = isPartnership ? 4 : (params.minPlayers || 2);
+    const maxPlayers = isLevel2Gapleh ? 4 : isPartnership ? 4 : isTwoPlayerOnly ? 2 : (params.maxPlayers || 4);
+    const minPlayers = isLevel2Gapleh ? 4 : isPartnership ? 4 : (params.minPlayers || 2);
 
     const hostPlayer: GamePlayerInfo = {
       id: makeId('p'),
@@ -112,6 +114,30 @@ export class TableManager {
       is_bot: false,
     };
 
+    const initialPlayers: GamePlayerInfo[] = [hostPlayer];
+
+    // Auto-populate selected bots for Level 2 (Gapleh Rame)
+    if (isLevel2Gapleh && Array.isArray(params.config?.selectedBotIds)) {
+      for (const bId of params.config.selectedBotIds) {
+        if (initialPlayers.length < maxPlayers) {
+          const botProfile = BotProfileService.getBotProfile(bId);
+          const nextSeat = initialPlayers.length;
+          initialPlayers.push({
+            id: makeId('p'),
+            user_id: botProfile.bot_id,
+            username: botProfile.bot_id,
+            display_name: `${botProfile.name} (${botProfile.title}) 🤖`,
+            avatar_url: null,
+            seat_number: nextSeat,
+            team: isPartnership ? (nextSeat % 2 === 0 ? 'A' : 'B') : undefined,
+            is_ready: true,
+            is_active: true,
+            is_bot: true,
+          });
+        }
+      }
+    }
+
     const tableData: GameTableData = {
       id: tableId,
       warung_id: params.warungId || null,
@@ -124,7 +150,7 @@ export class TableManager {
       has_password: !!params.password,
       host_id: params.host.id,
       created_at: new Date().toISOString(),
-      players: [hostPlayer],
+      players: initialPlayers,
       spectators: [],
       config: {
         turnTimeLimitSec: 30,
@@ -299,7 +325,8 @@ export class TableManager {
   // Add bot player for instant testing/play
   public static addBot(
     tableId: string,
-    hostUserId?: string
+    hostUserId?: string,
+    botProfileId?: string
   ): { success: boolean; error?: string; bot?: GamePlayerInfo; table?: GameTableData } {
     const active = this.tables.get(tableId);
     if (!active) return { success: false, error: 'Meja tidak ditemukan.' };
@@ -313,9 +340,17 @@ export class TableManager {
     let nextSeat = 0;
     while (takenSeats.has(nextSeat)) nextSeat++;
 
-    const botIndex = active.data.players.filter((p) => p.is_bot).length;
-    const botName = BOT_NAMES[botIndex % BOT_NAMES.length] || 'Kang Kopi Bot ☕';
-    const botId = makeId('bot');
+    let botName = '';
+    let botId = '';
+    if (botProfileId) {
+      const botProfile = BotProfileService.getBotProfile(botProfileId);
+      botName = `${botProfile.name} (${botProfile.title}) 🤖`;
+      botId = botProfile.bot_id;
+    } else {
+      const botIndex = active.data.players.filter((p) => p.is_bot).length;
+      botName = BOT_NAMES[botIndex % BOT_NAMES.length] || 'Kang Kopi Bot ☕';
+      botId = makeId('bot');
+    }
 
     const isPartnership = active.data.config?.gaplehMode === 'partnership';
     const botPlayer: GamePlayerInfo = {

@@ -9,6 +9,8 @@ import { OnboardingModal } from '../../src/components/OnboardingModal';
 import { GlobalAudioBar } from '../../src/components/GlobalAudioBar';
 import OfflineBanner from '../../src/components/OfflineBanner';
 import MeshPeerModal from '../../src/components/MeshPeerModal';
+import BluetoothHTModal from '../../src/components/BluetoothHTModal';
+import EmergencySOSModal from '../../src/components/EmergencySOSModal';
 import ConsentBannerModal from '../../src/components/ConsentBannerModal';
 import ModerationAlertModal from '../../src/components/ModerationAlertModal';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
@@ -72,6 +74,8 @@ export default function MainLayout() {
   const [callAlertMode, setCallAlertMode] = useState<CallAlertMode>('ringtone');
   const [activeIncomingCall, setActiveIncomingCall] = useState<ActiveIncomingCall | null>(null);
   const [meshModalVisible, setMeshModalVisible] = useState(false);
+  const [htModalVisible, setHtModalVisible] = useState(false);
+  const [emergencyModalVisible, setEmergencyModalVisible] = useState(false);
 
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -583,7 +587,11 @@ export default function MainLayout() {
   if (isLargeScreen) {
     return (
       <View style={styles.singleContainer}>
-        <OfflineBanner onPressPeers={() => setMeshModalVisible(true)} />
+        <OfflineBanner
+          onPressPeers={() => setMeshModalVisible(true)}
+          onPressHT={() => setHtModalVisible(true)}
+          onPressSOS={() => setEmergencyModalVisible(true)}
+        />
         <Slot />
         {renderIncomingCallModal()}
         {renderToast()}
@@ -600,6 +608,15 @@ export default function MainLayout() {
             router.push({ pathname: '/(main)/chat/[id]' as any, params: { id: peerId } });
           }}
         />
+        <BluetoothHTModal
+          visible={htModalVisible}
+          onClose={() => setHtModalVisible(false)}
+        />
+        <EmergencySOSModal
+          visible={emergencyModalVisible}
+          onClose={() => setEmergencyModalVisible(false)}
+          onOpenHT={() => setHtModalVisible(true)}
+        />
         <ConsentBannerModal />
       </View>
     );
@@ -607,7 +624,11 @@ export default function MainLayout() {
 
   return (
     <View style={{ flex: 1 }}>
-      <OfflineBanner onPressPeers={() => setMeshModalVisible(true)} />
+      <OfflineBanner
+        onPressPeers={() => setMeshModalVisible(true)}
+        onPressHT={() => setHtModalVisible(true)}
+        onPressSOS={() => setEmergencyModalVisible(true)}
+      />
       <Stack screenOptions={{
         headerStyle: { backgroundColor: coffee.surface },
         headerTintColor: coffee.text,
@@ -621,6 +642,8 @@ export default function MainLayout() {
         <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="call/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="help-center" options={{ headerShown: false }} />
+        <Stack.Screen name="guides/ht" options={{ headerShown: false }} />
+        <Stack.Screen name="guides/first-aid" options={{ headerShown: false }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>
       {renderIncomingCallModal()}
@@ -637,6 +660,15 @@ export default function MainLayout() {
           setMeshModalVisible(false);
           router.push({ pathname: '/(main)/chat/[id]' as any, params: { id: peerId } });
         }}
+      />
+      <BluetoothHTModal
+        visible={htModalVisible}
+        onClose={() => setHtModalVisible(false)}
+      />
+      <EmergencySOSModal
+        visible={emergencyModalVisible}
+        onClose={() => setEmergencyModalVisible(false)}
+        onOpenHT={() => setHtModalVisible(true)}
       />
       <ConsentBannerModal />
       <ModerationAlertModal />

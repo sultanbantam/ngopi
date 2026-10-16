@@ -513,5 +513,152 @@ model HTGroup {
   @@map("ht_groups")
 }
 
+// ==========================================
+// MODUL GAPLEH LEVEL, MATCH & BOT PROFILES (v3)
+// ==========================================
 
+model GaplehLevel {
+  id          String   @id @default(uuid())
+  level       Int      @unique // 1, 2
+  name        String   // "Gapleh Klasik", "Gapleh Rame"
+  min_players Int
+  max_players Int
+  description String
+  is_active   Boolean  @default(true)
+
+  @@map("gapleh_levels")
+}
+
+model GaplehMatchV2 {
+  id                  String   @id @default(uuid())
+  level               Int      @default(1) // 1 atau 2
+  user_id             String   @map("user_id")
+  opponent_ids        String[] @map("opponent_ids") // Bisa manusia atau bot
+  bot_ids             String[] @map("bot_ids")      // Daftar bot yang dipilih
+  result              String   // "win", "lose", "draw"
+  win_type            String?  // "gapleh_biasa", "digapleh", "nutup_balak6", "nutup_balak0"
+  points_earned       Int      @default(0)
+  base_points         Int      @default(0)
+  bonus_points        Int      @default(0)
+  is_first_nutup      Boolean  @default(false)
+  streak_count        Int      @default(0)
+  opponent_cards_left Json?
+  duration_sec        Int      @default(0)
+  moves_count         Int      @default(0)
+  created_at          DateTime @default(now())
+
+  @@map("gapleh_matches_v2")
+}
+
+model BotProfile {
+  id           String   @id @default(uuid())
+  bot_id       String   @unique @map("bot_id") // "gapleh_2_budi", "gapleh_2_maestro"
+  name         String
+  level        Int      @default(1)
+  total_points Int      @default(0)
+  total_wins   Int      @default(0)
+  total_losses Int      @default(0)
+  badges       String[] @default([])
+  updated_at   DateTime @updatedAt
+  created_at   DateTime @default(now())
+
+  @@map("bot_profiles")
+}
+
+model GaplehMatch {
+  id            String   @id @default(uuid())
+  user_id       String   @map("user_id")
+  opponent_ids  String[] @map("opponent_ids")
+  result        String   // "win", "lose", "draw"
+  win_type      String?  // "gapleh_biasa", "digapleh", "nutup_balak6", "nutup_balak0"
+  points_earned Int      @default(0)
+  base_points   Int      @default(0)
+  bonus_points  Int      @default(0)
+  created_at    DateTime @default(now())
+
+  @@map("gapleh_matches")
+}
+
+model UserGaplehStats {
+  id               String   @id @default(uuid())
+  user_id          String   @unique @map("user_id")
+  total_matches    Int      @default(0)
+  total_wins       Int      @default(0)
+  total_losses     Int      @default(0)
+  total_points     Int      @default(0)
+  streak_count     Int      @default(0)
+  highest_streak   Int      @default(0)
+  has_nutup_balak6 Boolean  @default(false)
+  has_nutup_balak0 Boolean  @default(false)
+  total_digapleh   Int      @default(0)
+  badges           String[] @default([])
+  updated_at       DateTime @updatedAt
+  created_at       DateTime @default(now())
+
+  @@map("user_gapleh_stats")
+}
+
+// ==========================================
+// TASK 5.10: DATABASE SCHEMA (HT OFFLINE)
+// ==========================================
+
+model HTProfile {
+  id             String   @id @default(cuid())
+  user_id        String   @unique @map("user_id")
+  callsign       String?
+  license_type   String?
+  default_freq   Float?
+  default_ctcss  String?
+  aprs_ssid      String?
+  preferred_mode String   @default("acoustic") // "bluetooth", "serial", "acoustic"
+  created_at     DateTime @default(now())
+
+  @@map("ht_profiles")
+}
+
+model HTMessage {
+  id           String    @id @default(cuid())
+  sender_id    String    @map("sender_id")
+  recipient_id String?   @map("recipient_id")
+  content      String
+  freq         Float
+  protocol     String    // "APRS", "DMR", "FSK"
+  mode         String    // "bluetooth", "serial", "acoustic"
+  status       String    @default("pending")
+  created_at   DateTime  @default(now())
+  sent_at      DateTime?
+  delivered_at DateTime?
+
+  @@map("ht_messages")
+}
+
+// ==========================================
+// TASK 7.3: DATABASE SCHEMA (EMERGENCY & P3K)
+// ==========================================
+
+model EmergencyContact {
+  id         String   @id @default(cuid())
+  user_id    String   @map("user_id")
+  name       String
+  phone      String
+  relation   String
+  is_primary Boolean  @default(false)
+  created_at DateTime @default(now())
+
+  @@map("emergency_contacts")
+}
+
+model EmergencyLog {
+  id           String   @id @default(cuid())
+  user_id      String   @map("user_id")
+  type         String   // "accident", "medical", "disaster"
+  latitude     Float?
+  longitude    Float?
+  description  String?
+  status       String   @default("active")
+  responded_by String[]
+  created_at   DateTime @default(now())
+
+  @@map("emergency_logs")
+}
 

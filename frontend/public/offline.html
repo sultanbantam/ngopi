@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>📡 Mode Offline Aktif — HT Siap | Ngopi</title>
+  <meta name="theme-color" content="#8B5E3C">
+  <link rel="manifest" href="/manifest.json">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: #171411;
+      color: #ede0d4;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: #241a12;
+      border: 1px solid #4d3221;
+      border-radius: 18px;
+      padding: 28px 24px;
+      max-width: 440px;
+      width: 100%;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(217, 119, 6, 0.2);
+      border: 1px solid #d97706;
+      color: #fbbf24;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 16px;
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #fbbf24;
+      animation: pulse 1.8s infinite;
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.3); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .icon-wrap {
+      width: 64px;
+      height: 64px;
+      border-radius: 32px;
+      background: rgba(212, 163, 115, 0.15);
+      border: 1px solid #d4a373;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      margin: 0 auto 16px auto;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 800;
+      color: #d4a373;
+      margin-bottom: 8px;
+    }
+    p {
+      font-size: 13px;
+      color: #b0bec5;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+    .status-box {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid #3b2518;
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 20px;
+      text-align: left;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .status-row:last-child {
+      border-bottom: none;
+    }
+    .status-label {
+      color: #9e8e81;
+    }
+    .status-val {
+      font-weight: 700;
+      color: #4ade80;
+    }
+    .btn-row {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .btn-primary {
+      background: #8b5e3c;
+      color: #ffffff;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover {
+      background: #a27048;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: #d4a373;
+      border: 1px solid #8b5e3c;
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .footer-note {
+      font-size: 11px;
+      color: #7d6b5c;
+      margin-top: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">
+      <div class="pulse-dot"></div>
+      OFFLINE • HT SIAP
+    </div>
+
+    <div class="icon-wrap">📻</div>
+
+    <h1>📡 Mode Offline Aktif — HT Siap</h1>
+    <p>
+      Koneksi internet Anda sedang terputus, namun aplikasi <strong>Ngopi</strong> tetap dapat berjalan. Anda dapat terus berkomunikasi melalui mode radio Handy Talky (HT) & Bluetooth Mesh.
+    </p>
+
+    <div class="status-box">
+      <div class="status-row">
+        <span class="status-label">Koneksi Internet</span>
+        <span class="status-val" style="color: #f87171;">Terputus (Offline)</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Mode HT (Handy Talky)</span>
+        <span class="status-val">Siap (145.500 MHz)</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Bluetooth Mesh & Akustik</span>
+        <span class="status-val">Aktif</span>
+      </div>
+      <div class="status-row">
+        <span class="status-label">Antrean Pesan</span>
+        <span class="status-val" style="color: #fbbf24;">Disinkronkan saat online</span>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn-primary" onclick="window.location.reload()">
+        Segarkan & Coba Hubungkan Kembali 🔄
+      </button>
+      <button class="btn-secondary" onclick="window.location.href='/'">
+        Buka Aplikasi Ngopi ☕
+      </button>
+    </div>
+
+    <div class="footer-note">
+      Darurat? Gunakan frekuensi SAR/PMI 145.000 MHz atau telepon 112 / 119 saat sinyal seluler tersedia.
+    </div>
+  </div>
+
+  <script>
+    // Auto-reload when internet is restored
+    window.addEventListener('online', function() {
+      console.log('Koneksi internet pulih. Memuat ulang aplikasi...');
+      window.location.reload();
+    });
+  </script>
+</body>
+</html>

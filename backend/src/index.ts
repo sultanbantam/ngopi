@@ -29,6 +29,7 @@ import meshRoutes from './routes/mesh.routes';
 import complianceRoutes from './routes/compliance.routes';
 import moderationRoutes from './routes/moderation.routes';
 import htRoutes from './routes/ht.routes';
+import emergencyRoutes from './routes/emergency.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -103,6 +104,7 @@ app.use('/api/keys', keysRoutes);
 app.use('/api/jukebox', jukeboxRoutes);
 app.use('/api/ambient', ambientRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/gapleh', gameRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/pokemon', pokemonRoutes);
 app.use('/api/events', eventRoutes);
@@ -111,6 +113,7 @@ app.use('/api/compliance', complianceRoutes);
 app.use('/api/user', complianceRoutes);
 app.use('/api/moderation', moderationRoutes);
 app.use('/api/ht', htRoutes);
+app.use('/api/emergency', emergencyRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
