@@ -16,7 +16,7 @@ export class GaplehGame extends BaseGame {
     const gameMode: GaplehGameMode = isPartnership ? 'partnership' : 'individual';
     const ruleset: GaplehRuleset = config?.gaplehRuleset === 'tournament' ? 'tournament' : 'kampung';
     const targetScore = typeof config?.targetScore === 'number' ? config.targetScore : 250;
-    const level: 1 | 2 = config?.level === 2 ? 2 : 1;
+    const level: 1 | 2 = Number(config?.level) === 2 ? 2 : 1;
     this.playerStats = config?.playerStats || {};
 
     // Sort players by seat_number to ensure correct seating alternation:
@@ -389,7 +389,7 @@ export class GaplehGame extends BaseGame {
     }
 
     const validMoves = this.isPlayerTurn(userId)
-      ? GaplehRules.getValidMoves(myHand, this.state.board)
+      ? GaplehRules.getValidMoves(myHand, this.state.board, this.state.level)
       : [];
 
     return {

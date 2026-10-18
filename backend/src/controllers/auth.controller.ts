@@ -5,6 +5,7 @@ import { prisma } from '../utils/prisma';
 import { registerSchema, loginSchema } from '../utils/validation';
 import { isPrivilegedRole, normalizeRole } from '../middleware/rbac.middleware';
 import { verifyMfaCode } from '../services/mfa.service';
+import { PointsService } from '../services/points.service';
 import {
   clearAuthCookies,
   issueTokenPair,
@@ -79,7 +80,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { username, password, display_name, wallet_address, public_key } = value;
+    const { username, password, display_name, wallet_address, public_key, referral_code } = value;
     const existingUser = await prisma.user.findUnique({ where: { username } });
     if (existingUser) {
       res.status(409).json({ error: 'Username already taken' });
@@ -98,6 +99,32 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         role: 'user',
       },
     });
+
+    // Reward referral points to the user who shared their victory or invite link (+50 points)
+    if (referral_code) {
+      try {
+        const cleanRef = String(referral_code).trim().replace(/^@/, '');
+        const referrer = await prisma.user.findFirst({
+          where: {
+            OR: [
+              { username: { equals: cleanRef, mode: 'insensitive' } },
+              { id: cleanRef },
+            ],
+          },
+        });
+        if (referrer && referrer.id !== newUser.id) {
+          PointsService.getInstance().earnReferralReward(referrer.id, newUser.id);
+          console.info('Referral reward awarded for victory share join', {
+            referrer_id: referrer.id,
+            referrer_username: referrer.username,
+            new_user_id: newUser.id,
+            points: 50,
+          });
+        }
+      } catch (refErr) {
+        console.warn('Failed to award referral points on register:', refErr);
+      }
+    }
 
     console.info('Register success', { user_id: newUser.id, username: newUser.username });
     await completeLogin(req, res, newUser);

@@ -5,6 +5,8 @@ import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
 import { BotProfileService } from '../games/gapleh/BotProfileService';
 import { GaplehShareService } from '../games/gapleh/GaplehShareService';
+import { PointsService } from '../services/points.service';
+import { prisma } from '../utils/prisma';
 import jwt from 'jsonwebtoken';
 
 const router = Router();
@@ -76,6 +78,10 @@ router.post('/tables', async (req: Request, res: Response) => {
   const { gameType, name, maxPlayers, minPlayers, isPrivate, password, warungId, config } = req.body;
 
   try {
+    const finalConfig = config
+      ? { ...config, level: config.level !== undefined ? Number(config.level) : undefined }
+      : undefined;
+
     const table = await TableManager.createTable({
       gameType: (gameType as GameType) || 'gapleh',
       name: name || `Meja ${gameType || 'Gapleh'} Warkop`,
@@ -85,7 +91,7 @@ router.post('/tables', async (req: Request, res: Response) => {
       isPrivate: !!isPrivate,
       password: password || undefined,
       warungId: warungId || undefined,
-      config: config || undefined,
+      config: finalConfig as any,
     } as any);
 
     res.status(201).json({ success: true, table });
@@ -155,6 +161,47 @@ router.post(['/gapleh/share', '/share'], (req: Request, res: Response) => {
     design_template: shareData.designTemplate,
     target_url: shareData.targetUrl,
   });
+});
+
+// POST /api/games/gapleh/share/claim-referral (Claim referral when player joins via victory share link)
+router.post(['/gapleh/share/claim-referral', '/share/claim-referral'], async (req: Request, res: Response) => {
+  const user = getUserFromReq(req);
+  const { referrerUsername } = req.body;
+
+  if (!referrerUsername) {
+    return res.status(400).json({ success: false, error: 'Username referral tidak valid.' });
+  }
+
+  const cleanRef = String(referrerUsername).trim().replace(/^@/, '');
+  try {
+    const referrer = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { username: { equals: cleanRef, mode: 'insensitive' } },
+          { id: cleanRef },
+        ],
+      },
+    });
+
+    if (!referrer) {
+      return res.status(404).json({ success: false, error: 'User pengajak tidak ditemukan.' });
+    }
+
+    if (referrer.id === user.id) {
+      return res.status(400).json({ success: false, error: 'Tidak dapat mengklaim referral dari diri sendiri.' });
+    }
+
+    const result = PointsService.getInstance().earnReferralReward(referrer.id, user.id);
+    return res.status(200).json({
+      success: true,
+      message: `Poin referral (+50 Poin) berhasil diberikan kepada @${referrer.username}!`,
+      pointsAwarded: 50,
+      referrerUsername: referrer.username,
+      newBalance: result.newBalance,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || 'Gagal memproses referral.' });
+  }
 });
 
 // POST /api/games/tables/:id/bot

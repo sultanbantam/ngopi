@@ -641,3 +641,6 @@ export class PointsEconomyService {
 }
 
 export const pointsEconomyService = new PointsEconomyService();
+export const PointsService = {
+  getInstance: () => pointsEconomyService,
+};

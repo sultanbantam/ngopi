@@ -76,12 +76,12 @@ const GAPLEH_BOTS: Array<{
   difficulty: string;
   avatar: string;
 }> = [
-  { id: 'gapleh_2_budi', name: 'Budi', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
-  { id: 'gapleh_2_asep', name: 'Asep', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
-  { id: 'gapleh_2_rudi', name: 'Rudi', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
-  { id: 'gapleh_2_deni', name: 'Deni', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
-  { id: 'gapleh_2_jago', name: 'Bang Jago', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
-  { id: 'gapleh_2_maestro', name: 'Sang Maestro', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
+  { id: 'gapleh_2_budi', name: 'Gelideg', title: 'Kelas Bulu', personality: 'Pemalu, sering salah', difficulty: 'Pemula', avatar: '🐣' },
+  { id: 'gapleh_2_asep', name: 'Mangmad', title: 'Kelas Warung', personality: 'Ramah, main santai', difficulty: 'Kasual', avatar: '☕' },
+  { id: 'gapleh_2_rudi', name: 'Mangsante', title: 'Kelas Kampung', personality: 'Serius, kadang blunder', difficulty: 'Menengah', avatar: '🧢' },
+  { id: 'gapleh_2_deni', name: 'Hamlihi', title: 'Kelas Kota', personality: 'Cerdas, sering jebakan', difficulty: 'Mahir', avatar: '🕶️' },
+  { id: 'gapleh_2_jago', name: 'Sodung', title: 'Kelas Jagal', personality: 'Agresif, susah ditebak', difficulty: 'Expert', avatar: '🔥' },
+  { id: 'gapleh_2_maestro', name: 'Daman', title: 'Kelas Dunia', personality: 'Tenang, mematikan', difficulty: 'Juara', avatar: '👑' },
 ];
 
 function UnoCardTile({
@@ -636,7 +636,7 @@ export default function GameTableScreen() {
   // Action: Add Bot
   const handleAddBot = (botProfileId?: string) => {
     if (!socketRef.current || !tableId) return;
-    if (!botProfileId && table?.game_type === 'gapleh' && table?.config?.level === 2) {
+    if (!botProfileId && table?.game_type === 'gapleh' && Number(table?.config?.level) === 2) {
       setBotPickerVisible(true);
       return;
     }
@@ -683,7 +683,7 @@ export default function GameTableScreen() {
 
     const gameLabel = (table?.game_type || 'GAPLEH').toUpperCase();
     const winnerName = currentUsername || 'albantani';
-    const hookText = `menang maen ${gameLabel} sambil Ngopi! 🏆✨\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng ${winnerName} sekarang, klik: https://ngopi.top ☕🚀`;
+    const hookText = `menang maen ${gameLabel} sambil Ngopi! 🏆✨\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng ${winnerName} sekarang, klik: https://ngopi.top?ref=${encodeURIComponent(winnerName)} ☕🚀`;
 
     if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
       if (navigator.share) {
@@ -882,6 +882,11 @@ export default function GameTableScreen() {
     const board = gameState.board;
     // If board is empty, place directly
     if (board.leftEnd === null || board.rightEnd === null) {
+      const isLevel2 = table.game_type === 'gapleh' && (Number(table.config?.level) === 2 || Number(gameState.level) === 2);
+      if (isLevel2 && ((card[0] === 6 && card[1] === 6) || (card[0] === 0 && card[1] === 0))) {
+        Alert.alert('Aturan Level 2', 'Kartu pembuka tidak boleh dibuka dengan Balak 6 (6-6) atau Balak 0 (0-0).');
+        return;
+      }
       executePlayCard(card, 'left');
       return;
     }
@@ -1042,7 +1047,7 @@ export default function GameTableScreen() {
             {table.name}
           </Text>
           <Text style={styles.headerSub}>
-            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi • {table.game_type === 'gapleh' ? (table.config?.level === 2 ? '🔥 GAPLEH RAME (LEVEL 2)' : '☕ GAPLEH KLASIK (LEVEL 1)') : table.game_type?.toUpperCase()}
+            {isPlaying ? '🟢 Pertandingan Berlangsung' : '🟡 Menunggu Pemain'} • {table.players?.length}/{table.max_players} Kursi • {table.game_type === 'gapleh' ? (Number(table.config?.level) === 2 || Number(gameState?.level) === 2 ? '🔥 GAPLEH RAME (LEVEL 2)' : '☕ GAPLEH KLASIK (LEVEL 1)') : table.game_type?.toUpperCase()}
           </Text>
         </View>
 

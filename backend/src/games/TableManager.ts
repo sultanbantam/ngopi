@@ -75,7 +75,7 @@ const BOT_NAMES = [
   'Serbombok',
   'Kang Kopi Bot ☕',
   'Mang Udin Bot 🎲',
-  'Bang Jago Bot 🔥',
+  'Sodung Bot 🔥',
   'Pak RT Bot 🁫',
 ];
 
@@ -95,7 +95,10 @@ export class TableManager {
     config?: TableConfig;
   }): Promise<GameTableData> {
     const tableId = makeId('tbl');
-    const isLevel2Gapleh = params.gameType === 'gapleh' && params.config?.level === 2;
+    const isLevel2Gapleh = params.gameType === 'gapleh' && Number(params.config?.level) === 2;
+    if (params.config && isLevel2Gapleh) {
+      params.config.level = 2;
+    }
     const isPartnership = params.config?.gaplehMode === 'partnership';
     const isTwoPlayerOnly = ['catur', 'pokemon', 'daku', 'billiard'].includes(params.gameType);
     const maxPlayers = isLevel2Gapleh ? 4 : isPartnership ? 4 : isTwoPlayerOnly ? 2 : (params.maxPlayers || 4);
@@ -342,8 +345,18 @@ export class TableManager {
 
     let botName = '';
     let botId = '';
+    const isLevel2Gapleh = active.data.game_type === 'gapleh' && Number(active.data.config?.level) === 2;
+
     if (botProfileId) {
       const botProfile = BotProfileService.getBotProfile(botProfileId);
+      botName = `${botProfile.name} (${botProfile.title}) 🤖`;
+      botId = botProfile.bot_id;
+    } else if (isLevel2Gapleh) {
+      // Pick first unseated Level 2 character bot to maintain themed warkop cast
+      const seatedIds = new Set(active.data.players.map((p) => p.user_id));
+      const level2BotPool = ['gapleh_2_budi', 'gapleh_2_asep', 'gapleh_2_rudi', 'gapleh_2_deni', 'gapleh_2_jago', 'gapleh_2_maestro'];
+      const chosenBotId = level2BotPool.find((id) => !seatedIds.has(id)) || level2BotPool[0]!;
+      const botProfile = BotProfileService.getBotProfile(chosenBotId);
       botName = `${botProfile.name} (${botProfile.title}) 🤖`;
       botId = botProfile.bot_id;
     } else {

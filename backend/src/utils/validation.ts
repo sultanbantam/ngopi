@@ -12,6 +12,7 @@ export const registerSchema = Joi.object({
   display_name: safeText(50).required(),
   wallet_address: Joi.string().trim().max(120).allow(null, ''),
   public_key: Joi.string().trim().max(2048).required(),
+  referral_code: Joi.string().trim().max(100).allow(null, '').optional(),
 });
 
 export const loginSchema = Joi.object({

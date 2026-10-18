@@ -1,8 +1,8 @@
 import { afterProfileLogin } from '../../src/utils/profileLink';
 import { coffee } from '../../src/theme/coffee';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
 import { deriveKeyPairFromSeed, generateDeviceKeyPair } from '../../src/utils/e2ee';
@@ -15,12 +15,31 @@ import NgopiBrand from '../../src/components/NgopiBrand';
 
 
 export default function RegisterScreen() {
+  const params = useLocalSearchParams<{ ref?: string }>();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState<string>('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const initRef = async () => {
+      let code = params.ref ? String(params.ref) : '';
+      if (!code) {
+        if (Platform.OS === 'web') {
+          code = localStorage.getItem('referral_code') || '';
+        } else {
+          code = (await SecureStore.getItemAsync('referral_code')) || '';
+        }
+      }
+      if (code) {
+        setReferralCode(code.replace(/^@/, ''));
+      }
+    };
+    initRef();
+  }, [params.ref]);
 
   const handleRegister = async () => {
     const normalizedUsername = username.trim().toLowerCase();
@@ -60,7 +79,8 @@ export default function RegisterScreen() {
         username: normalizedUsername,
         password,
         display_name: normalizedDisplayName,
-        public_key: deviceKeys.publicKey
+        public_key: deviceKeys.publicKey,
+        referral_code: referralCode ? referralCode.trim() : undefined,
       }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
       const { token, refresh_token: refreshToken, user } = response.data;
 
@@ -72,11 +92,13 @@ export default function RegisterScreen() {
         localStorage.setItem('username', normalizedUsername);
         localStorage.setItem('userId', user.id);
         localStorage.setItem('private_key', deviceKeys.privateKey);
+        localStorage.removeItem('referral_code');
       } else {
         await SecureStore.setItemAsync('temp_key', password);
         await SecureStore.setItemAsync('username', normalizedUsername);
         await SecureStore.setItemAsync('userId', user.id);
         await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
+        try { await SecureStore.deleteItemAsync('referral_code'); } catch (_) {}
       }
 
       await afterProfileLogin();
@@ -93,6 +115,30 @@ export default function RegisterScreen() {
       <View style={styles.card}>
         <NgopiBrand />
         <Text style={styles.subtitle}>Mulai obrolan dengan akun unikmu.</Text>
+
+        {referralCode ? (
+          <View style={{
+            backgroundColor: 'rgba(234, 88, 12, 0.15)',
+            borderColor: '#ea580c',
+            borderWidth: 1,
+            borderRadius: 8,
+            padding: 10,
+            marginBottom: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+          }}>
+            <Text style={{ fontSize: 20 }}>🏆</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '700' }}>
+                Undangan dari @{referralCode}
+              </Text>
+              <Text style={{ color: coffee.secondary, fontSize: 10 }}>
+                Bergabung melalui link kemenangan! Kawan Anda akan menerima +50 Poin Referral.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 

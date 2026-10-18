@@ -1,23 +1,38 @@
 import { coffee } from '../src/theme/coffee';
 import { useEffect } from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { getLastRefreshFailureReason, getValidAccessToken, hasStoredSession } from '../src/utils/session';
+import { Platform } from 'react-native';
+import * as SecureStore from '../src/utils/storage';
 
 import NgopiBrand from '../src/components/NgopiBrand';
 
 export default function IndexScreen() {
+  const { ref } = useLocalSearchParams<{ ref?: string }>();
+
   useEffect(() => {
     const checkSession = async () => {
+      if (ref) {
+        if (Platform.OS === 'web') {
+          localStorage.setItem('referral_code', String(ref));
+        } else {
+          await SecureStore.setItemAsync('referral_code', String(ref));
+        }
+      }
+
       const hasSession = await hasStoredSession();
       if (hasSession) {
         router.replace('/(main)/warkop');
       } else {
-        router.replace('/(auth)/register');
+        router.replace({
+          pathname: '/(auth)/register',
+          params: ref ? { ref: String(ref) } : {},
+        });
       }
     };
     checkSession();
-  }, []);
+  }, [ref]);
 
   return (
     <View style={styles.container}>

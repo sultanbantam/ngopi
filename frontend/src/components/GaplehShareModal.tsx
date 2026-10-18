@@ -103,7 +103,9 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
 
   // Copy caption
   const handleCopyCaption = async () => {
-    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\nMain di: https://ngopi.top`;
+    const cleanUser = (data.username || '').replace(/^@/, '');
+    const targetUrl = cleanUser ? `https://ngopi.top?ref=${encodeURIComponent(cleanUser)}` : 'https://ngopi.top';
+    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\nMain di: ${targetUrl}`;
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(fullText);
@@ -111,7 +113,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
       setCopySuccess(true);
       setTimeout(() => setCopySuccess(false), 2000);
       if (Platform.OS !== 'web') {
-        Alert.alert('Berhasil', 'Caption berhasil disalin ke clipboard!');
+        Alert.alert('Berhasil', 'Caption & link referral kemenangan berhasil disalin!');
       }
     } catch (err) {
       Alert.alert('Info', fullText);
@@ -120,7 +122,9 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
 
   // Open Social Deep Links
   const handleShareSocial = async (platform: 'whatsapp' | 'twitter' | 'facebook' | 'native') => {
-    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\nhttps://ngopi.top`;
+    const cleanUser = (data.username || '').replace(/^@/, '');
+    const targetUrl = cleanUser ? `https://ngopi.top?ref=${encodeURIComponent(cleanUser)}` : 'https://ngopi.top';
+    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\n${targetUrl}`;
 
     if (platform === 'native') {
       try {
@@ -128,13 +132,13 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
           await (navigator as any).share({
             title: 'Kemenangan Gapleh di Ngopi',
             text: caption,
-            url: 'https://ngopi.top',
+            url: targetUrl,
           });
           return;
         }
         await RNShare.share({
           message: fullText,
-          url: 'https://ngopi.top',
+          url: targetUrl,
           title: 'Kemenangan Gapleh di Ngopi',
         });
       } catch (err) {
@@ -143,14 +147,14 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
       return;
     }
 
-    const targetUrl = shareLinks[platform];
-    if (targetUrl) {
+    const deepLinkUrl = shareLinks[platform];
+    if (deepLinkUrl) {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.open(targetUrl, '_blank');
+        window.open(deepLinkUrl, '_blank');
       } else {
-        const canOpen = await Linking.canOpenURL(targetUrl);
+        const canOpen = await Linking.canOpenURL(deepLinkUrl);
         if (canOpen) {
-          await Linking.openURL(targetUrl);
+          await Linking.openURL(deepLinkUrl);
         } else {
           handleCopyCaption();
         }
@@ -414,6 +418,32 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
                   {copySuccess ? 'Tersalin ke Clipboard!' : 'Salin Caption & Link'}
                 </Text>
               </TouchableOpacity>
+            </View>
+
+            {/* Referral Reward Info Banner */}
+            <View
+              style={{
+                backgroundColor: 'rgba(234, 88, 12, 0.12)',
+                borderColor: 'rgba(234, 88, 12, 0.4)',
+                borderWidth: 1,
+                borderRadius: 8,
+                padding: 10,
+                marginTop: 10,
+                marginBottom: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+              }}
+            >
+              <Text style={{ fontSize: 18 }}>🎁</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#fb923c', fontSize: 11, fontWeight: '800' }}>
+                  Bonus Referral Kemenangan (+50 Poin)
+                </Text>
+                <Text style={{ color: coffee.secondary, fontSize: 10, marginTop: 1 }}>
+                  Setiap kawan yang bergabung melalui link kemenangan Anda akan memberi Anda +50 Poin Warkop!
+                </Text>
+              </View>
             </View>
 
             {/* Social Share Buttons (WhatsApp, X, Facebook, Native) */}

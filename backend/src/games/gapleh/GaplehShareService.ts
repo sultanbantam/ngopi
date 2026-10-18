@@ -116,7 +116,8 @@ export class GaplehShareService {
     if (winType === 'digapleh') hashtags.push('Digapleh', 'GaplehBuntu');
     if (streakCount >= 2) hashtags.push(`Streak${streakCount}x`);
 
-    const targetUrl = 'https://ngopi.top';
+    const cleanUsername = (username || '').replace(/^@/, '');
+    const targetUrl = cleanUsername ? `https://ngopi.top?ref=${encodeURIComponent(cleanUsername)}` : 'https://ngopi.top';
     const hashtagsText = hashtags.map((h) => `#${h}`).join(' ');
 
     const shareLinks = {
