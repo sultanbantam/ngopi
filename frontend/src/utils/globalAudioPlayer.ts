@@ -46,33 +46,43 @@ class GlobalAudioPlayer {
   private intervalTimer: any = null;
   private resolvedUrlCache: Map<string, string> = new Map();
 
-  public async resolvePlayableUri(track: GlobalTrack): Promise<string> {
+  private fullTrackMap: Record<string, string> = {
+    'trk_dt_spirit': 'https://api.ngopi.top/uploads/mixtape_songs/trk_dt_spirit.mp3',
+    'trk_u2_one': 'https://api.ngopi.top/uploads/mixtape_songs/trk_u2_one.mp3',
+    'trk_manowar_heart_of_steel': 'https://api.ngopi.top/uploads/mixtape_songs/trk_manowar_heart_of_steel.mp3',
+    'trk_pearljam_alive': 'https://api.ngopi.top/uploads/mixtape_songs/trk_pearljam_alive.mp3',
+    'trk_nirvana_smells': 'https://api.ngopi.top/uploads/mixtape_songs/trk_nirvana_smells.mp3',
+    'trk_kantata_nyanyian_jiwa': 'https://api.ngopi.top/uploads/mixtape_songs/trk_kantata_nyanyian_jiwa.mp3',
+    'trk_pasband_kesepian_kita': 'https://api.ngopi.top/uploads/mixtape_songs/trk_pasband_kesepian_kita.mp3',
+    'trk_gnr_november_rain': 'https://api.ngopi.top/uploads/mixtape_songs/trk_gnr_november_rain.mp3',
+    'trk_met_the_unforgiven': 'https://api.ngopi.top/uploads/mixtape_songs/trk_met_the_unforgiven.mp3',
+    'trk_dewa_elang': 'https://api.ngopi.top/uploads/mixtape_songs/trk_dewa_elang.mp3',
+  };
+
+  public resolvePlayableUri(track: GlobalTrack): string {
     if (!track) return '';
-    const cleanTitle = (track.title || '').replace(/\[.*?\]|\(.*?\)/g, '').trim();
-    const cleanArtist = (track.artist || '').trim();
-    const cacheKey = `${cleanTitle.toLowerCase()}:::${cleanArtist.toLowerCase()}`;
-    if (this.resolvedUrlCache.has(cacheKey)) {
-      return this.resolvedUrlCache.get(cacheKey)!;
-    }
-
-    try {
-      const q = encodeURIComponent(`${cleanArtist} ${cleanTitle}`.trim());
-      const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
-      const data = await res.json();
-      let item = data?.results?.[0];
-      if (!item && cleanTitle) {
-        const res2 = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle)}&entity=song&limit=1`);
-        const data2 = await res2.json();
-        item = data2?.results?.[0];
+    // Check ID mapping first
+    for (const [idKey, hostedUrl] of Object.entries(this.fullTrackMap)) {
+      if (track.id && track.id.includes(idKey)) {
+        return hostedUrl;
       }
-      if (item?.previewUrl) {
-        this.resolvedUrlCache.set(cacheKey, item.previewUrl);
-        return item.previewUrl;
-      }
-    } catch (e) {
-      console.warn('[GlobalAudioPlayer] iTunes fallback search failed:', e);
     }
-
+    const cleanTitle = (track.title || '').replace(/\[.*?\]|\(.*?\)/g, '').trim().toLowerCase();
+    for (const [idKey, hostedUrl] of Object.entries(this.fullTrackMap)) {
+      const namePart = idKey.replace(/^trk_/, '').replace(/_/g, ' ');
+      if (cleanTitle.includes(namePart) || (track.artist && idKey.includes(track.artist.toLowerCase().split(' ')[0]))) {
+        if (cleanTitle.includes('spirit') && idKey === 'trk_dt_spirit') return hostedUrl;
+        if (cleanTitle.includes('one') && idKey === 'trk_u2_one') return hostedUrl;
+        if (cleanTitle.includes('heart of steel') && idKey === 'trk_manowar_heart_of_steel') return hostedUrl;
+        if (cleanTitle.includes('alive') && idKey === 'trk_pearljam_alive') return hostedUrl;
+        if (cleanTitle.includes('smells') && idKey === 'trk_nirvana_smells') return hostedUrl;
+        if (cleanTitle.includes('nyanyian jiwa') && idKey === 'trk_kantata_nyanyian_jiwa') return hostedUrl;
+        if (cleanTitle.includes('kesepian') && idKey === 'trk_pasband_kesepian_kita') return hostedUrl;
+        if (cleanTitle.includes('november') && idKey === 'trk_gnr_november_rain') return hostedUrl;
+        if (cleanTitle.includes('unforgiven') && idKey === 'trk_met_the_unforgiven') return hostedUrl;
+        if (cleanTitle.includes('elang') && idKey === 'trk_dewa_elang') return hostedUrl;
+      }
+    }
     return track.track_uri;
   }
 
@@ -170,25 +180,23 @@ class GlobalAudioPlayer {
         }
       }
 
-      // 2. Song fallback: resolve automatically to Apple CDN
-      if (!audio.src.includes('itunes.apple.com') && !audio.src.includes('mzstatic.com')) {
-        try {
-          const fallbackUri = await this.resolvePlayableUri(track);
-          if (fallbackUri && fallbackUri !== audio.src) {
-            console.log('[GlobalAudioPlayer] Switching to resolved playable source:', fallbackUri);
-            track.track_uri = fallbackUri;
-            audio.src = fallbackUri;
-            audio.load();
-            await audio.play();
-            this.state.isPlaying = true;
-            this.state.isLoading = false;
-            this.state.error = null;
-            this.notify();
-            return;
-          }
-        } catch (resErr) {
-          console.warn('[GlobalAudioPlayer] Fallback play error:', resErr);
+      // 2. Song fallback: resolve to full hosted track
+      try {
+        const fallbackUri = this.resolvePlayableUri(track);
+        if (fallbackUri && fallbackUri !== audio.src) {
+          console.log('[GlobalAudioPlayer] Switching to full hosted audio source:', fallbackUri);
+          track.track_uri = fallbackUri;
+          audio.src = fallbackUri;
+          audio.load();
+          await audio.play();
+          this.state.isPlaying = true;
+          this.state.isLoading = false;
+          this.state.error = null;
+          this.notify();
+          return;
         }
+      } catch (resErr) {
+        console.warn('[GlobalAudioPlayer] Fallback play error:', resErr);
       }
 
       this.state.isLoading = false;
@@ -292,7 +300,8 @@ class GlobalAudioPlayer {
           return;
         }
 
-        audio.src = track.track_uri;
+        const initialUri = this.resolvePlayableUri(track);
+        audio.src = initialUri;
         audio.load();
         const playPromise = audio.play();
         if (playPromise !== undefined) {
@@ -302,7 +311,7 @@ class GlobalAudioPlayer {
               this.state.isLoading = false;
               this.notify();
             })
-            .catch(async (err: any) => {
+            .catch((err: any) => {
               if (err?.name === 'AbortError') return;
               console.warn('[GlobalAudioPlayer] Direct play error:', err);
               if (isRadio) {
@@ -317,21 +326,6 @@ class GlobalAudioPlayer {
                   }
                 });
               } else {
-                try {
-                  const fallbackUri = await this.resolvePlayableUri(track);
-                  if (fallbackUri && fallbackUri !== audio.src) {
-                    console.log('[GlobalAudioPlayer] Switching to resolved playable source after play rejection:', fallbackUri);
-                    track.track_uri = fallbackUri;
-                    audio.src = fallbackUri;
-                    audio.load();
-                    await audio.play();
-                    this.state.isPlaying = true;
-                    this.state.isLoading = false;
-                    this.state.error = null;
-                    this.notify();
-                    return;
-                  }
-                } catch {}
                 this.state.error = 'Pemutaran audio diblokir browser atau format tidak didukung.';
                 this.state.isPlaying = false;
                 this.notify();
