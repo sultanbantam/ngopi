@@ -63,9 +63,24 @@ interface TopGameItem {
   matchesPlayed: number;
 }
 
+export interface TopAlbumItem {
+  id: string;
+  rank: number;
+  title: string;
+  description?: string;
+  cover_emoji?: string;
+  creator_id: string;
+  creator_username: string;
+  creator_name: string;
+  track_count: number;
+  play_count: number;
+  royalty_points: number;
+}
+
 interface LeaderboardData {
   top_points: TopPointUser[];
   top_gapleh?: TopGaplehItem[];
+  top_albums?: TopAlbumItem[];
   top_music: TopMusicTrack[];
   top_radio: TopRadioStation[];
   top_games: TopGameItem[];
@@ -75,10 +90,11 @@ interface LeaderboardModalProps {
   visible: boolean;
   onClose: () => void;
   onSelectRadio?: (stationId: string) => void;
+  onSelectAlbum?: (albumId: string) => void;
   initialTab?: TabType;
 }
 
-type TabType = 'points' | 'gapleh' | 'music' | 'radio' | 'games';
+type TabType = 'points' | 'gapleh' | 'albums' | 'music' | 'radio' | 'games';
 
 const getBotEmoji = (botId: string) => {
   if (botId.includes('budi')) return '👶';
@@ -98,7 +114,7 @@ const getBadgeStyle = (badgeName: string) => {
   return { backgroundColor: 'rgba(212, 163, 115, 0.15)', borderColor: coffee.accent, color: coffee.accent };
 };
 
-export default function LeaderboardModal({ visible, onClose, onSelectRadio, initialTab }: LeaderboardModalProps) {
+export default function LeaderboardModal({ visible, onClose, onSelectRadio, onSelectAlbum, initialTab }: LeaderboardModalProps) {
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'points');
   const [data, setData] = useState<LeaderboardData | null>(null);
   const [loading, setLoading] = useState(false);
@@ -178,6 +194,16 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
               <Text style={{ fontSize: 13 }}>🁫</Text>
               <Text style={[styles.tabText, activeTab === 'gapleh' && styles.tabTextActive]}>
                 Gapleh
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'albums' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('albums')}
+            >
+              <Text style={{ fontSize: 13 }}>💿</Text>
+              <Text style={[styles.tabText, activeTab === 'albums' && styles.tabTextActive]}>
+                Album
               </Text>
             </TouchableOpacity>
 
@@ -362,6 +388,76 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
                   ) : (
                     <View style={styles.emptyWrap}>
                       <Text style={styles.emptyText}>Memuat klasemen gapleh...</Text>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* TAB 3: ALBUM KOMPILASI PALING BANYAK DIPUTAR & ROYALTI */}
+              {activeTab === 'albums' && (
+                <View style={styles.tabContent}>
+                  <View style={[styles.tabBanner, { borderColor: '#d97706', backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={[styles.tabBannerTitle, { color: '#fbbf24' }]}>💿 Klasemen Album Kompilasi Warkop</Text>
+                      <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.25)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#f59e0b' }}>
+                        <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '800' }}>🪙 Royalti +10 Poin / Putar</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.tabBannerDesc}>
+                      Peringkat album lagu utuh kurasi warga Warkop. Setiap kali albummu diputar oleh pengunjung lain, kamu otomatis mendapatkan royalti +10 Poin Ngopi!
+                    </Text>
+                  </View>
+
+                  {data?.top_albums && data.top_albums.length > 0 ? (
+                    data.top_albums.map((item, idx) => {
+                      const badge = getRankBadge(idx);
+                      return (
+                        <View key={item.id} style={styles.rankCard}>
+                          <View style={[styles.rankBadge, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+                            <Text style={[styles.rankText, { color: badge.color }]}>{badge.icon}</Text>
+                          </View>
+
+                          <View style={styles.albumCoverWrap}>
+                            <Text style={{ fontSize: 22 }}>{item.cover_emoji || '💿'}</Text>
+                          </View>
+
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.itemName} numberOfLines={1}>
+                              {item.title}
+                            </Text>
+                            <Text style={styles.itemSub} numberOfLines={1}>
+                              Oleh @{item.creator_username} • {item.track_count || 10} Lagu Utuh
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <View style={styles.royaltyPill}>
+                                <Text style={styles.royaltyText}>+{item.royalty_points || 0} Poin Royalti 🪙</Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                            <View style={styles.countPill}>
+                              <Text style={styles.countVal}>{item.play_count}</Text>
+                              <Text style={styles.countLabel}>x Diputar</Text>
+                            </View>
+                            {onSelectAlbum && (
+                              <TouchableOpacity
+                                style={styles.listenShortcut}
+                                onPress={() => {
+                                  onSelectAlbum(item.id);
+                                  onClose();
+                                }}
+                              >
+                                <Text style={styles.listenShortcutText}>Buka / Putar ▶</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })
+                  ) : (
+                    <View style={styles.emptyWrap}>
+                      <Text style={styles.emptyText}>Belum ada album yang diputar. Rilis album kompilasimu dan kumpulkan royalti poin!</Text>
                     </View>
                   )}
                 </View>
@@ -726,6 +822,29 @@ const styles = StyleSheet.create({
     backgroundColor: '#382619',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  albumCoverWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: '#2e1f14',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  royaltyPill: {
+    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  royaltyText: {
+    color: '#fbbf24',
+    fontSize: 10,
+    fontWeight: '800',
   },
   itemName: {
     color: coffee.text,

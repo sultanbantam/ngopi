@@ -44,6 +44,37 @@ class GlobalAudioPlayer {
   private audioEl: HTMLAudioElement | null = null;
   private onEndCallback: (() => void) | null = null;
   private intervalTimer: any = null;
+  private resolvedUrlCache: Map<string, string> = new Map();
+
+  public async resolvePlayableUri(track: GlobalTrack): Promise<string> {
+    if (!track) return '';
+    const cleanTitle = (track.title || '').replace(/\[.*?\]|\(.*?\)/g, '').trim();
+    const cleanArtist = (track.artist || '').trim();
+    const cacheKey = `${cleanTitle.toLowerCase()}:::${cleanArtist.toLowerCase()}`;
+    if (this.resolvedUrlCache.has(cacheKey)) {
+      return this.resolvedUrlCache.get(cacheKey)!;
+    }
+
+    try {
+      const q = encodeURIComponent(`${cleanArtist} ${cleanTitle}`.trim());
+      const res = await fetch(`https://itunes.apple.com/search?term=${q}&entity=song&limit=1`);
+      const data = await res.json();
+      let item = data?.results?.[0];
+      if (!item && cleanTitle) {
+        const res2 = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle)}&entity=song&limit=1`);
+        const data2 = await res2.json();
+        item = data2?.results?.[0];
+      }
+      if (item?.previewUrl) {
+        this.resolvedUrlCache.set(cacheKey, item.previewUrl);
+        return item.previewUrl;
+      }
+    } catch (e) {
+      console.warn('[GlobalAudioPlayer] iTunes fallback search failed:', e);
+    }
+
+    return track.track_uri;
+  }
 
   constructor() {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -116,11 +147,13 @@ class GlobalAudioPlayer {
       }
     };
 
-    audio.onerror = (e) => {
-      console.warn('[GlobalAudioPlayer] Audio error:', e);
+    audio.onerror = async (e) => {
+      console.warn('[GlobalAudioPlayer] Audio error on source:', audio.src, e);
       const track = this.state.track;
-      // If error occurred on radio stream, fallback to proxy stream
-      if (track && (track.is_radio || track.added_by === 'Radio Warkop' || track.track_uri.includes('stream'))) {
+      if (!track) return;
+
+      // 1. Radio fallback
+      if (track.is_radio || track.added_by === 'Radio Warkop' || track.track_uri.includes('stream')) {
         if (!audio.src.includes('/api/jukebox/radio/stream')) {
           const proxy = `https://api.ngopi.top/api/jukebox/radio/stream?url=${encodeURIComponent(track.track_uri)}`;
           console.log('[GlobalAudioPlayer] Attempting radio stream proxy:', proxy);
@@ -128,7 +161,7 @@ class GlobalAudioPlayer {
           audio.load();
           audio.play().catch(err => {
             if (err?.name !== 'AbortError') {
-              this.state.error = 'Gagal memutar siaran radio';
+              this.state.error = 'Siaran sedang offline atau diblokir browser.';
               this.state.isPlaying = false;
               this.notify();
             }
@@ -136,6 +169,28 @@ class GlobalAudioPlayer {
           return;
         }
       }
+
+      // 2. Song fallback: resolve automatically to Apple CDN
+      if (!audio.src.includes('itunes.apple.com') && !audio.src.includes('mzstatic.com')) {
+        try {
+          const fallbackUri = await this.resolvePlayableUri(track);
+          if (fallbackUri && fallbackUri !== audio.src) {
+            console.log('[GlobalAudioPlayer] Switching to resolved playable source:', fallbackUri);
+            track.track_uri = fallbackUri;
+            audio.src = fallbackUri;
+            audio.load();
+            await audio.play();
+            this.state.isPlaying = true;
+            this.state.isLoading = false;
+            this.state.error = null;
+            this.notify();
+            return;
+          }
+        } catch (resErr) {
+          console.warn('[GlobalAudioPlayer] Fallback play error:', resErr);
+        }
+      }
+
       this.state.isLoading = false;
       this.state.error = 'Gagal memutar audio';
       this.notify();
@@ -247,7 +302,7 @@ class GlobalAudioPlayer {
               this.state.isLoading = false;
               this.notify();
             })
-            .catch((err: any) => {
+            .catch(async (err: any) => {
               if (err?.name === 'AbortError') return;
               console.warn('[GlobalAudioPlayer] Direct play error:', err);
               if (isRadio) {
@@ -262,6 +317,21 @@ class GlobalAudioPlayer {
                   }
                 });
               } else {
+                try {
+                  const fallbackUri = await this.resolvePlayableUri(track);
+                  if (fallbackUri && fallbackUri !== audio.src) {
+                    console.log('[GlobalAudioPlayer] Switching to resolved playable source after play rejection:', fallbackUri);
+                    track.track_uri = fallbackUri;
+                    audio.src = fallbackUri;
+                    audio.load();
+                    await audio.play();
+                    this.state.isPlaying = true;
+                    this.state.isLoading = false;
+                    this.state.error = null;
+                    this.notify();
+                    return;
+                  }
+                } catch {}
                 this.state.error = 'Pemutaran audio diblokir browser atau format tidak didukung.';
                 this.state.isPlaying = false;
                 this.notify();

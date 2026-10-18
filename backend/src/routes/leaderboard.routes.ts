@@ -5,6 +5,7 @@ import { pointsEconomyService } from '../services/points.service';
 import { TableManager } from '../games/TableManager';
 import { BotProfileService } from '../games/gapleh/BotProfileService';
 import { GameStatsService, recordGameMatch, updateGameStats, getTopGames } from '../services/gameStats.service';
+import { AlbumService } from '../services/album.service';
 import fs from 'fs';
 import path from 'path';
 
@@ -242,6 +243,14 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
         rank: idx + 1,
       }));
 
+    // 6. Top Compilation Albums (Paling Banyak Diputar & Royalti Poin)
+    let topAlbums: any[] = [];
+    try {
+      topAlbums = AlbumService.getTopAlbums(25);
+    } catch (e) {
+      console.warn('Failed to get top albums for leaderboard:', e);
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -250,11 +259,23 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
         top_radio: topRadio,
         top_games: topGames,
         top_gapleh: topGapleh,
+        top_albums: topAlbums,
       },
     });
   } catch (error: any) {
     console.error('Error fetching leaderboard:', error);
     res.status(500).json({ success: false, error: 'Gagal memuat data klasemen.' });
+  }
+});
+
+// GET /api/leaderboard/albums - Dedicated Top Albums Leaderboard
+router.get('/albums', (_req: Request, res: Response) => {
+  try {
+    const topAlbums = AlbumService.getTopAlbums(50);
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.status(200).json({ success: true, top_albums: topAlbums });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e?.message });
   }
 });
 

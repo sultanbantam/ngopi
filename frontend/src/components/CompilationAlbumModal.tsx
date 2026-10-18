@@ -327,18 +327,21 @@ export default function CompilationAlbumModal({
     }
   };
 
-  // Play full album
-  const handlePlayAlbum = (album: CompilationAlbum) => {
+  // Play full album or track at index
+  const handlePlayAlbum = (album: CompilationAlbum, startIndex = 0) => {
     if (!album.tracks || album.tracks.length === 0) {
       Alert.alert('Album Kosong', 'Album ini belum memiliki daftar lagu.');
       return;
     }
 
-    // Record album play count on backend
-    axios.post(`${API_URL}/albums/${album.id}/play`).catch(() => {});
+    // Record album play count on backend & credit creator with +10 royalti points if listener is someone else
+    axios.post(`${API_URL}/albums/${album.id}/play`, {
+      listenerId: currentUserId,
+      listenerUsername: currentUsername,
+    }).catch(() => {});
 
     // Set onEndCallback on globalAudioPlayer to automatically chain tracks
-    let currentIndex = 0;
+    let currentIndex = startIndex;
     const playTrackAtIndex = (idx: number) => {
       if (idx < 0 || idx >= album.tracks.length) return;
       currentIndex = idx;
@@ -364,13 +367,18 @@ export default function CompilationAlbumModal({
       });
     };
 
-    playTrackAtIndex(0);
-    Alert.alert('Memutar Album 💿', `Memutar "${album.title}" oleh ${album.creator_display_name} (Lagu 1 dari ${album.tracks.length})`);
+    playTrackAtIndex(startIndex);
+    Alert.alert('Memutar Album 💿', `Memutar "${album.title}" oleh ${album.creator_display_name} (Lagu ${startIndex + 1} dari ${album.tracks.length})`);
   };
 
-  // Share Album Actions
+  // Share Album Actions with catchy hook
   const getShareText = (album: CompilationAlbum) => {
-    return `Dengerin Album Kompilasi Warkop buatanku: '${album.cover_emoji} ${album.title}' (${album.tracks.length} Lagu Utuh Pilihan) di Ngopi! 💿☕\n\nNongkrong, denger musik asik, dan main game warkop bareng di sini: ${album.share_url}`;
+    const highlights = album.tracks?.slice(0, 3).map((t) => t.title).join(', ');
+    return `🔥 Wajib Dengerin! Album Kompilasi Warkop Pilihan:\n` +
+      `"${album.cover_emoji} ${album.title}"\n` +
+      `Kurasi spesial oleh @${album.creator_username} (${album.tracks?.length || 10} Lagu Utuh)${highlights ? `\n🎶 Hits pilihan: ${highlights}...` : ''}\n\n` +
+      `Mau nostalgia sambil nongkrong santai? Putar album lengkapnya gratis tanpa iklan di web ngopi.top:\n` +
+      `${album.share_url}`;
   };
 
   const handleShareSocial = (platform: 'whatsapp' | 'twitter' | 'facebook' | 'copy', album: CompilationAlbum) => {
@@ -542,7 +550,12 @@ export default function CompilationAlbumModal({
                         <View style={styles.expandedTracklist}>
                           <Text style={styles.tracklistHeader}>Daftar Lagu ({alb.tracks?.length}):</Text>
                           {alb.tracks?.map((trk, tIdx) => (
-                            <View key={trk.id || tIdx} style={styles.trackRow}>
+                            <TouchableOpacity
+                              key={trk.id || tIdx}
+                              style={styles.trackRow}
+                              onPress={() => handlePlayAlbum(alb, tIdx)}
+                              activeOpacity={0.7}
+                            >
                               <Text style={styles.trackNumber}>{tIdx + 1}.</Text>
                               <View style={{ flex: 1, minWidth: 0 }}>
                                 <Text style={styles.trackRowTitle} numberOfLines={1}>
@@ -552,10 +565,13 @@ export default function CompilationAlbumModal({
                                   {trk.artist}
                                 </Text>
                               </View>
-                              <View style={styles.fullTrackTag}>
-                                <Text style={styles.fullTrackTagText}>Utuh ✨</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={styles.fullTrackTag}>
+                                  <Text style={styles.fullTrackTagText}>Utuh ✨</Text>
+                                </View>
+                                <Ionicons name="play-circle" size={18} color={coffee.accent} />
                               </View>
-                            </View>
+                            </TouchableOpacity>
                           ))}
                         </View>
                       )}

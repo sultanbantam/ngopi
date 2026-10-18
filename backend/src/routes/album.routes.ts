@@ -11,7 +11,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'bamboochat-super-secret-key-change
 const extractUser = (req: Request): { id: string; username: string; display_name: string } | null => {
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1];
+    const token = authHeader.split(' ')[1] || '';
     try {
       const decoded: any = jwt.verify(token, JWT_SECRET);
       if (decoded && (decoded.id || decoded.userId)) {
@@ -64,7 +64,7 @@ router.get('/', (req: Request, res: Response) => {
 // GET /api/albums/:id - Get specific album
 router.get('/:id', (req: Request, res: Response) => {
   try {
-    const album = AlbumService.getAlbumById(req.params.id);
+    const album = AlbumService.getAlbumById(String(req.params.id || ''));
     if (!album) {
       return res.status(404).json({ success: false, error: 'Album kompilasi tidak ditemukan.' });
     }
@@ -95,7 +95,7 @@ router.post('/', (req: Request, res: Response) => {
       title,
       description,
       coverEmoji,
-      capacity: Number(capacity) || undefined,
+      capacity: Number(capacity) || 10,
       tracks: Array.isArray(tracks) ? tracks : [],
     });
 
@@ -109,10 +109,15 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/albums/:id/play - Record album play
+// POST /api/albums/:id/play - Record album play & award royalties
 router.post('/:id/play', (req: Request, res: Response) => {
   try {
-    const playCount = AlbumService.recordAlbumPlay(req.params.id);
+    const user = extractUser(req);
+    const listenerId = user?.id || (req.body?.listenerId ? String(req.body.listenerId) : undefined);
+    const listenerUsername = user?.username || (req.body?.listenerUsername ? String(req.body.listenerUsername) : undefined);
+
+    const listener = listenerId ? { userId: listenerId, username: listenerUsername } : undefined;
+    const playCount = AlbumService.recordAlbumPlay(String(req.params.id || ''), listener);
     res.status(200).json({ success: true, playCount });
   } catch (e: any) {
     res.status(500).json({ success: false, error: e?.message });

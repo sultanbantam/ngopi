@@ -1380,6 +1380,10 @@ export default function BambupediaRoom() {
       <LeaderboardModal
         visible={leaderboardVisible}
         onClose={() => setLeaderboardVisible(false)}
+        onSelectAlbum={(albId) => {
+          setSharedAlbumId(albId);
+          setAlbumModalVisible(true);
+        }}
       />
 
       {/* HT Walkie-Talkie Modal */}

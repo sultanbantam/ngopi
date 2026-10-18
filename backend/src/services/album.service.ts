@@ -2090,12 +2090,12 @@ export class AlbumService {
       let parsedArtist = 'Pilihan Warkop';
       if (rawQ.includes('-')) {
         const parts = rawQ.split('-');
-        parsedArtist = parts[0].trim();
-        parsedTitle = parts.slice(1).join('-').trim();
+        parsedArtist = (parts[0] || 'Pilihan Warkop').trim();
+        parsedTitle = (parts.slice(1).join('-') || capitalizedQuery).trim();
       } else if (rawQ.toLowerCase().includes(' by ')) {
         const parts = rawQ.split(/ by /i);
-        parsedTitle = parts[0].trim();
-        parsedArtist = parts[1].trim();
+        parsedTitle = (parts[0] || capitalizedQuery).trim();
+        parsedArtist = (parts[1] || 'Pilihan Warkop').trim();
       }
 
       combined.push({
@@ -2171,7 +2171,7 @@ export class AlbumService {
       pointsEconomyService.addDirectPoints(
         userId || username,
         -pointsCost,
-        'item_purchase',
+        'purchase_badge' as any,
         `Rilis Album Kompilasi: ${title.trim()} (${tracks.length}/${effectiveCapacity} Lagu)`
       );
     } catch (e: any) {
@@ -2224,14 +2224,66 @@ export class AlbumService {
     return albums.find((a) => a.id === albumId) || null;
   }
 
-  public static recordAlbumPlay(albumId: string): number {
+  public static recordAlbumPlay(
+    albumId: string,
+    listener?: { userId?: string; username?: string }
+  ): { playCount: number; royaltyAwarded: boolean; royaltyPoints: number } {
     const albums = this.loadAlbums();
     const album = albums.find((a) => a.id === albumId);
-    if (album) {
-      album.play_count = (album.play_count || 0) + 1;
-      this.saveAlbums(albums);
-      return album.play_count;
+    if (!album) {
+      return { playCount: 0, royaltyAwarded: false, royaltyPoints: 0 };
     }
-    return 0;
+
+    album.play_count = (album.play_count || 0) + 1;
+
+    let royaltyAwarded = false;
+    const isSelfPlay = Boolean(
+      listener && (
+        (listener.userId && (listener.userId === album.user_id || listener.userId === album.creator_username)) ||
+        (listener.username && (listener.username === album.creator_username || listener.username === album.user_id))
+      )
+    );
+
+    // If another user plays this album, award 10 points royalty to the album creator!
+    if (!isSelfPlay && album.creator_username) {
+      try {
+        const creatorTarget = album.creator_username || album.user_id;
+        const currentCreatorPts = PointsManager.getPoints(creatorTarget) || 0;
+        const newCreatorPts = currentCreatorPts + 10;
+        PointsManager.setPoints(creatorTarget, newCreatorPts);
+        if (album.user_id && album.user_id !== creatorTarget) {
+          PointsManager.setPoints(album.user_id, newCreatorPts);
+        }
+
+        pointsEconomyService.addDirectPoints(
+          album.user_id || album.creator_username,
+          10,
+          'referral_reward' as any,
+          `Royalti Album Kompilasi: "${album.title}" diputar oleh warga warkop (+10 Poin)`
+        );
+        royaltyAwarded = true;
+      } catch (err) {
+        console.warn('Failed to award album royalty points:', err);
+      }
+    }
+
+    this.saveAlbums(albums);
+    return {
+      playCount: album.play_count,
+      royaltyAwarded,
+      royaltyPoints: (album.play_count || 0) * 10,
+    };
+  }
+
+  public static getTopAlbums(limit: number = 20): (CompilationAlbum & { rank: number; royalty_points: number })[] {
+    const albums = this.loadAlbums();
+    return albums
+      .sort((a, b) => (b.play_count || 0) - (a.play_count || 0))
+      .slice(0, limit)
+      .map((album, idx) => ({
+        ...album,
+        rank: idx + 1,
+        royalty_points: (album.play_count || 0) * 10,
+      }));
   }
 }

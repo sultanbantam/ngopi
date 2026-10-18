@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
+import { AlbumService } from '../services/album.service';
 const router = Router();
 const BASE_URL = 'https://ngopi.top';
 const DEFAULT_IMAGE = `${BASE_URL}/ngopi-share-v3.jpg`;
@@ -24,11 +25,31 @@ router.get('/', async (req: Request, res: Response) => {
   let title = 'Ngopi — ngobrol paling intim';
   let description = 'Daftar tanpa nomor HP/email. Nikmati chat aman, voice, video call, kirim gambar, dokumen, dan alihbahasa otomatis.';
   let image = DEFAULT_IMAGE;
+  let customUrl = '';
   try {
+    // Check for compilation album share query
+    const albumId = req.query.album
+      ? String(req.query.album)
+      : (typeof req.query.path === 'string' && req.query.path.includes('album='))
+        ? req.query.path.split('album=')[1]?.split('&')[0] || null
+        : null;
+
+    if (albumId) {
+      const album = AlbumService.getAlbumById(albumId);
+      if (album) {
+        const creator = album.creator_display_name || album.creator_username || 'Warga Warkop';
+        const trackCount = album.tracks?.length || album.capacity || 10;
+        const highlights = album.tracks?.slice(0, 3).map((t: any) => t.title).join(', ');
+        title = `🎵 ${album.title} — Album Kompilasi Warkop Ngopi`;
+        description = `Dengarkan album "${album.title}" kurasi @${album.creator_username} (${trackCount} Lagu Utuh)${highlights ? ` [Hits: ${highlights}]` : ''}. Putar gratis tanpa iklan & nongkrong santai di ngopi.top!`;
+        customUrl = `${BASE_URL}/warkop?album=${encodeURIComponent(albumId)}`;
+      }
+    }
+
     const parts = path.split('/').filter(Boolean).map(decodeURIComponent);
     const first = parts[0] || '';
     const target = parts.length === 1 && !reserved.has(first) ? first : parts.length === 2 && first === 'chat' ? (parts[1] || '') : '';
-    if (target) {
+    if (target && !albumId) {
       // Only public profile fields are selected. Ambiguous display names use the brand image.
       const users = await prisma.user.findMany({ select: { id: true, username: true, display_name: true, avatar_url: true } });
       let matches = users.filter(user => user.id === target || slug(user.username) === slug(target));
@@ -44,7 +65,7 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Ngopi social preview lookup failed:', error);
   }
-  const url = BASE_URL + path;
+  const url = customUrl || (BASE_URL + path);
   const meta = (attribute: string, key: string, value: string) => `<meta ${attribute}="${key}" content="${escapeHtml(value)}">`;
   const tags = [meta('name', 'description', description), meta('property', 'og:type', 'website'), meta('property', 'og:site_name', 'Ngopi'), meta('property', 'og:url', url), meta('property', 'og:title', title), meta('property', 'og:description', description), meta('property', 'og:image', image), meta('property', 'og:image:alt', title), meta('name', 'twitter:card', 'summary_large_image'), meta('name', 'twitter:title', title), meta('name', 'twitter:description', description), meta('name', 'twitter:image', image)];
   if (image.startsWith('https:')) tags.push(meta('property', 'og:image:secure_url', image));
