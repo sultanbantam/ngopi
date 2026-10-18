@@ -1992,9 +1992,13 @@ export class AlbumService {
     scoredCurated.sort((a, b) => b.score - a.score);
     const localMatches = scoredCurated.map((s) => s.track);
 
-    // If we have strong local matches, return immediately for instant responsiveness
-    if (localMatches.length >= 3 || localMatches.some((m) => m.title.toLowerCase() === q || m.artist.toLowerCase() === q)) {
+    // If we have local matches, return immediately for instant responsiveness (<1ms)
+    if (localMatches.length > 0) {
       return localMatches;
+    }
+
+    if (rawQ.length < 3) {
+      return [];
     }
 
     // 3. Search Archive.org for full-length MP3 files (broad audio search)
@@ -2005,16 +2009,16 @@ export class AlbumService {
 
       const archiveUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(
         searchQuery
-      )}&fl[]=identifier,title,creator,description,mediatype&rows=10&output=json`;
+      )}&fl[]=identifier,title,creator,description,mediatype&rows=6&output=json`;
 
-      const arcRes = await axios.get(archiveUrl, { timeout: 3500 });
+      const arcRes = await axios.get(archiveUrl, { timeout: 1500 });
       const docs = arcRes.data?.response?.docs || [];
 
       await Promise.all(
-        docs.slice(0, 6).map(async (doc: any) => {
+        docs.slice(0, 3).map(async (doc: any) => {
           try {
             const filesUrl = `https://archive.org/metadata/${doc.identifier}/files`;
-            const fRes = await axios.get(filesUrl, { timeout: 3000 });
+            const fRes = await axios.get(filesUrl, { timeout: 1200 });
             const files = fRes.data?.result || [];
 
             const mp3s = files.filter(

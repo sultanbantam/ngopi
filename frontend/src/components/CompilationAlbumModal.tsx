@@ -17,6 +17,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { coffee } from '../theme/coffee';
 import axios from 'axios';
 import { globalAudioPlayer, GlobalTrack } from '../utils/globalAudioPlayer';
+import { searchLocalCuratedTracks } from '../data/curatedTracks';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -91,7 +92,7 @@ export default function CompilationAlbumModal({
   const [selectedTracks, setSelectedTracks] = useState<CompilationTrack[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedEra, setSelectedEra] = useState<string>('all');
-  const [searchResults, setSearchResults] = useState<CompilationTrack[]>([]);
+  const [searchResults, setSearchResults] = useState<CompilationTrack[]>(() => searchLocalCuratedTracks('', 'all'));
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
@@ -99,8 +100,10 @@ export default function CompilationAlbumModal({
   // Share Modal state
   const [shareAlbum, setShareAlbum] = useState<CompilationAlbum | null>(null);
 
-  // Search debounce ref
+  // Search debounce ref & AbortController ref
   const searchTimeout = useRef<any>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const searchRequestIdRef = useRef<number>(0);
 
   const pointsCost = Math.max(1, Math.ceil(capacity / 10)) * 1000;
   const canAfford = userPoints >= pointsCost;
@@ -122,35 +125,62 @@ export default function CompilationAlbumModal({
     }
   }, []);
 
-  // Search full songs with era support
+  // Search full songs with era support - instant local first (<1ms) + cancellable remote fallback
   const searchSongs = useCallback(async (query: string, eraFilter?: string) => {
+    const qClean = (query || '').trim();
+    const targetEra = eraFilter !== undefined ? eraFilter : selectedEra;
+
+    // 1. Instant local curated search (0ms, no network delay, anti-spinner hang)
+    const localMatches = searchLocalCuratedTracks(qClean, targetEra);
+    if (localMatches.length > 0 || !qClean) {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+        abortControllerRef.current = null;
+      }
+      setSearchResults(localMatches);
+      setIsSearching(false);
+      return;
+    }
+
+    // 2. If no local matches found and query is >= 2 chars, query backend with cancellation & timeout
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    const currentRequestId = ++searchRequestIdRef.current;
+
     setIsSearching(true);
     try {
-      const qClean = (query || '').trim();
-      const targetEra = eraFilter !== undefined ? eraFilter : selectedEra;
       const eraParam = targetEra && targetEra !== 'all' ? `&era=${encodeURIComponent(targetEra)}` : '';
       const res = await axios.get(`${API_URL}/albums/search-tracks?q=${encodeURIComponent(qClean)}${eraParam}`, {
-        timeout: 8000,
+        timeout: 3000,
+        signal: controller.signal,
       });
-      if (res.data?.success && Array.isArray(res.data.tracks)) {
+      if (currentRequestId === searchRequestIdRef.current && res.data?.success && Array.isArray(res.data.tracks)) {
         setSearchResults(res.data.tracks);
       }
     } catch (e: any) {
-      console.warn('Failed to search songs:', e?.message || e);
+      if (!axios.isCancel(e) && e?.name !== 'CanceledError') {
+        console.warn('Failed to search songs remotely:', e?.message || e);
+      }
     } finally {
-      setIsSearching(false);
+      if (currentRequestId === searchRequestIdRef.current) {
+        setIsSearching(false);
+      }
     }
   }, [selectedEra]);
 
   useEffect(() => {
     if (visible) {
       fetchAlbums();
-      searchSongs('');
+      // Load initial local tracks immediately (0ms)
+      setSearchResults(searchLocalCuratedTracks(searchQuery, selectedEra));
       if (initialAlbumId) {
         setExpandedAlbumId(initialAlbumId);
       }
     }
-  }, [visible, initialAlbumId, fetchAlbums, searchSongs]);
+  }, [visible, initialAlbumId, fetchAlbums]);
 
   // Handle Search Input with debounce
   const handleSearchChange = (text: string) => {
