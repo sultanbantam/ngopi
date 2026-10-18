@@ -18,6 +18,7 @@ import { coffee } from '../theme/coffee';
 import axios from 'axios';
 import { globalAudioPlayer, GlobalTrack } from '../utils/globalAudioPlayer';
 import { searchLocalCuratedTracks } from '../data/curatedTracks';
+import { getValidAccessToken } from '../utils/session';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -270,9 +271,10 @@ export default function CompilationAlbumModal({
       setIsCreating(true);
       try {
         const token =
-          Platform.OS === 'web' && typeof localStorage !== 'undefined'
+          (await getValidAccessToken()) ||
+          (Platform.OS === 'web' && typeof localStorage !== 'undefined'
             ? localStorage.getItem('token')
-            : null;
+            : null);
 
         const res = await axios.post(
           `${API_URL}/albums`,
@@ -287,6 +289,7 @@ export default function CompilationAlbumModal({
           },
           {
             headers: token ? { Authorization: `Bearer ${token}` } : {},
+            timeout: 15000,
           }
         );
 
