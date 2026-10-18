@@ -28,6 +28,7 @@ import {
   BilliardGame,
 } from './engine/GenericWarkopGame';
 import { BotProfileService } from './gapleh/BotProfileService';
+import { GameStatsService } from '../services/gameStats.service';
 import { prisma } from '../utils/prisma';
 
 const makeId = (prefix = 'id') => `${prefix}_${crypto.randomUUID().replace(/-/g, '').slice(0, 8)}`;
@@ -496,6 +497,13 @@ export class TableManager {
 
       active.gameInstance = gameInstance;
       active.data.status = 'playing';
+
+      // Record match count to Warkop leaderboard statistics
+      try {
+        GameStatsService.recordGameMatch(active.data.game_type, 1);
+      } catch (e: any) {
+        console.warn('Failed to record game match count:', e?.message);
+      }
 
       return {
         success: true,

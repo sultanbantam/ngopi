@@ -4,8 +4,11 @@ import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
 import { TableManager } from '../games/TableManager';
 import { BotProfileService } from '../games/gapleh/BotProfileService';
+import { GameStatsService, recordGameMatch, updateGameStats, getTopGames } from '../services/gameStats.service';
 import fs from 'fs';
 import path from 'path';
+
+export { recordGameMatch, updateGameStats, getTopGames };
 
 const router = Router();
 
@@ -50,16 +53,18 @@ const DEFAULT_GAME_STATS: Record<string, { name: string; icon: string; matches: 
   gapleh: { name: 'Gapleh Domino', icon: '🀥', matches: 124 },
   catur: { name: 'Catur Santai', icon: '♟️', matches: 86 },
   uno: { name: 'UNO Card Game', icon: '🎴', matches: 58 },
+  snake_ladder: { name: 'Ular Tangga', icon: '🎲', matches: 49 },
   remi: { name: 'Remi Klasik', icon: '🃏', matches: 42 },
+  monopoly: { name: 'Monopoli Warkop', icon: '🏠', matches: 36 },
   poker: { name: 'Poker Meja', icon: '♠️', matches: 31 },
-  truf: { name: 'Truf PekaI', icon: '♦️', matches: 19 },
-  bridge: { name: 'Bridge Warkop', icon: '🌉', matches: 12 },
+  billiard: { name: 'Billiard 8-Ball', icon: '🎱', matches: 28 },
   pokemon: { name: 'Monster TCG', icon: '🎴', matches: 25 },
+  karambol: { name: 'Karambol Warkop', icon: '⚪', matches: 22 },
+  truf: { name: 'Truf Pekai', icon: '♦️', matches: 19 },
+  daku: { name: 'Daku Congklak', icon: '🪵', matches: 18 },
   mahyong: { name: 'Mahjong Warkop', icon: '🀄', matches: 15 },
   halma: { name: 'Halma Bintang', icon: '🌟', matches: 14 },
-  daku: { name: 'Daku Congklak', icon: '🪵', matches: 18 },
-  karambol: { name: 'Karambol Warkop', icon: '⚪', matches: 22 },
-  billiard: { name: 'Billiard 8-Ball', icon: '🎱', matches: 28 },
+  bridge: { name: 'Bridge Warkop', icon: '🌉', matches: 12 },
 };
 
 // GET /api/leaderboard - Get full klasemen
@@ -176,32 +181,7 @@ router.get('/', async (_req: Request, res: Response): Promise<void> => {
     })).sort((a, b) => b.selectedCount - a.selectedCount);
 
     // 4. Top Games (Game yang Banyak Dimainkan)
-    const gameStats = loadJsonStats(GAME_STATS_FILE, DEFAULT_GAME_STATS);
-    // Count history from DB if available
-    try {
-      const history = await prisma.gameHistory.groupBy({
-        by: ['game_type'],
-        _count: { id: true },
-      });
-      for (const h of history) {
-        if (gameStats[h.game_type]) {
-          gameStats[h.game_type].matches += h._count.id;
-        } else {
-          gameStats[h.game_type] = {
-            name: h.game_type.toUpperCase(),
-            icon: '🎮',
-            matches: h._count.id,
-          };
-        }
-      }
-    } catch {}
-
-    const topGames = Object.entries(gameStats).map(([id, info]) => ({
-      id,
-      name: info.name,
-      icon: info.icon,
-      matchesPlayed: info.matches,
-    })).sort((a, b) => b.matchesPlayed - a.matchesPlayed);
+    const topGames = GameStatsService.getTopGames();
 
     // 5. Top 10 Gapleh: Combined Human + Bot Leaderboard (Task 4 & Task 8.2)
     const bots = BotProfileService.getAllProfiles();
@@ -417,6 +397,50 @@ router.post('/music/played', (req: Request, res: Response) => {
     }
     saveJsonStats(MUSIC_STATS_FILE, current);
     res.status(200).json({ success: true, playCount: current[key].playCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/leaderboard/game/played - Record a match played for a game
+router.post('/game/played', (req: Request, res: Response) => {
+  try {
+    const { gameType, count } = req.body;
+    if (!gameType) {
+      return res.status(400).json({ error: 'gameType wajib diisi.' });
+    }
+    const incrementBy = typeof count === 'number' && count > 0 ? count : 1;
+    const matches = GameStatsService.recordGameMatch(gameType, incrementBy);
+    res.status(200).json({ success: true, gameType, matches });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/leaderboard/game/update - Update or set match counts for games
+router.post('/game/update', (req: Request, res: Response) => {
+  try {
+    const { gameType, matches, stats } = req.body;
+    let updated;
+    if (stats && typeof stats === 'object') {
+      updated = GameStatsService.updateGameStats(stats);
+    } else if (gameType && typeof matches === 'number') {
+      updated = GameStatsService.updateGameStats({ [gameType]: matches });
+    } else {
+      return res.status(400).json({ error: 'Format data tidak valid. Berikan gameType & matches atau objek stats.' });
+    }
+    res.status(200).json({ success: true, data: updated });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/leaderboard/game - Get game leaderboard directly
+router.get('/game', (_req: Request, res: Response) => {
+  try {
+    const topGames = GameStatsService.getTopGames();
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.status(200).json({ success: true, top_games: topGames });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

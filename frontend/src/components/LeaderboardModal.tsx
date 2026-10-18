@@ -106,7 +106,9 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
   const fetchLeaderboard = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await axios.get(`${API_URL}/leaderboard`);
+      const res = await axios.get(`${API_URL}/leaderboard?_t=${Date.now()}`, {
+        headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+      });
       if (res.data?.success && res.data?.data) {
         setData(res.data.data);
       }
@@ -464,9 +466,14 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
               {activeTab === 'games' && (
                 <View style={styles.tabContent}>
                   <View style={styles.tabBanner}>
-                    <Text style={styles.tabBannerTitle}>🎲 Permainan Terpopuler di Meja</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.tabBannerTitle}>🎲 Permainan Terpopuler di Meja</Text>
+                      <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ color: '#4ade80', fontSize: 10, fontWeight: '700' }}>● Real-time Sync</Text>
+                      </View>
+                    </View>
                     <Text style={styles.tabBannerDesc}>
-                      Permainan kartu & catur yang paling sering digelar antar pengunjung warung kopi.
+                      Statistik live permainan kartu & catur yang digelar di warung kopi. Bertambah otomatis setiap ronde dimulai.
                     </Text>
                   </View>
 
