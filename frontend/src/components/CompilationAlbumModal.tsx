@@ -701,7 +701,29 @@ export default function CompilationAlbumModal({
 
                 {/* Quick Suggestion Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickSearchScroll}>
-                  {['Spirit carries on', 'Queen', 'Guns N Roses', 'Metallica', 'Sheila on 7', 'Dewa 19', 'Peterpan', 'Iwan Fals', 'Chrisye', 'Ungu', 'Tulus'].map((qChip) => (
+                  {[
+                    'Spirit carries on',
+                    'U2',
+                    'Manowar',
+                    'Pearl Jam',
+                    'RHCP',
+                    'Nirvana',
+                    'Kantata Takwa',
+                    'Kantata Samsara',
+                    'PAS Band',
+                    'Pure Saturday',
+                    'Puppen',
+                    'Nicky Astria',
+                    'Nike Ardilla',
+                    'Queen',
+                    'Guns N Roses',
+                    'Metallica',
+                    'Dewa 19',
+                    'Sheila on 7',
+                    'Peterpan',
+                    'Iwan Fals',
+                    'Chrisye',
+                  ].map((qChip) => (
                     <TouchableOpacity
                       key={qChip}
                       style={[styles.quickSearchChip, searchQuery.toLowerCase() === qChip.toLowerCase() && styles.quickSearchChipActive]}
