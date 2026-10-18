@@ -40,7 +40,8 @@ const extractUser = (req: Request): { id: string; username: string; display_name
 router.get('/search-tracks', async (req: Request, res: Response) => {
   try {
     const q = String(req.query.q || req.query.term || '').trim();
-    const tracks = await AlbumService.searchFullTracks(q);
+    const era = req.query.era ? String(req.query.era).trim() : undefined;
+    const tracks = await AlbumService.searchFullTracks(q, era);
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.status(200).json({ success: true, tracks });
   } catch (e: any) {

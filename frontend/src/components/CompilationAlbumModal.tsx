@@ -25,6 +25,7 @@ export interface CompilationTrack {
   title: string;
   artist: string;
   genre?: string;
+  era?: '80s' | '90s' | '2000s' | 'west' | 'warkop';
   uri: string;
   duration: number;
   thumbnail?: string | null;
@@ -59,6 +60,15 @@ interface CompilationAlbumModalProps {
 
 const COVER_EMOJIS = ['💿', '☕', '🎸', '📼', '📻', '🎶', '🎧', '🌴', '✨', '🔥'];
 
+export const ERA_CATEGORIES = [
+  { id: 'all', label: 'Semua Koleksi', icon: '🎵' },
+  { id: 'west', label: '80-90s Rock Barat', icon: '🎸' },
+  { id: '90s', label: '90s Pop-Rock Indo', icon: '☕' },
+  { id: '2000s', label: '2000s Hits Indo', icon: '💿' },
+  { id: '80s', label: '80s Tembang Kenangan', icon: '📻' },
+  { id: 'warkop', label: 'Warkop & Dangdut', icon: '🍵' },
+];
+
 export default function CompilationAlbumModal({
   visible,
   onClose,
@@ -80,6 +90,7 @@ export default function CompilationAlbumModal({
   const [coverEmoji, setCoverEmoji] = useState('💿');
   const [selectedTracks, setSelectedTracks] = useState<CompilationTrack[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedEra, setSelectedEra] = useState<string>('all');
   const [searchResults, setSearchResults] = useState<CompilationTrack[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -111,12 +122,14 @@ export default function CompilationAlbumModal({
     }
   }, []);
 
-  // Search full songs
-  const searchSongs = useCallback(async (query: string) => {
+  // Search full songs with era support
+  const searchSongs = useCallback(async (query: string, eraFilter?: string) => {
     setIsSearching(true);
     try {
       const qClean = (query || '').trim();
-      const res = await axios.get(`${API_URL}/albums/search-tracks?q=${encodeURIComponent(qClean)}`, {
+      const targetEra = eraFilter !== undefined ? eraFilter : selectedEra;
+      const eraParam = targetEra && targetEra !== 'all' ? `&era=${encodeURIComponent(targetEra)}` : '';
+      const res = await axios.get(`${API_URL}/albums/search-tracks?q=${encodeURIComponent(qClean)}${eraParam}`, {
         timeout: 8000,
       });
       if (res.data?.success && Array.isArray(res.data.tracks)) {
@@ -127,7 +140,7 @@ export default function CompilationAlbumModal({
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [selectedEra]);
 
   useEffect(() => {
     if (visible) {
@@ -632,9 +645,34 @@ export default function CompilationAlbumModal({
                 </View>
               )}
 
-              {/* Search Song Section */}
+              {/* Era / Decade Filter Section */}
               <View style={{ marginTop: 4 }}>
-                <Text style={styles.fieldLabel}>Cari & Tambah Lagu Utuh Pilihan:</Text>
+                <Text style={styles.fieldLabel}>Pilih Berdasarkan Era / Dekade:</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.eraChipsScroll}>
+                  {ERA_CATEGORIES.map((cat) => {
+                    const isCatActive = selectedEra === cat.id;
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={[styles.eraChip, isCatActive && styles.eraChipActive]}
+                        onPress={() => {
+                          setSelectedEra(cat.id);
+                          searchSongs(searchQuery, cat.id);
+                        }}
+                      >
+                        <Text style={{ fontSize: 13 }}>{cat.icon}</Text>
+                        <Text style={[styles.eraChipText, isCatActive && styles.eraChipTextActive]}>
+                          {cat.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+
+              {/* Search Song Section */}
+              <View style={{ marginTop: 6 }}>
+                <Text style={styles.fieldLabel}>Atau Cari Lagu / Artis Favorit:</Text>
                 
                 {/* Search Input Row with Clear & Submit Action */}
                 <View style={styles.searchBoxRow}>
@@ -642,7 +680,7 @@ export default function CompilationAlbumModal({
                     <Ionicons name="search" size={16} color={coffee.secondary} />
                     <TextInput
                       style={styles.searchInput}
-                      placeholder="Ketik judul lagu atau artis..."
+                      placeholder="Ketik lagu atau artis, misal: Spirit carries on..."
                       placeholderTextColor="#786050"
                       value={searchQuery}
                       onChangeText={handleSearchChange}
@@ -650,7 +688,7 @@ export default function CompilationAlbumModal({
                       returnKeyType="search"
                     />
                     {searchQuery.trim().length > 0 && (
-                      <TouchableOpacity onPress={() => { setSearchQuery(''); searchSongs(''); }}>
+                      <TouchableOpacity onPress={() => { setSearchQuery(''); searchSongs('', selectedEra); }}>
                         <Ionicons name="close-circle" size={18} color={coffee.secondary} />
                       </TouchableOpacity>
                     )}
@@ -663,7 +701,7 @@ export default function CompilationAlbumModal({
 
                 {/* Quick Suggestion Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickSearchScroll}>
-                  {['Spirit carries on', 'Dream Theater', 'Queen', 'Sheila on 7', 'Dewa 19', 'Peterpan', 'Tulus', 'Iwan Fals'].map((qChip) => (
+                  {['Spirit carries on', 'Queen', 'Guns N Roses', 'Metallica', 'Sheila on 7', 'Dewa 19', 'Peterpan', 'Iwan Fals', 'Chrisye', 'Ungu', 'Tulus'].map((qChip) => (
                     <TouchableOpacity
                       key={qChip}
                       style={[styles.quickSearchChip, searchQuery.toLowerCase() === qChip.toLowerCase() && styles.quickSearchChipActive]}
@@ -689,9 +727,16 @@ export default function CompilationAlbumModal({
                   </View>
                 )}
 
+                {/* Counter Badge */}
+                <View style={styles.tracksCountRow}>
+                  <Text style={styles.tracksCountText}>
+                    Tersedia <Text style={{ color: coffee.accent, fontWeight: '900' }}>{searchResults.length}</Text> lagu utuh pilihan siap masuk album:
+                  </Text>
+                </View>
+
                 {/* Search Results / Curated List */}
-                <View style={{ marginTop: 8, gap: 6 }}>
-                  {searchResults.slice(0, 15).map((track) => {
+                <View style={{ marginTop: 6, gap: 6 }}>
+                  {searchResults.slice(0, 60).map((track) => {
                     const isSelected = selectedTracks.some((t) => t.id === track.id || t.title.toLowerCase() === track.title.toLowerCase());
                     return (
                       <View
@@ -704,7 +749,7 @@ export default function CompilationAlbumModal({
                           </Text>
                           <Text style={styles.pickArtist} numberOfLines={1}>
                             {track.artist} • {Math.floor(track.duration / 60)}:
-                            {String(track.duration % 60).padStart(2, '0')}
+                            {String(track.duration % 60).padStart(2, '0')}{track.genre ? ` • ${track.genre}` : ''}
                           </Text>
                         </View>
 
@@ -1278,6 +1323,45 @@ const styles = StyleSheet.create({
     color: '#1b120c',
     fontSize: 13,
     fontWeight: '900',
+  },
+  eraChipsScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  eraChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#261910',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 163, 115, 0.15)',
+  },
+  eraChipActive: {
+    backgroundColor: 'rgba(217, 119, 6, 0.25)',
+    borderColor: '#f59e0b',
+  },
+  eraChipText: {
+    color: coffee.secondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  eraChipTextActive: {
+    color: '#fbbf24',
+    fontWeight: '900',
+  },
+  tracksCountRow: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    marginTop: 2,
+  },
+  tracksCountText: {
+    color: coffee.secondary,
+    fontSize: 11,
+    fontWeight: '600',
   },
   quickSearchScroll: {
     flexDirection: 'row',
