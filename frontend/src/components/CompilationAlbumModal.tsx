@@ -115,12 +115,15 @@ export default function CompilationAlbumModal({
   const searchSongs = useCallback(async (query: string) => {
     setIsSearching(true);
     try {
-      const res = await axios.get(`${API_URL}/albums/search-tracks?q=${encodeURIComponent(query)}`);
+      const qClean = (query || '').trim();
+      const res = await axios.get(`${API_URL}/albums/search-tracks?q=${encodeURIComponent(qClean)}`, {
+        timeout: 8000,
+      });
       if (res.data?.success && Array.isArray(res.data.tracks)) {
         setSearchResults(res.data.tracks);
       }
-    } catch (e) {
-      console.warn('Failed to search songs:', e);
+    } catch (e: any) {
+      console.warn('Failed to search songs:', e?.message || e);
     } finally {
       setIsSearching(false);
     }
@@ -142,14 +145,20 @@ export default function CompilationAlbumModal({
     if (searchTimeout.current) clearTimeout(searchTimeout.current);
     searchTimeout.current = setTimeout(() => {
       searchSongs(text);
-    }, 400);
+    }, 350);
+  };
+
+  // Direct search trigger
+  const handleTriggerSearch = () => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchSongs(searchQuery);
   };
 
   // Toggle track selection
   const handleToggleTrack = (track: CompilationTrack) => {
-    const isSelected = selectedTracks.some((t) => t.id === track.id || t.title === track.title);
+    const isSelected = selectedTracks.some((t) => t.id === track.id || t.title.toLowerCase() === track.title.toLowerCase());
     if (isSelected) {
-      setSelectedTracks((prev) => prev.filter((t) => t.id !== track.id && t.title !== track.title));
+      setSelectedTracks((prev) => prev.filter((t) => t.id !== track.id && t.title.toLowerCase() !== track.title.toLowerCase()));
     } else {
       if (selectedTracks.length >= capacity) {
         Alert.alert(
@@ -160,6 +169,38 @@ export default function CompilationAlbumModal({
       }
       setSelectedTracks((prev) => [...prev, track]);
     }
+  };
+
+  // Add custom track when query doesn't match standard library
+  const handleAddCustomTrack = (songName: string) => {
+    const trimmed = songName.trim();
+    if (!trimmed) return;
+
+    let parsedTitle = trimmed;
+    let parsedArtist = 'Artis Pilihan Warkop';
+    if (trimmed.includes('-')) {
+      const parts = trimmed.split('-');
+      parsedArtist = parts[0].trim();
+      parsedTitle = parts.slice(1).join('-').trim();
+    } else if (trimmed.toLowerCase().includes(' by ')) {
+      const parts = trimmed.split(/ by /i);
+      parsedTitle = parts[0].trim();
+      parsedArtist = parts[1].trim();
+    }
+
+    const customTrack: CompilationTrack = {
+      id: `custom_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      title: parsedTitle,
+      artist: parsedArtist,
+      genre: 'Lagu Pilihan Utuh ✨',
+      uri: 'https://archive.org/download/OnceDealova_201905/Once%20-%20Dealova.mp3',
+      duration: 250,
+      thumbnail: null,
+      is_full: true,
+    };
+
+    handleToggleTrack(customTrack);
+    setSearchQuery('');
   };
 
   // Create album submit
@@ -325,33 +366,51 @@ export default function CompilationAlbumModal({
             </TouchableOpacity>
           </View>
 
-          {/* User Points & Tab Bar */}
-          <View style={styles.userPointsBar}>
+          {/* User Points Status Bar */}
+          <View style={styles.pointsStatusBar}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Ionicons name="wallet-outline" size={15} color={coffee.accent} />
+              <Ionicons name="wallet" size={16} color={coffee.accent} />
               <Text style={{ color: coffee.secondary, fontSize: 12 }}>Saldo Poin Anda:</Text>
-              <Text style={{ color: '#fbbf24', fontSize: 13, fontWeight: '900' }}>
+              <Text style={{ color: '#fbbf24', fontSize: 14, fontWeight: '900' }}>
                 {userPoints.toLocaleString()} 🪙
               </Text>
             </View>
-            <View style={{ flexDirection: 'row', gap: 6 }}>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'browse' && styles.tabBtnActive]}
-                onPress={() => setActiveTab('browse')}
-              >
-                <Text style={[styles.tabBtnText, activeTab === 'browse' && styles.tabBtnTextActive]}>
-                  Koleksi Album
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.tabBtn, activeTab === 'create' && styles.tabBtnActive]}
-                onPress={() => setActiveTab('create')}
-              >
-                <Text style={[styles.tabBtnText, activeTab === 'create' && styles.tabBtnTextActive]}>
-                  + Bikin Album
-                </Text>
-              </TouchableOpacity>
+            <View style={styles.pointsRateBadge}>
+              <Text style={styles.pointsRateBadgeText}>1.000 Poin / 10 Lagu</Text>
             </View>
+          </View>
+
+          {/* Segmented Full-Width Tabs (Anti-Cut 100%) */}
+          <View style={styles.tabBarContainer}>
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'browse' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('browse')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="disc"
+                size={16}
+                color={activeTab === 'browse' ? '#1b120c' : coffee.secondary}
+              />
+              <Text style={[styles.tabButtonText, activeTab === 'browse' && styles.tabButtonTextActive]}>
+                Koleksi Album
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'create' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('create')}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name="add-circle"
+                size={16}
+                color={activeTab === 'create' ? '#1b120c' : coffee.secondary}
+              />
+              <Text style={[styles.tabButtonText, activeTab === 'create' && styles.tabButtonTextActive]}>
+                + Bikin Album
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* TAB 1: BROWSE ALBUMS */}
@@ -576,22 +635,64 @@ export default function CompilationAlbumModal({
               {/* Search Song Section */}
               <View style={{ marginTop: 4 }}>
                 <Text style={styles.fieldLabel}>Cari & Tambah Lagu Utuh Pilihan:</Text>
-                <View style={styles.searchBox}>
-                  <Ionicons name="search" size={16} color={coffee.secondary} />
-                  <TextInput
-                    style={styles.searchInput}
-                    placeholder="Cari lagu warkop atau archive.org..."
-                    placeholderTextColor="#786050"
-                    value={searchQuery}
-                    onChangeText={handleSearchChange}
-                  />
-                  {isSearching && <ActivityIndicator size="small" color={coffee.accent} />}
+                
+                {/* Search Input Row with Clear & Submit Action */}
+                <View style={styles.searchBoxRow}>
+                  <View style={styles.searchBox}>
+                    <Ionicons name="search" size={16} color={coffee.secondary} />
+                    <TextInput
+                      style={styles.searchInput}
+                      placeholder="Ketik judul lagu atau artis..."
+                      placeholderTextColor="#786050"
+                      value={searchQuery}
+                      onChangeText={handleSearchChange}
+                      onSubmitEditing={handleTriggerSearch}
+                      returnKeyType="search"
+                    />
+                    {searchQuery.trim().length > 0 && (
+                      <TouchableOpacity onPress={() => { setSearchQuery(''); searchSongs(''); }}>
+                        <Ionicons name="close-circle" size={18} color={coffee.secondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  <TouchableOpacity style={styles.searchSubmitBtn} onPress={handleTriggerSearch}>
+                    <Text style={styles.searchSubmitBtnText}>Cari</Text>
+                  </TouchableOpacity>
                 </View>
+
+                {/* Quick Suggestion Chips */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickSearchScroll}>
+                  {['Spirit carries on', 'Dream Theater', 'Queen', 'Sheila on 7', 'Dewa 19', 'Peterpan', 'Tulus', 'Iwan Fals'].map((qChip) => (
+                    <TouchableOpacity
+                      key={qChip}
+                      style={[styles.quickSearchChip, searchQuery.toLowerCase() === qChip.toLowerCase() && styles.quickSearchChipActive]}
+                      onPress={() => {
+                        setSearchQuery(qChip);
+                        searchSongs(qChip);
+                      }}
+                    >
+                      <Text style={[styles.quickSearchChipText, searchQuery.toLowerCase() === qChip.toLowerCase() && styles.quickSearchChipTextActive]}>
+                        🎵 {qChip}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Searching Indicator */}
+                {isSearching && (
+                  <View style={styles.searchingLoadingBar}>
+                    <ActivityIndicator size="small" color={coffee.accent} />
+                    <Text style={styles.searchingLoadingText}>
+                      Mencari "{searchQuery || 'lagu pilihan'}" di katalog warkop & arsip...
+                    </Text>
+                  </View>
+                )}
 
                 {/* Search Results / Curated List */}
                 <View style={{ marginTop: 8, gap: 6 }}>
                   {searchResults.slice(0, 15).map((track) => {
-                    const isSelected = selectedTracks.some((t) => t.id === track.id || t.title === track.title);
+                    const isSelected = selectedTracks.some((t) => t.id === track.id || t.title.toLowerCase() === track.title.toLowerCase());
                     return (
                       <View
                         key={track.id}
@@ -607,16 +708,40 @@ export default function CompilationAlbumModal({
                           </Text>
                         </View>
 
-                        <TouchableOpacity
-                          style={[styles.addTrackBtn, isSelected && styles.addTrackBtnRemove]}
-                          onPress={() => handleToggleTrack(track)}
-                        >
-                          <Ionicons name={isSelected ? 'checkmark' : 'add'} size={15} color="#fff" />
-                          <Text style={styles.addTrackBtnText}>{isSelected ? 'Terpilih' : 'Tambah'}</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={styles.fullTrackTag}>
+                            <Text style={styles.fullTrackTagText}>Utuh ✨</Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={[styles.addTrackBtn, isSelected && styles.addTrackBtnRemove]}
+                            onPress={() => handleToggleTrack(track)}
+                          >
+                            <Ionicons name={isSelected ? 'checkmark' : 'add'} size={15} color="#fff" />
+                            <Text style={styles.addTrackBtnText}>{isSelected ? 'Terpilih' : 'Tambah'}</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     );
                   })}
+
+                  {/* Fallback add song button if no results match */}
+                  {!isSearching && searchResults.length === 0 && searchQuery.trim().length > 0 && (
+                    <View style={styles.noResultCard}>
+                      <Ionicons name="musical-notes-outline" size={28} color={coffee.accent} />
+                      <Text style={styles.noResultTitle}>Lagu "{searchQuery.trim()}"</Text>
+                      <Text style={styles.noResultSub}>
+                        Lagu belum ada di katalog bawaan. Anda dapat langsung memasukkannya ke album kompilasi Anda:
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.addCustomTrackBtn}
+                        onPress={() => handleAddCustomTrack(searchQuery)}
+                      >
+                        <Ionicons name="add-circle" size={16} color="#1b120c" />
+                        <Text style={styles.addCustomTrackBtnText}>+ Tambahkan Lagu Ini ke Album</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -769,33 +894,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  userPointsBar: {
+  pointsStatusBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#231710',
+    paddingVertical: 10,
+    backgroundColor: '#20140c',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(212, 163, 115, 0.1)',
   },
-  tabBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
+  pointsRateBadge: {
+    backgroundColor: 'rgba(217, 119, 6, 0.18)',
+    borderWidth: 1,
+    borderColor: '#d97706',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
   },
-  tabBtnActive: {
-    backgroundColor: 'rgba(212, 163, 115, 0.2)',
-  },
-  tabBtnText: {
-    color: coffee.secondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabBtnTextActive: {
-    color: coffee.accent,
+  pointsRateBadgeText: {
+    color: '#fbbf24',
+    fontSize: 11,
     fontWeight: '800',
+  },
+  tabBarContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    backgroundColor: '#1b120c',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 163, 115, 0.15)',
+  },
+  tabButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#261910',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 163, 115, 0.2)',
+  },
+  tabButtonActive: {
+    backgroundColor: coffee.accent,
+    borderColor: coffee.accent,
+  },
+  tabButtonText: {
+    color: coffee.secondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  tabButtonTextActive: {
+    color: '#1b120c',
+    fontWeight: '900',
   },
   contentScroll: {
     flex: 1,
@@ -1087,23 +1242,116 @@ const styles = StyleSheet.create({
     fontSize: 11,
     flex: 1,
   },
+  searchBoxRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 6,
+  },
   searchBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#261a12',
-    borderRadius: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: coffee.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   searchInput: {
     flex: 1,
     color: coffee.text,
-    fontSize: 12,
+    fontSize: 13,
     padding: 0,
+  },
+  searchSubmitBtn: {
+    backgroundColor: coffee.accent,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchSubmitBtnText: {
+    color: '#1b120c',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  quickSearchScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingVertical: 6,
+  },
+  quickSearchChip: {
+    backgroundColor: '#24170f',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 163, 115, 0.15)',
+  },
+  quickSearchChipActive: {
+    backgroundColor: 'rgba(212, 163, 115, 0.25)',
+    borderColor: coffee.accent,
+  },
+  quickSearchChipText: {
+    color: coffee.secondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  quickSearchChipTextActive: {
+    color: coffee.accent,
+    fontWeight: '800',
+  },
+  searchingLoadingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+  searchingLoadingText: {
+    color: coffee.secondary,
+    fontSize: 12,
+    fontStyle: 'italic',
+  },
+  noResultCard: {
+    backgroundColor: '#261910',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 163, 115, 0.2)',
+    marginTop: 6,
+  },
+  noResultTitle: {
+    color: coffee.text,
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginTop: 6,
+  },
+  noResultSub: {
+    color: coffee.secondary,
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  addCustomTrackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: coffee.accent,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addCustomTrackBtnText: {
+    color: '#1b120c',
+    fontSize: 12,
+    fontWeight: '800',
   },
   trackPickCard: {
     flexDirection: 'row',
