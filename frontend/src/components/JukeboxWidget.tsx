@@ -532,8 +532,13 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
                 <Text style={{ fontSize: 20 }}>🎶</Text>
                 <Text style={styles.modalTitle}>Antrian Jukebox Warung</Text>
               </View>
-              <TouchableOpacity onPress={() => setModalVisible(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={20} color={coffee.text} />
+              <TouchableOpacity
+                onPress={() => setModalVisible(false)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={18} color={coffee.text} />
               </TouchableOpacity>
             </View>
 
@@ -584,14 +589,19 @@ export const JukeboxWidget: React.FC<JukeboxWidgetProps> = ({ warungId }) => {
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxHeight: '92%' }]}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Musik & Suasana Warkop</Text>
-                <Text style={{ fontSize: 11, color: coffee.muted, marginTop: 2 }}>
+              <View style={{ flex: 1, minWidth: 0, marginRight: 10 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>Musik & Suasana Warkop</Text>
+                <Text style={{ fontSize: 11, color: coffee.muted, marginTop: 2, lineHeight: 15 }} numberOfLines={2}>
                   Pilih lagu warkop, cari musik global dunia, atau dengarkan radio streaming
                 </Text>
               </View>
-              <TouchableOpacity onPress={() => setAddModalVisible(false)} style={{ padding: 4 }}>
-                <Ionicons name="close" size={20} color={coffee.text} />
+              <TouchableOpacity
+                onPress={() => setAddModalVisible(false)}
+                style={styles.modalCloseBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={18} color={coffee.text} />
               </TouchableOpacity>
             </View>
 
@@ -1080,6 +1090,16 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: coffee.text,
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#261a12',
+    borderWidth: 1,
+    borderColor: coffee.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   currentTrackCard: {
     backgroundColor: coffee.inset,
