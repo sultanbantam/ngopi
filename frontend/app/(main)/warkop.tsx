@@ -21,7 +21,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Audio } from 'expo-av';
 import axios from 'axios';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { getMimeType } from '../../src/utils/fileHelpers';
@@ -33,6 +33,7 @@ import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan'
 import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 import LeaderboardModal from '../../src/components/LeaderboardModal';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
+import CompilationAlbumModal from '../../src/components/CompilationAlbumModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -252,6 +253,16 @@ export default function BambupediaRoom() {
   const [htModalVisible, setHtModalVisible] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const { album } = useLocalSearchParams<{ album?: string }>();
+  const [albumModalVisible, setAlbumModalVisible] = useState(false);
+  const [sharedAlbumId, setSharedAlbumId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (album) {
+      setSharedAlbumId(String(album));
+      setAlbumModalVisible(true);
+    }
+  }, [album]);
   const [suasanaExpanded, setSuasanaExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
@@ -983,6 +994,30 @@ export default function BambupediaRoom() {
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
 
+            {/* Featured Album Kompilasi Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: 'rgba(234, 88, 12, 0.4)', backgroundColor: 'rgba(234, 88, 12, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                setAlbumModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(234, 88, 12, 0.2)' }]}>
+                <Ionicons name="disc" size={22} color="#ea580c" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>Album Kompilasi (Mixtape)</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#ea580c' }]}>
+                    <Text style={styles.offlineBadgeText}>1.000 POIN</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Bikin album 10 lagu utuh pilihanmu, dengarkan sendiri atau bagikan</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
+
             {/* Grid 2-Kolom Rapi & User Friendly */}
             <View style={styles.menuGrid2Col}>
               <TouchableOpacity
@@ -1235,14 +1270,26 @@ export default function BambupediaRoom() {
             </View>
           )}
 
-          {/* Quick Action Chips Bar (HT Radio, Tebak-tebakan, Poin, Sapa) */}
-          <View style={styles.quickChipsBar}>
+          {/* Quick Action Chips Bar (HT Radio, Album Mixtape, Tebak-tebakan, Poin, Sapa) */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickChipsBar}
+          >
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}
               onPress={() => setHtModalVisible(true)}
               accessibilityLabel="Buka HT Radio Walkie-Talkie"
             >
               <Text style={[styles.quickChipText, { color: '#10b981', fontWeight: '800' }]}>📻 HT Radio</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: '#d97706' }]}
+              onPress={() => setAlbumModalVisible(true)}
+              accessibilityLabel="Buka Album Kompilasi Mixtape"
+            >
+              <Text style={[styles.quickChipText, { color: '#f59e0b', fontWeight: '800' }]}>💿 Album Mixtape</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -1277,7 +1324,7 @@ export default function BambupediaRoom() {
             >
               <Text style={styles.quickChipText}>☕ Sapa Warung</Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
 
           {/* Modern Unified Single-Row Input Bar */}
           <View style={styles.inputBarRow}>
@@ -1339,6 +1386,20 @@ export default function BambupediaRoom() {
       <HTWalkieTalkieModal
         visible={htModalVisible}
         onClose={() => setHtModalVisible(false)}
+      />
+
+      {/* Mixtape Compilation Album Modal */}
+      <CompilationAlbumModal
+        visible={albumModalVisible}
+        onClose={() => {
+          setAlbumModalVisible(false);
+          setSharedAlbumId(null);
+        }}
+        currentUserId={currentUserId || undefined}
+        currentUsername={currentUsername || undefined}
+        userPoints={userPoints}
+        onPointsUpdated={(newPts) => setUserPoints(newPts)}
+        initialAlbumId={sharedAlbumId}
       />
     </View>
   );
