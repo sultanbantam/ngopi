@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import axios from 'axios';
 import { musicSynthesizer } from './musicSynthesizer';
 
 export interface GlobalTrack {
@@ -200,6 +201,30 @@ class GlobalAudioPlayer {
     this.state.duration = isRadio ? 0 : (track.duration || 0);
     this.state.progress = isRadio ? 100 : 0;
     this.notify();
+
+    // Report playback to Warkop leaderboard statistics asynchronously
+    try {
+      if (isRadio) {
+        const rawStationId = track.id?.replace(/^radio-/, '') || 'radio-live';
+        axios
+          .post('https://api.ngopi.top/api/leaderboard/radio/select', {
+            stationId: rawStationId,
+            name: track.title,
+            genre: track.artist || 'Radio Warkop',
+            icon: '📻',
+            frequency: 'Live Stream',
+          })
+          .catch(() => {});
+      } else if (track.title && track.artist) {
+        axios
+          .post('https://api.ngopi.top/api/leaderboard/music/played', {
+            title: track.title,
+            artist: track.artist,
+            thumbnail: track.thumbnail || null,
+          })
+          .catch(() => {});
+      }
+    } catch {}
 
     if (Platform.OS === 'web' && this.audioEl) {
       try {

@@ -371,9 +371,14 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
               {activeTab === 'music' && (
                 <View style={styles.tabContent}>
                   <View style={styles.tabBanner}>
-                    <Text style={styles.tabBannerTitle}>🎵 Musik Paling Banyak Didengar</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.tabBannerTitle}>🎵 Musik Paling Banyak Didengar</Text>
+                      <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ color: '#4ade80', fontSize: 10, fontWeight: '700' }}>● Real-time Sync</Text>
+                      </View>
+                    </View>
                     <Text style={styles.tabBannerDesc}>
-                      Daftar lagu favorit pilihan warga Warkop yang paling sering diputar dan disukai di Jukebox.
+                      Daftar lagu favorit pilihan warga Warkop yang paling sering diputar dan disukai di Jukebox. Bertambah otomatis setiap lagu diputar.
                     </Text>
                   </View>
 
@@ -412,9 +417,14 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
               {activeTab === 'radio' && (
                 <View style={styles.tabContent}>
                   <View style={styles.tabBanner}>
-                    <Text style={styles.tabBannerTitle}>📻 Stasiun Radio Paling Populer</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.tabBannerTitle}>📻 Stasiun Radio Paling Populer</Text>
+                      <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ color: '#4ade80', fontSize: 10, fontWeight: '700' }}>● Real-time Sync</Text>
+                      </View>
+                    </View>
                     <Text style={styles.tabBannerDesc}>
-                      Stasiun radio siaran langsung yang paling sering dinyalakan untuk menemani nongkrong di meja kopi.
+                      Stasiun radio siaran langsung yang paling sering dinyalakan untuk menemani nongkrong di meja kopi. Bertambah otomatis saat dipilih.
                     </Text>
                   </View>
 
@@ -448,6 +458,15 @@ export default function LeaderboardModal({ visible, onClose, onSelectRadio, init
                             <TouchableOpacity
                               style={styles.listenShortcut}
                               onPress={() => {
+                                axios
+                                  .post(`${API_URL}/leaderboard/radio/select`, {
+                                    stationId: item.id,
+                                    name: item.name,
+                                    genre: item.genre,
+                                    icon: item.icon,
+                                    frequency: item.frequency,
+                                  })
+                                  .catch(() => {});
                                 onSelectRadio(item.id);
                                 onClose();
                               }}

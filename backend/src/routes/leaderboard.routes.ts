@@ -376,6 +376,31 @@ router.post('/radio/select', (req: Request, res: Response) => {
   }
 });
 
+// POST /api/leaderboard/radio/update - Update or set radio counts
+router.post('/radio/update', (req: Request, res: Response) => {
+  try {
+    const { stationId, count, stats } = req.body;
+    const current = loadJsonStats(RADIO_STATS_FILE, DEFAULT_RADIO_STATS);
+    if (stats && typeof stats === 'object') {
+      for (const [sId, c] of Object.entries(stats)) {
+        if (typeof c === 'number') {
+          if (current[sId]) current[sId].count = c;
+          else current[sId] = { name: sId, frequency: 'Online', genre: 'Radio', icon: '📻', count: c };
+        }
+      }
+    } else if (stationId && typeof count === 'number') {
+      if (current[stationId]) current[stationId].count = count;
+      else current[stationId] = { name: stationId, frequency: 'Online', genre: 'Radio', icon: '📻', count };
+    } else {
+      return res.status(400).json({ error: 'Berikan stationId & count atau objek stats.' });
+    }
+    saveJsonStats(RADIO_STATS_FILE, current);
+    res.status(200).json({ success: true, data: current });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/leaderboard/music/played - Record music played
 router.post('/music/played', (req: Request, res: Response) => {
   try {
@@ -397,6 +422,34 @@ router.post('/music/played', (req: Request, res: Response) => {
     }
     saveJsonStats(MUSIC_STATS_FILE, current);
     res.status(200).json({ success: true, playCount: current[key].playCount });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/leaderboard/music/update - Update or set music play counts
+router.post('/music/update', (req: Request, res: Response) => {
+  try {
+    const { title, artist, playCount, stats } = req.body;
+    const current = loadJsonStats(MUSIC_STATS_FILE, {});
+    if (stats && typeof stats === 'object') {
+      for (const [key, c] of Object.entries(stats)) {
+        if (typeof c === 'number') {
+          if (current[key]) current[key].playCount = c;
+          else {
+            const [t = key, a = 'Warkop'] = key.split(':::');
+            current[key] = { title: t, artist: a, thumbnail: null, playCount: c };
+          }
+        }
+      }
+    } else if (title && artist && typeof playCount === 'number') {
+      const key = `${title}:::${artist}`.toLowerCase();
+      current[key] = { title, artist, thumbnail: req.body.thumbnail || null, playCount };
+    } else {
+      return res.status(400).json({ error: 'Berikan title, artist & playCount atau objek stats.' });
+    }
+    saveJsonStats(MUSIC_STATS_FILE, current);
+    res.status(200).json({ success: true, data: current });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
