@@ -38,6 +38,7 @@ model User {
   refreshTokens       RefreshToken[]
   gamePlayers         GamePlayer[]
   htProfile           HTProfile?
+  merchantProfile     MerchantProfile?
 }
 
 model Message {
@@ -599,38 +600,63 @@ model UserGaplehStats {
 }
 
 // ==========================================
-// TASK 5.10: DATABASE SCHEMA (HT OFFLINE)
+// MODUL MERCHANT & CAFE PARTNER (Ngopi for Business)
 // ==========================================
 
-model HTProfile {
-  id             String   @id @default(cuid())
-  user_id        String   @unique @map("user_id")
-  callsign       String?
-  license_type   String?
-  default_freq   Float?
-  default_ctcss  String?
-  aprs_ssid      String?
-  preferred_mode String   @default("acoustic") // "bluetooth", "serial", "acoustic"
-  created_at     DateTime @default(now())
+model MerchantProfile {
+  id             String            @id @default(uuid())
+  user_id        String            @unique @map("user_id")
+  cafe_name      String            @map("cafe_name")
+  address        String?
+  description    String?
+  phone          String?
+  logo           String?
+  banner_url     String?           @map("banner_url")
+  qr_code_token  String            @unique @map("qr_code_token")
+  is_verified    Boolean           @default(true) @map("is_verified")
+  reward_points  Int               @default(50) @map("reward_points")
+  created_at     DateTime          @default(now()) @map("created_at")
+  updated_at     DateTime          @updatedAt @map("updated_at")
 
-  @@map("ht_profiles")
+  user           User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  promos         MerchantPromo[]
+  checkins       MerchantCheckin[]
+
+  @@map("merchant_profiles")
 }
 
-model HTMessage {
-  id           String    @id @default(cuid())
-  sender_id    String    @map("sender_id")
-  recipient_id String?   @map("recipient_id")
-  content      String
-  freq         Float
-  protocol     String    // "APRS", "DMR", "FSK"
-  mode         String    // "bluetooth", "serial", "acoustic"
-  status       String    @default("pending")
-  created_at   DateTime  @default(now())
-  sent_at      DateTime?
-  delivered_at DateTime?
+model MerchantPromo {
+  id          String          @id @default(uuid())
+  merchant_id String          @map("merchant_id")
+  title       String
+  description String
+  discount    String?
+  image_url   String?
+  valid_until DateTime        @map("valid_until")
+  is_active   Boolean         @default(true) @map("is_active")
+  created_at  DateTime        @default(now()) @map("created_at")
 
-  @@map("ht_messages")
+  merchant    MerchantProfile @relation(fields: [merchant_id], references: [id], onDelete: Cascade)
+
+  @@index([merchant_id])
+  @@map("merchant_promos")
 }
+
+model MerchantCheckin {
+  id          String          @id @default(uuid())
+  merchant_id String          @map("merchant_id")
+  user_id     String          @map("user_id")
+  username    String?
+  points      Int             @default(50)
+  note        String?
+  created_at  DateTime        @default(now()) @map("created_at")
+
+  merchant    MerchantProfile @relation(fields: [merchant_id], references: [id], onDelete: Cascade)
+
+  @@index([merchant_id, user_id, created_at])
+  @@map("merchant_checkins")
+}
+
 
 // ==========================================
 // TASK 7.3: DATABASE SCHEMA (EMERGENCY & P3K)

@@ -31,6 +31,7 @@ import moderationRoutes from './routes/moderation.routes';
 import htRoutes from './routes/ht.routes';
 import emergencyRoutes from './routes/emergency.routes';
 import albumRoutes from './routes/album.routes';
+import merchantRoutes from './routes/merchant.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -116,6 +117,7 @@ app.use('/api/moderation', moderationRoutes);
 app.use('/api/ht', htRoutes);
 app.use('/api/emergency', emergencyRoutes);
 app.use('/api/albums', albumRoutes);
+app.use('/api/merchant', merchantRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

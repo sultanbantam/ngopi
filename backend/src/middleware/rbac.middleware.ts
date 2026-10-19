@@ -1,12 +1,14 @@
 import { NextFunction, Request, Response } from 'express';
 import { prisma } from '../utils/prisma';
 
-export const ROLES = ['user', 'agent_cs', 'admin', 'superadmin'] as const;
+export const ROLES = ['user', 'merchant', 'agent_cs', 'admin', 'superadmin'] as const;
 export type Role = typeof ROLES[number];
 
 const ROLE_ALIASES: Record<string, Role> = {
   agent: 'agent_cs',
   cs: 'agent_cs',
+  cafe: 'merchant',
+  partner: 'merchant',
 };
 
 export const normalizeRole = (role?: string | null): Role => {
@@ -51,7 +53,8 @@ export const requireRole = (...allowedRoles: Role[]) => async (req: Request, res
 };
 
 export const requireRoles = (roles: Role[]) => requireRole(...roles);
+export const requireMerchant = requireRole('merchant', 'admin', 'superadmin');
 export const requireStaff = requireRole('agent_cs', 'admin', 'superadmin');
 export const requireAdmin = requireRole('admin', 'superadmin');
 export const requireSuperadmin = requireRole('superadmin');
-export const isPrivilegedRole = (role?: string | null) => hasRole(role, ['agent_cs', 'admin', 'superadmin']);
+export const isPrivilegedRole = (role?: string | null) => hasRole(role, ['merchant', 'agent_cs', 'admin', 'superadmin']);

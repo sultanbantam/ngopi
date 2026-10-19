@@ -541,6 +541,14 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
                   </View>
 
                   <View style={styles.earningGrid}>
+                    <View style={[styles.earningItem, { borderColor: 'rgba(212, 163, 115, 0.5)', backgroundColor: 'rgba(212, 163, 115, 0.08)' }]}>
+                      <Text style={styles.earningEmoji}>☕</Text>
+                      <View style={styles.earningInfo}>
+                        <Text style={[styles.earningTitle, { color: coffee.accent, fontWeight: '800' }]}>Check-in Meja Cafe Partner</Text>
+                        <Text style={styles.earningSub}>+50 Poin setiap scan QR code di meja cafe partner resmi (maks. 1x sehari per cafe)!</Text>
+                      </View>
+                    </View>
+
                     <View style={styles.earningItem}>
                       <Text style={styles.earningEmoji}>🤝</Text>
                       <View style={styles.earningInfo}>

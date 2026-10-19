@@ -34,6 +34,9 @@ import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 import LeaderboardModal from '../../src/components/LeaderboardModal';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
 import CompilationAlbumModal from '../../src/components/CompilationAlbumModal';
+import CafeCheckinModal from '../../src/components/CafeCheckinModal';
+import CafePartnerModal from '../../src/components/CafePartnerModal';
+import MerchantDashboardModal from '../../src/components/MerchantDashboardModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 const ROOM_ID = 'bambupedia-room';
@@ -256,6 +259,10 @@ export default function BambupediaRoom() {
   const { album } = useLocalSearchParams<{ album?: string }>();
   const [albumModalVisible, setAlbumModalVisible] = useState(false);
   const [sharedAlbumId, setSharedAlbumId] = useState<string | null>(null);
+  const [cafeCheckinVisible, setCafeCheckinVisible] = useState(false);
+  const [cafePartnerVisible, setCafePartnerVisible] = useState(false);
+  const [selectedCafeToken, setSelectedCafeToken] = useState<string>('NGOPI_WARKOP_SEDUH');
+  const [merchantDashboardVisible, setMerchantDashboardVisible] = useState(false);
 
   useEffect(() => {
     if (album) {
@@ -1018,6 +1025,54 @@ export default function BambupediaRoom() {
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
 
+            {/* Featured Cafe Partner / Warung Digital Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: 'rgba(212, 163, 115, 0.4)', backgroundColor: 'rgba(212, 163, 115, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                setCafeCheckinVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(212, 163, 115, 0.2)' }]}>
+                <Ionicons name="storefront" size={22} color={coffee.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>Check-in Cafe Partner</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#10b981' }]}>
+                    <Text style={styles.offlineBadgeText}>+50 POIN</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Scan QR di meja cafe fisik, dapatkan 50 poin & voucher diskon kasir</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
+
+            {/* Featured Merchant Dashboard (Bisnis Cafe) */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: 'rgba(99, 102, 241, 0.4)', backgroundColor: 'rgba(99, 102, 241, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                setMerchantDashboardVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(99, 102, 241, 0.2)' }]}>
+                <Ionicons name="business" size={22} color="#6366f1" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>Merchant Dashboard (Bisnis)</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#6366f1' }]}>
+                    <Text style={styles.offlineBadgeText}>CAFE OWNER</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Kelola cafe partner, cetak plakat meja QR, dan pantau pengunjung</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
+
             {/* Grid 2-Kolom Rapi & User Friendly */}
             <View style={styles.menuGrid2Col}>
               <TouchableOpacity
@@ -1293,6 +1348,14 @@ export default function BambupediaRoom() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(212, 163, 115, 0.22)', borderColor: coffee.accent }]}
+              onPress={() => setCafeCheckinVisible(true)}
+              accessibilityLabel="Check-in Cafe Partner"
+            >
+              <Text style={[styles.quickChipText, { color: coffee.accent, fontWeight: '800' }]}>☕ Check-in Cafe (+50)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.quickChipBtn}
               onPress={() => {
                 sendSocketMessage({ content: '/tebak', message_type: 'text' });
@@ -1404,6 +1467,45 @@ export default function BambupediaRoom() {
         userPoints={userPoints}
         onPointsUpdated={(newPts) => setUserPoints(newPts)}
         initialAlbumId={sharedAlbumId}
+      />
+
+      {/* Cafe Partner QR Check-in Modal */}
+      <CafeCheckinModal
+        visible={cafeCheckinVisible}
+        onClose={() => setCafeCheckinVisible(false)}
+        initialToken={selectedCafeToken}
+        onCheckinSuccess={(pts, newTotal) => {
+          if (newTotal) {
+            setUserPoints(newTotal);
+          } else {
+            setUserPoints((prev) => prev + pts);
+          }
+        }}
+        onOpenCafeDetails={(token) => {
+          setSelectedCafeToken(token);
+          setCafePartnerVisible(true);
+        }}
+      />
+
+      {/* Warung [Nama Cafe] Detail & Menu Modal */}
+      <CafePartnerModal
+        visible={cafePartnerVisible}
+        onClose={() => setCafePartnerVisible(false)}
+        cafeTokenOrId={selectedCafeToken}
+        onCheckinSuccess={(pts, newTotal) => {
+          if (newTotal) {
+            setUserPoints(newTotal);
+          } else {
+            setUserPoints((prev) => prev + pts);
+          }
+        }}
+      />
+
+      {/* Merchant Dashboard (Cafe Owner) Modal */}
+      <MerchantDashboardModal
+        visible={merchantDashboardVisible}
+        onClose={() => setMerchantDashboardVisible(false)}
+        currentUserId={currentUserId || undefined}
       />
     </View>
   );

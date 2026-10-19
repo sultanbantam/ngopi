@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { normalizeRole, requireRoles, requireStaff } from './rbac.middleware';
+import { normalizeRole, requireRoles, requireStaff, requireMerchant } from './rbac.middleware';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
 
@@ -40,4 +40,4 @@ export const verifyJWT = (req: AuthRequest, res: Response, next: NextFunction): 
   }
 };
 
-export { requireRoles, requireStaff };
+export { requireRoles, requireStaff, requireMerchant };
