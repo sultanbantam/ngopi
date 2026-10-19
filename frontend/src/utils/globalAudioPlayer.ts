@@ -47,6 +47,7 @@ class GlobalAudioPlayer {
   private resolvedUrlCache: Map<string, string> = new Map();
 
   private fullTrackMap: Record<string, string> = {
+    // Album 1 (Bandung, dan Para Mantanku)
     'trk_dt_spirit': 'https://api.ngopi.top/uploads/mixtape_songs/trk_dt_spirit.mp3',
     'trk_u2_one': 'https://api.ngopi.top/uploads/mixtape_songs/trk_u2_one.mp3',
     'trk_manowar_heart_of_steel': 'https://api.ngopi.top/uploads/mixtape_songs/trk_manowar_heart_of_steel.mp3',
@@ -57,6 +58,17 @@ class GlobalAudioPlayer {
     'trk_gnr_november_rain': 'https://api.ngopi.top/uploads/mixtape_songs/trk_gnr_november_rain.mp3',
     'trk_met_the_unforgiven': 'https://api.ngopi.top/uploads/mixtape_songs/trk_met_the_unforgiven.mp3',
     'trk_dewa_elang': 'https://api.ngopi.top/uploads/mixtape_songs/trk_dewa_elang.mp3',
+    // Album 2 (2. Bandung, dan Para Mantanku)
+    'trk_iwan_ibu': 'https://api.ngopi.top/uploads/mixtape_songs/trk_iwan_ibu.mp3',
+    'trk_once_dealova': 'https://api.ngopi.top/uploads/mixtape_songs/trk_once_dealova.mp3',
+    'trk_so7_dan': 'https://api.ngopi.top/uploads/mixtape_songs/trk_so7_dan.mp3',
+    'trk_slank_terlalu_manis': 'https://api.ngopi.top/uploads/mixtape_songs/trk_slank_terlalu_manis.mp3',
+    'trk_padi_mahadewi': 'https://api.ngopi.top/uploads/mixtape_songs/trk_padi_mahadewi.mp3',
+    'trk_jamrud_pelangi': 'https://api.ngopi.top/uploads/mixtape_songs/trk_jamrud_pelangi.mp3',
+    'trk_nike_bintang_kehidupan': 'https://api.ngopi.top/uploads/mixtape_songs/trk_nike_bintang_kehidupan.mp3',
+    'trk_boomerang_pelangi': 'https://api.ngopi.top/uploads/mixtape_songs/trk_boomerang_pelangi.mp3',
+    'trk_puresaturday_kosong': 'https://api.ngopi.top/uploads/mixtape_songs/trk_puresaturday_kosong.mp3',
+    'trk_kantata_kesaksian': 'https://api.ngopi.top/uploads/mixtape_songs/trk_kantata_kesaksian.mp3',
   };
 
   public resolvePlayableUri(track: GlobalTrack): string {
@@ -81,7 +93,21 @@ class GlobalAudioPlayer {
         if (cleanTitle.includes('november') && idKey === 'trk_gnr_november_rain') return hostedUrl;
         if (cleanTitle.includes('unforgiven') && idKey === 'trk_met_the_unforgiven') return hostedUrl;
         if (cleanTitle.includes('elang') && idKey === 'trk_dewa_elang') return hostedUrl;
+        if (cleanTitle.includes('ibu') && idKey === 'trk_iwan_ibu') return hostedUrl;
+        if (cleanTitle.includes('dealova') && idKey === 'trk_once_dealova') return hostedUrl;
+        if (cleanTitle.includes('dan') && idKey === 'trk_so7_dan') return hostedUrl;
+        if (cleanTitle.includes('manis') && idKey === 'trk_slank_terlalu_manis') return hostedUrl;
+        if (cleanTitle.includes('mahadewi') && idKey === 'trk_padi_mahadewi') return hostedUrl;
+        if (cleanTitle.includes('matamu') && idKey === 'trk_jamrud_pelangi') return hostedUrl;
+        if (cleanTitle.includes('bintang kehidupan') && idKey === 'trk_nike_bintang_kehidupan') return hostedUrl;
+        if (cleanTitle.includes('pelangi') && idKey === 'trk_boomerang_pelangi') return hostedUrl;
+        if (cleanTitle.includes('kosong') && idKey === 'trk_puresaturday_kosong') return hostedUrl;
+        if (cleanTitle.includes('kesaksian') && idKey === 'trk_kantata_kesaksian') return hostedUrl;
       }
+    }
+    // If external archive.org link, proxy it through server to avoid 503/403/CORS issues
+    if (track.track_uri && track.track_uri.includes('archive.org') && !track.track_uri.includes('api.ngopi.top')) {
+      return `https://api.ngopi.top/api/albums/stream?url=${encodeURIComponent(track.track_uri)}&trackId=${track.id || ''}`;
     }
     return track.track_uri;
   }
@@ -180,13 +206,24 @@ class GlobalAudioPlayer {
         }
       }
 
-      // 2. Song fallback: resolve to full hosted track
+      // 2. Song fallback: resolve to full hosted track or stream proxy
       try {
         const fallbackUri = this.resolvePlayableUri(track);
         if (fallbackUri && fallbackUri !== audio.src) {
           console.log('[GlobalAudioPlayer] Switching to full hosted audio source:', fallbackUri);
           track.track_uri = fallbackUri;
           audio.src = fallbackUri;
+          audio.load();
+          await audio.play();
+          this.state.isPlaying = true;
+          this.state.isLoading = false;
+          this.state.error = null;
+          this.notify();
+          return;
+        } else if (!audio.src.includes('/api/albums/stream') && !audio.src.includes('/uploads/mixtape_songs/')) {
+          const proxyUri = `https://api.ngopi.top/api/albums/stream?url=${encodeURIComponent(track.track_uri)}&trackId=${track.id || ''}`;
+          console.log('[GlobalAudioPlayer] Switching to album stream proxy:', proxyUri);
+          audio.src = proxyUri;
           audio.load();
           await audio.play();
           this.state.isPlaying = true;

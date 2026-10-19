@@ -1,4 +1,7 @@
 import { Router, Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
 import { AlbumService } from '../services/album.service';
 import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
@@ -35,6 +38,78 @@ const extractUser = (req: Request): { id: string; username: string; display_name
 
   return null;
 };
+
+// GET /api/albums/stream?url=...&trackId=... - Audio stream proxy & local cache server
+router.get('/stream', async (req: Request, res: Response): Promise<void> => {
+  const audioUrl = String(req.query.url || '').trim();
+  const trackId = String(req.query.trackId || req.query.id || '').trim();
+
+  // 1. If local cached file exists, serve directly with full range/seek support
+  if (trackId) {
+    const safeTrackId = trackId.replace(/[^a-zA-Z0-9_-]/g, '');
+    const localPath = path.join(__dirname, '../../uploads/mixtape_songs', `${safeTrackId}.mp3`);
+    if (fs.existsSync(localPath)) {
+      res.sendFile(localPath);
+      return;
+    }
+  }
+
+  if (!audioUrl || !audioUrl.startsWith('http')) {
+    res.status(400).send('Invalid audio URL');
+    return;
+  }
+
+  // 2. Stream through proxy with range support and proper headers
+  try {
+    const rangeHeader = req.headers.range;
+    const requestHeaders: Record<string, string> = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      Accept: '*/*',
+    };
+    if (rangeHeader) {
+      requestHeaders['Range'] = rangeHeader;
+    }
+
+    const streamRes = await axios({
+      method: 'GET',
+      url: audioUrl,
+      responseType: 'stream',
+      timeout: 15000,
+      headers: requestHeaders,
+      validateStatus: (status) => status < 400,
+    });
+
+    const status = streamRes.status;
+    res.status(status);
+
+    const headersToForward = ['content-type', 'content-length', 'content-range', 'accept-ranges'];
+    headersToForward.forEach((h) => {
+      if (streamRes.headers[h]) {
+        res.setHeader(h, streamRes.headers[h]);
+      }
+    });
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+
+    streamRes.data.pipe(res);
+
+    req.on('close', () => {
+      try {
+        streamRes.data.destroy();
+      } catch (_) {}
+    });
+
+    // 3. Asynchronously trigger caching in background if trackId provided
+    if (trackId) {
+      AlbumService.cacheTrackInBackground(trackId, audioUrl).catch(() => {});
+    }
+  } catch (err: any) {
+    console.error('Album audio stream proxy error:', err?.message);
+    res.status(502).send('Audio stream currently unavailable');
+  }
+});
 
 // GET /api/albums/search-tracks - Search full-length tracks for mixtape
 router.get('/search-tracks', async (req: Request, res: Response) => {

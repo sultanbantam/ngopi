@@ -1049,6 +1049,30 @@ export default function BambupediaRoom() {
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
 
+            {/* Featured Kerja Sama Kemitraan Digital (Cafe MoU) Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: 'rgba(255, 215, 0, 0.4)', backgroundColor: 'rgba(255, 215, 0, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                router.push('/(main)/partnership' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(255, 215, 0, 0.2)' }]}>
+                <Ionicons name="ribbon" size={22} color="#FFD700" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>Kemitraan Cafe (MoU)</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#FFD700' }]}>
+                    <Text style={[styles.offlineBadgeText, { color: '#2c1810', fontWeight: '800' }]}>MOU DIGITAL</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Daftarkan cafe fisik Anda, tanda tangani MoU digital & terima QR meja</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
+
             {/* Featured Merchant Dashboard (Bisnis Cafe) */}
             <TouchableOpacity
               style={[styles.featuredHtCard, { borderColor: 'rgba(99, 102, 241, 0.4)', backgroundColor: 'rgba(99, 102, 241, 0.08)', marginTop: 8 }]}

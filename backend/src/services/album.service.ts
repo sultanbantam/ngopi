@@ -2204,11 +2204,121 @@ export class AlbumService {
     albums.unshift(newAlbum);
     this.saveAlbums(albums);
 
+    // Auto-cache tracks in background so future plays are hosted locally & never fail
+    setTimeout(() => {
+      AlbumService.autoCacheAlbumTracks(newAlbum).catch((err) => {
+        console.warn('[AlbumService] Auto-cache error:', err);
+      });
+    }, 100);
+
     return {
       success: true,
       album: newAlbum,
       remainingPoints: newBalance,
     };
+  }
+
+  /**
+   * Auto-cache tracks of an album in the background so future plays are 100% reliable and hosted locally
+   */
+  public static async autoCacheAlbumTracks(album: CompilationAlbum): Promise<void> {
+    const mixtapeDir = path.join(__dirname, '../../uploads/mixtape_songs');
+    if (!fs.existsSync(mixtapeDir)) {
+      try {
+        fs.mkdirSync(mixtapeDir, { recursive: true });
+      } catch {}
+    }
+
+    let changed = false;
+    for (const track of album.tracks) {
+      if (track.uri && track.uri.startsWith('https://api.ngopi.top/uploads/mixtape_songs/')) {
+        continue;
+      }
+      const safeId = (track.id || '').replace(/[^a-zA-Z0-9_-]/g, '');
+      if (!safeId) continue;
+      const targetFile = path.join(mixtapeDir, `${safeId}.mp3`);
+
+      if (!fs.existsSync(targetFile)) {
+        await this.downloadTrackFile(safeId, track.title, track.artist, track.uri);
+      }
+
+      if (fs.existsSync(targetFile)) {
+        track.uri = `https://api.ngopi.top/uploads/mixtape_songs/${safeId}.mp3`;
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      const albums = this.loadAlbums();
+      const existingIdx = albums.findIndex((a) => a.id === album.id);
+      if (existingIdx !== -1) {
+        albums[existingIdx] = album;
+        this.saveAlbums(albums);
+      }
+    }
+  }
+
+  public static async downloadTrackFile(
+    safeId: string,
+    title?: string,
+    artist?: string,
+    sourceUri?: string
+  ): Promise<boolean> {
+    const mixtapeDir = path.join(__dirname, '../../uploads/mixtape_songs');
+    const targetFile = path.join(mixtapeDir, `${safeId}.mp3`);
+    if (fs.existsSync(targetFile)) return true;
+
+    // 1. If yt-dlp is available, try scsearch
+    const query = `${artist || ''} ${title || ''}`.trim();
+    if (query) {
+      try {
+        const { exec } = require('child_process');
+        const util = require('util');
+        const execAsync = util.promisify(exec);
+        const cleanQuery = query.replace(/["'$`\\]/g, '');
+        const cmd = `yt-dlp --force-overwrites --match-filter "duration > 120" --max-downloads 1 -x --audio-format mp3 -o "${targetFile.replace('.mp3', '')}.%(ext)s" "scsearch5:${cleanQuery}" --no-playlist`;
+        await execAsync(cmd, { timeout: 45000 });
+        if (fs.existsSync(targetFile)) return true;
+      } catch (ytErr) {
+        // Fallback to direct download
+      }
+    }
+
+    // 2. Direct download from sourceUri with browser headers
+    if (sourceUri && sourceUri.startsWith('http')) {
+      try {
+        const response = await axios({
+          method: 'GET',
+          url: sourceUri,
+          responseType: 'stream',
+          timeout: 30000,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          },
+        });
+        const writer = fs.createWriteStream(targetFile);
+        response.data.pipe(writer);
+        await new Promise((resolve, reject) => {
+          writer.on('finish', resolve);
+          writer.on('error', reject);
+        });
+        return fs.existsSync(targetFile);
+      } catch (dlErr) {
+        console.warn(`[AlbumService] Direct download failed for ${safeId}:`, dlErr);
+      }
+    }
+
+    return false;
+  }
+
+  public static async cacheTrackInBackground(trackId: string, audioUrl: string): Promise<void> {
+    const safeId = (trackId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeId) return;
+    const mixtapeDir = path.join(__dirname, '../../uploads/mixtape_songs');
+    const targetFile = path.join(mixtapeDir, `${safeId}.mp3`);
+    if (fs.existsSync(targetFile)) return;
+    await this.downloadTrackFile(safeId, undefined, undefined, audioUrl);
   }
 
   public static getAlbums(userId?: string): CompilationAlbum[] {

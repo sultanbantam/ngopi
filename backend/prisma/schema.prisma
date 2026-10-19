@@ -39,6 +39,7 @@ model User {
   gamePlayers         GamePlayer[]
   htProfile           HTProfile?
   merchantProfile     MerchantProfile?
+  merchantAgreement   MerchantAgreement?
 }
 
 model Message {
@@ -688,3 +689,27 @@ model EmergencyLog {
   @@map("emergency_logs")
 }
 
+// ==========================================
+// DIGITAL PARTNERSHIP MOU & CAFE ONBOARDING
+// ==========================================
+
+model MerchantAgreement {
+  id               String    @id @default(cuid())
+  user_id          String    @unique @map("user_id")
+  username         String
+  cafe_name        String    @map("cafe_name")
+  address          String
+  phone            String
+  commercial_model String?   @default("model_a") @map("commercial_model")
+  agreement_text   String    @map("agreement_text")
+  is_agreed        Boolean   @default(false) @map("is_agreed")
+  signed_at        DateTime? @map("signed_at")
+  qr_token         String?   @unique @map("qr_token")
+  qr_image_url     String?   @map("qr_image_url")
+  warung_group_id  String?   @map("warung_group_id")
+  created_at       DateTime  @default(now()) @map("created_at")
+
+  user             User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("merchant_agreements")
+}
