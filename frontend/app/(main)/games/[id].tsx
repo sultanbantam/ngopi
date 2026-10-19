@@ -149,19 +149,48 @@ function PlayingCardTile({
   disabled,
   highlight,
   size = 'normal',
+  isFaceDown = false,
 }: {
-  card: { suit: string; rank: string };
+  card?: { suit: string; rank: string };
   onPress?: () => void;
   disabled?: boolean;
   highlight?: boolean;
   size?: 'normal' | 'small' | 'large';
+  isFaceDown?: boolean;
 }) {
-  const meta = SUIT_META[card?.suit] || { symbol: '♠', color: '#111827', label: '' };
+  const meta = card ? SUIT_META[card.suit] || { symbol: '♠', color: '#111827', label: '' } : { symbol: '?', color: '#111827', label: '' };
   const isLarge = size === 'large';
   const isSmall = size === 'small';
 
   const width = isLarge ? 56 : isSmall ? 36 : 46;
   const height = isLarge ? 80 : isSmall ? 52 : 66;
+
+  if (isFaceDown) {
+    return (
+      <View
+        style={[
+          {
+            width,
+            height,
+            backgroundColor: '#451a03',
+            borderRadius: 6,
+            padding: 4,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderWidth: 1.5,
+            borderColor: '#b45309',
+            shadowColor: '#000',
+            shadowOpacity: 0.25,
+            shadowRadius: 3,
+            elevation: 3,
+          },
+          highlight && { borderColor: coffee.accent, borderWidth: 2 },
+        ]}
+      >
+        <Text style={{ fontSize: isLarge ? 24 : isSmall ? 15 : 18 }}>🂠</Text>
+      </View>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -824,15 +853,16 @@ export default function GameTableScreen() {
         }
       );
     } else if (table.game_type === 'bridge' || table.game_type === 'truf') {
+      const isTrufBidding = table.game_type === 'truf' && gameState?.phase === 'bidding';
       socketRef.current.emit(
         'game:action',
         {
           tableId,
-          action: 'play',
+          action: isTrufBidding ? 'bid' : 'play',
           payload: { suit: card.suit, rank: card.rank },
         },
         (res: any) => {
-          if (!res?.success) Alert.alert('Gagal', res?.error || 'Gagal memainkan kartu.');
+          if (!res?.success) Alert.alert('Gagal', res?.error || (isTrufBidding ? 'Gagal menawar kartu.' : 'Gagal memainkan kartu.'));
         }
       );
     }
@@ -1207,7 +1237,18 @@ export default function GameTableScreen() {
               )}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={styles.cardCountText}>
-                  {player.is_bot ? '🤖 Bot' : table.game_type === 'gapleh' ? '🁫' : '🃏'} {isPlaying ? (table.game_type === 'catur' ? (gameState?.whitePlayerId === player.user_id ? 'Putih ⚪' : 'Hitam ⚫') : `${cardCount} kartu`) : player.is_ready ? 'Siap' : 'Menunggu'}
+                  {player.is_bot ? '🤖 Bot' : table.game_type === 'gapleh' ? '🁫' : '🃏'}{' '}
+                  {isPlaying
+                    ? table.game_type === 'catur'
+                      ? gameState?.whitePlayerId === player.user_id
+                        ? 'Putih ⚪'
+                        : 'Hitam ⚫'
+                      : table.game_type === 'truf' && gameState?.phase !== 'bidding'
+                      ? `${cardCount} kartu • 🏆 ${gameState?.tricksWon?.[player.user_id] || 0}${gameState?.bids?.[player.user_id]?.target !== undefined ? `/${gameState.bids[player.user_id].target}` : ''}`
+                      : `${cardCount} kartu`
+                    : player.is_ready
+                    ? 'Siap'
+                    : 'Menunggu'}
                 </Text>
               </View>
               {isTurn && <Text style={styles.turnIndicatorBadge}>Gilirannya</Text>}
@@ -2083,8 +2124,149 @@ export default function GameTableScreen() {
                   </View>
                 );
               })()
+            ) : table.game_type === 'truf' ? (
+              <View style={{ width: '100%', maxWidth: 420, alignItems: 'center', paddingVertical: 6, gap: 8 }}>
+                {gameState?.phase === 'bidding' ? (
+                  <View style={{ width: '100%', backgroundColor: '#26150c', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#78350f', alignItems: 'center' }}>
+                    <Text style={{ color: '#f59e0b', fontWeight: '900', fontSize: 13, marginBottom: 4 }}>
+                      🎯 FASE TAWARAN TARGET (BIDDING)
+                    </Text>
+                    <Text style={{ color: coffee.muted, fontSize: 11, textAlign: 'center', marginBottom: 10 }}>
+                      Pilih 1 kartu dari tangan Anda di bawah. Angka kartu = target trik (A=1 s/d K=13). Kartu tertinggi menentukan Bunga Truf.
+                    </Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', width: '100%' }}>
+                      {table.players?.map((p: any) => {
+                        const bid = gameState?.bids?.[p.user_id];
+                        const isCurrentTurn = gameState?.currentTurn === p.user_id;
+                        return (
+                          <View
+                            key={p.user_id}
+                            style={{
+                              backgroundColor: isCurrentTurn ? '#3d1f11' : '#1f130a',
+                              borderWidth: 1,
+                              borderColor: isCurrentTurn ? coffee.accent : '#5c3d24',
+                              borderRadius: 8,
+                              paddingHorizontal: 8,
+                              paddingVertical: 5,
+                              minWidth: 90,
+                              alignItems: 'center',
+                            }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 11, fontWeight: '700' }} numberOfLines={1}>
+                              {p.display_name}
+                            </Text>
+                            {bid ? (
+                              <Text style={{ color: '#22c55e', fontSize: 10, fontWeight: '800', marginTop: 2 }}>
+                                ✓ {bid.card?.rank} {SUIT_META[bid.card?.suit]?.symbol} ({bid.target} Trik)
+                              </Text>
+                            ) : (
+                              <Text style={{ color: isCurrentTurn ? '#f59e0b' : coffee.muted, fontSize: 10, marginTop: 2 }}>
+                                {isCurrentTurn ? '⏳ Memilih...' : 'Menunggu'}
+                              </Text>
+                            )}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : gameState?.phase === 'scoring' ? (
+                  <View style={{ width: '100%', backgroundColor: '#26150c', borderRadius: 10, padding: 12, borderWidth: 1, borderColor: '#78350f', alignItems: 'center' }}>
+                    <Text style={{ color: '#22c55e', fontWeight: '900', fontSize: 14, marginBottom: 2 }}>
+                      🏁 PERMAINAN TRUF SELESAI
+                    </Text>
+                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700', marginBottom: 8 }}>
+                      Mode: {gameState?.mode === 'main_atas' ? 'Main Atas 📈 (Total Bid > 13)' : 'Main Bawah 📉 (Total Bid < 13)'} • Total Bid: {gameState?.totalBids}
+                    </Text>
+                    <View style={{ width: '100%', gap: 4 }}>
+                      {table.players?.map((p: any) => {
+                        const target = gameState?.bids?.[p.user_id]?.target ?? 0;
+                        const won = gameState?.tricksWon?.[p.user_id] ?? 0;
+                        const score = gameState?.scores?.[p.user_id] ?? 0;
+                        const isSuccess = gameState?.mode === 'main_atas' ? won >= target : won <= target;
+                        return (
+                          <View
+                            key={p.user_id}
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              backgroundColor: '#1f130a',
+                              paddingHorizontal: 10,
+                              paddingVertical: 6,
+                              borderRadius: 6,
+                              borderWidth: 0.5,
+                              borderColor: '#5c3d24',
+                            }}
+                          >
+                            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{p.display_name}</Text>
+                            <Text style={{ color: coffee.muted, fontSize: 11 }}>
+                              Target: <Text style={{ color: '#fff', fontWeight: 'bold' }}>{target}</Text> | Dapat: <Text style={{ color: '#fff', fontWeight: 'bold' }}>{won}</Text>
+                            </Text>
+                            <Text style={{ color: isSuccess ? '#22c55e' : '#ef4444', fontWeight: '900', fontSize: 12 }}>
+                              {score > 0 ? `+${score}` : score} Poin {isSuccess ? '🎯' : '💥'}
+                            </Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : (
+                  /* Truf Playing Phase */
+                  <View style={{ width: '100%', alignItems: 'center', gap: 6 }}>
+                    {/* Truf Meta Info Badges */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' }}>
+                      <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                        <Text style={{ color: coffee.accent, fontWeight: 'bold', fontSize: 11 }}>
+                          🃏 Truf: {gameState?.trumpSuit ? `${SUIT_META[gameState.trumpSuit]?.symbol} ${SUIT_META[gameState.trumpSuit]?.label}` : 'Tanpa Truf'}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                        <Text style={{ color: gameState?.mode === 'main_atas' ? '#22c55e' : '#38bdf8', fontWeight: 'bold', fontSize: 11 }}>
+                          {gameState?.mode === 'main_atas' ? '📈 Main Atas' : '📉 Main Bawah'} (Bid: {gameState?.totalBids})
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, borderColor: coffee.border }}>
+                        <Text style={{ color: '#fbbf24', fontWeight: 'bold', fontSize: 11 }}>
+                          Trik #{gameState?.trickNumber || 1} / 13
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Trick Cards On Table */}
+                    <View style={{ flexDirection: 'row', gap: 10, minHeight: 76, alignItems: 'center', justifyContent: 'center', paddingVertical: 4 }}>
+                      {gameState?.currentTrick && gameState.currentTrick.length > 0 ? (
+                        gameState.currentTrick.map((tr: any, i: number) => {
+                          const player = table.players?.find((p: any) => p.user_id === tr.playerId);
+                          return (
+                            <View key={i} style={{ alignItems: 'center' }}>
+                              <PlayingCardTile card={tr.card} isFaceDown={Boolean(tr.isFaceDown)} />
+                              <Text style={{ fontSize: 9, color: coffee.accent, marginTop: 3, fontWeight: '600' }} numberOfLines={1}>
+                                {player?.display_name || `P${i + 1}`}
+                              </Text>
+                              {tr.isFaceDown && (
+                                <Text style={{ fontSize: 8, color: '#f59e0b', fontWeight: 'bold' }}>Truf Tertutup</Text>
+                              )}
+                            </View>
+                          );
+                        })
+                      ) : (
+                        <View style={{ alignItems: 'center', paddingVertical: 8 }}>
+                          <Text style={{ fontSize: 12, color: coffee.muted }}>
+                            Menunggu pemain pertama membuka trik...
+                          </Text>
+                          {gameState?.lastTrickWinner && (
+                            <Text style={{ fontSize: 11, color: coffee.accent, marginTop: 3 }}>
+                              🏆 Trik lalu dimenangkan oleh: {table.players?.find((p: any) => p.user_id === gameState.lastTrickWinner)?.display_name || gameState.lastTrickWinner}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+              </View>
             ) : (
-              /* Bridge & Truf Current Trick and Trump */
+              /* Bridge Current Trick and Trump */
               <View style={{ alignItems: 'center', gap: 8, paddingVertical: 10 }}>
                 <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: coffee.border }}>
                   <Text style={{ color: coffee.accent, fontWeight: 'bold', fontSize: 12 }}>
@@ -2153,6 +2335,17 @@ export default function GameTableScreen() {
             <TouchableOpacity style={[styles.passBtn, { backgroundColor: '#7f1d1d' }]} onPress={() => handlePokerAction('fold')}>
               <Text style={styles.passBtnText}>Fold ❌</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Truf Turn Guidance */}
+        {isMyTurn && table.game_type === 'truf' && (
+          <View style={{ backgroundColor: '#26150c', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: coffee.accent, marginVertical: 4, alignItems: 'center' }}>
+            <Text style={{ color: coffee.accent, fontWeight: 'bold', fontSize: 12 }}>
+              {gameState?.phase === 'bidding'
+                ? '🎯 Giliran Anda! Pilih 1 kartu di bawah untuk menentukan Target & Bunga Truf.'
+                : '🃏 Giliran Anda! Mainkan kartu yang sesuai dengan bunga pembuka.'}
+            </Text>
           </View>
         )}
 
@@ -2343,6 +2536,8 @@ export default function GameTableScreen() {
                 ? `Aset Monopoli Anda (Saldo: Rp ${gameState?.players?.[currentUserId]?.money ?? 0})`
                 : table.game_type === 'pokemon'
                 ? `Monster Anda: Klik Cadangan untuk Bertukar (${gameState?.players?.[currentUserId]?.team?.filter((m: any) => !m.isFainted).length ?? 0}/3 Siap)`
+                : table.game_type === 'truf' && gameState?.phase === 'bidding'
+                ? `Pilih 1 Kartu untuk Bid Target (${myCards.length} Kartu)`
                 : `Kartu di Tangan Anda (${table.game_type === 'gapleh' ? myHand.length : myCards.length})`}
             </Text>
             {isMyTurn && (
@@ -2542,16 +2737,30 @@ export default function GameTableScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={{ gap: 8, paddingVertical: 4 }}
             >
-              {myCards.map((card, idx) => (
-                <PlayingCardTile
-                  key={idx}
-                  card={card}
-                  size="large"
-                  highlight={isMyTurn}
-                  disabled={!isMyTurn}
-                  onPress={() => handlePlayCardAction(card)}
-                />
-              ))}
+              {myCards.map((card, idx) => {
+                const isTrufBidding = table.game_type === 'truf' && gameState?.phase === 'bidding';
+                const rankToTarget: Record<string, number> = {
+                  'A': 1, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7,
+                  '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13,
+                };
+                const bidTarget = rankToTarget[card.rank] ?? card.rank;
+                return (
+                  <View key={idx} style={{ alignItems: 'center' }}>
+                    <PlayingCardTile
+                      card={card}
+                      size="large"
+                      highlight={isMyTurn}
+                      disabled={!isMyTurn}
+                      onPress={() => handlePlayCardAction(card)}
+                    />
+                    {isTrufBidding && (
+                      <View style={{ backgroundColor: '#2c1e14', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, marginTop: 4, borderWidth: 0.5, borderColor: coffee.accent }}>
+                        <Text style={{ fontSize: 10, color: coffee.accent, fontWeight: 'bold' }}>{bidTarget} Trik</Text>
+                      </View>
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
           ) : null}
         </View>
