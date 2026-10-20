@@ -249,18 +249,18 @@ export default function NgopAIFloatingAgent() {
           <View style={styles.modalCard}>
             {/* Modal Header */}
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
                 <View style={styles.avatarBadge}>
                   <Text style={{ fontSize: 22 }}>🤖</Text>
                 </View>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <Text style={styles.modalTitle}>ngopAI Concierge</Text>
                     <View style={styles.tagAutonomous}>
                       <Text style={styles.tagAutonomousText}>Autonomous Agent</Text>
                     </View>
                   </View>
-                  <Text style={styles.competitionSubtitle}>
+                  <Text style={styles.competitionSubtitle} numberOfLines={1}>
                     Dubai Chamber Digital — Personal AI Agent
                   </Text>
                 </View>

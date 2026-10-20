@@ -257,13 +257,13 @@ export default function MerchantDashboardModal({
         <View style={styles.container}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
               <View style={styles.iconBadge}>
                 <Ionicons name="bar-chart" size={18} color={coffee.accent} />
               </View>
-              <View>
-                <Text style={styles.headerTitle}>Merchant Cafe Dashboard</Text>
-                <Text style={styles.headerSubtitle}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.headerTitle} numberOfLines={1}>Merchant Cafe Dashboard</Text>
+                <Text style={styles.headerSubtitle} numberOfLines={1}>
                   {dashboard?.profile?.cafe_name || 'Ngopi for Business'}
                 </Text>
               </View>
@@ -365,41 +365,50 @@ export default function MerchantDashboardModal({
                 <View>
                   {/* Hero: Dubai Chamber Digital - Best Business AI Agent One-Click Demo */}
                   <View style={{ backgroundColor: '#1e293b', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#38bdf8' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontSize: 24 }}>🤖☕</Text>
-                        <View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900' }}>ngopAI — Virtual Cafe Manager</Text>
-                            <View style={{ backgroundColor: '#0284c7', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ color: '#fff', fontSize: 8, fontWeight: '900' }}>BEST BUSINESS AI AGENT</Text>
-                            </View>
-                          </View>
-                          <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 1 }}>
-                            Dubai Chamber Digital Competition Entry • Autonomous Operations
-                          </Text>
-                        </View>
+                    {/* Top Competition & Category Badges */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+                      <View style={{ backgroundColor: '#0284c7', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={{ fontSize: 10 }}>🏆</Text>
+                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>BEST BUSINESS AI AGENT</Text>
+                      </View>
+                      <View style={{ backgroundColor: 'rgba(56, 189, 248, 0.12)', borderWidth: 1, borderColor: '#38bdf8', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 }}>
+                        <Text style={{ color: '#38bdf8', fontSize: 9, fontWeight: '800' }}>Dubai Chamber Digital</Text>
                       </View>
                     </View>
 
-                    <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 8, lineHeight: 16 }}>
+                    {/* Agent Title & Identity */}
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                      <Text style={{ fontSize: 24, marginTop: 1 }}>🤖☕</Text>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '900', lineHeight: 18 }}>
+                          ngopAI — Virtual Cafe Manager
+                        </Text>
+                        <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 2, lineHeight: 14 }}>
+                          Dubai Chamber Digital Entry • Autonomous Operations
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Description */}
+                    <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 10, lineHeight: 16 }}>
                       Agen AI otonom yang bertindak sebagai manajer virtual cafe: memantau penurunan pengunjung, otomatis membuat flash promo 20%, menyiarkan alert radio, dan mengkurasi musik warkop.
                     </Text>
 
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                    {/* Action Buttons (Stacked & Full-Width for Easy Mobile Tap) */}
+                    <View style={{ marginTop: 12, gap: 8 }}>
                       <TouchableOpacity
-                        style={{ backgroundColor: '#0284c7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                        style={{ backgroundColor: '#0284c7', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}
                         onPress={() => {
                           setActiveTab('agent');
                           handleRunAgentDemo('low_traffic');
                         }}
                       >
-                        <Text style={{ fontSize: 12 }}>⚡</Text>
+                        <Text style={{ fontSize: 13 }}>⚡</Text>
                         <Text style={{ color: '#fff', fontSize: 11, fontWeight: 'bold' }}>Jalankan One-Click Demo (Low Traffic)</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={{ backgroundColor: '#334155', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                        style={{ backgroundColor: '#334155', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%' }}
                         onPress={() => setActiveTab('agent')}
                       >
                         <Ionicons name="options" size={13} color="#94a3b8" />
@@ -689,38 +698,44 @@ export default function MerchantDashboardModal({
                 <View style={{ gap: 14 }}>
                   {/* Dubai Chamber Digital Competition Banner */}
                   <View style={{ backgroundColor: '#0f172a', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#38bdf8' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontSize: 26 }}>🏆</Text>
-                        <View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={{ color: '#fff', fontSize: 14, fontWeight: '900' }}>Dubai Chamber of Digital Economy</Text>
-                            <View style={{ backgroundColor: '#eab308', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                              <Text style={{ color: '#000', fontSize: 8, fontWeight: '900' }}>COMPETITION</Text>
-                            </View>
-                          </View>
-                          <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '700' }}>
-                            Category: Best Business AI Agent • Virtual Cafe Manager
-                          </Text>
-                        </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, flexWrap: 'wrap', gap: 6 }}>
+                      <View style={{ backgroundColor: '#eab308', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 3, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={{ fontSize: 10 }}>🏆</Text>
+                        <Text style={{ color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 }}>COMPETITION ENTRY</Text>
+                      </View>
+                      <View style={{ backgroundColor: 'rgba(56, 189, 248, 0.12)', borderWidth: 1, borderColor: '#38bdf8', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2.5 }}>
+                        <Text style={{ color: '#38bdf8', fontSize: 9, fontWeight: '800' }}>Best Business AI Agent</Text>
                       </View>
                     </View>
-                    <Text style={{ color: '#94a3b8', fontSize: 11, marginTop: 8, lineHeight: 16 }}>
+
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                      <Text style={{ fontSize: 24, marginTop: 1 }}>🇦🇪</Text>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: '900', lineHeight: 18 }}>
+                          Dubai Chamber of Digital Economy
+                        </Text>
+                        <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '700', marginTop: 2 }}>
+                          Virtual Cafe Manager • Autonomous Operations
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ color: '#cbd5e1', fontSize: 11, marginTop: 10, lineHeight: 16 }}>
                       ngopAI bekerja secara otonom memantau analitik cafe 24/7 dan mengeksekusi aksi bisnis nyata (promo otomatis, broadcasting notifikasi geofencing, kurasi audio, dan kemitraan) menggunakan ReAct Loop (Thought ➔ Action ➔ Observation ➔ Final Answer).
                     </Text>
                   </View>
 
                   {/* Autonomous Loop Status & Control */}
                   <View style={styles.cardBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 150 }}>
                         <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: autonomousLoopActive ? '#10b981' : '#ef4444' }} />
-                        <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>
-                          Autonomous Background Loop: {autonomousLoopActive ? 'AKTIF 🟢' : 'NON-AKTIF 🔴'}
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                          Loop Otonom: {autonomousLoopActive ? 'AKTIF 🟢' : 'NON-AKTIF 🔴'}
                         </Text>
                       </View>
                       <TouchableOpacity
-                        style={{ backgroundColor: autonomousLoopActive ? '#7f1d1d' : '#047857', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
+                        style={{ backgroundColor: autonomousLoopActive ? '#7f1d1d' : '#047857', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 }}
                         onPress={() => setAutonomousLoopActive(!autonomousLoopActive)}
                       >
                         <Text style={{ color: '#fff', fontSize: 10, fontWeight: 'bold' }}>
@@ -728,7 +743,7 @@ export default function MerchantDashboardModal({
                         </Text>
                       </TouchableOpacity>
                     </View>
-                    <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 4 }}>
+                    <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 6, lineHeight: 16 }}>
                       Memindai data check-in cafe setiap 60 detik. Jika mendeteksi penurunan kunjungan &gt;= 40%, sistem otomatis mengaktifkan flash voucher &amp; mengirim notifikasi 5km.
                     </Text>
                   </View>
