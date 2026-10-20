@@ -14,6 +14,7 @@ import EmergencySOSModal from '../../src/components/EmergencySOSModal';
 import ConsentBannerModal from '../../src/components/ConsentBannerModal';
 import ModerationAlertModal from '../../src/components/ModerationAlertModal';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
+import NgopAIFloatingAgent from '../../src/components/NgopAIFloatingAgent';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -618,6 +619,7 @@ export default function MainLayout() {
           onOpenHT={() => setHtModalVisible(true)}
         />
         <ConsentBannerModal />
+        <NgopAIFloatingAgent />
       </View>
     );
   }
@@ -672,6 +674,7 @@ export default function MainLayout() {
       />
       <ConsentBannerModal />
       <ModerationAlertModal />
+      <NgopAIFloatingAgent />
     </View>
   );
 }
