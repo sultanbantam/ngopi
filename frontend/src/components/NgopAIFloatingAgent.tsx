@@ -65,13 +65,6 @@ export default function NgopAIFloatingAgent() {
   const pathname = usePathname() || '';
   const isGameScreen = pathname.includes('/games');
   const isChatScreen = pathname.includes('/warkop') || pathname.includes('/chat');
-  const [isCompact, setIsCompact] = useState(isGameScreen);
-
-  React.useEffect(() => {
-    if (isGameScreen) {
-      setIsCompact(true);
-    }
-  }, [isGameScreen]);
 
   const pan = useRef(new Animated.ValueXY()).current;
   const panResponder = useRef(
@@ -264,7 +257,7 @@ export default function NgopAIFloatingAgent() {
 
   return (
     <>
-      {/* Floating Action Button - Draggable & Screen-Aware */}
+      {/* Floating Action Button - Pure Circular FAB (Never Elongated) */}
       <Animated.View
         {...panResponder.panHandlers}
         style={[
@@ -274,34 +267,26 @@ export default function NgopAIFloatingAgent() {
             : isChatScreen
             ? styles.fabChatPos
             : styles.fabDefaultPos,
-          pan.getLayout(),
           {
-            transform: [{ scale: pulseAnim }],
+            transform: [
+              ...pan.getTranslateTransform(),
+              { scale: pulseAnim },
+            ],
           },
         ]}
       >
         <TouchableOpacity
           activeOpacity={0.85}
-          style={isCompact ? styles.fabCompactButton : styles.fabButton}
+          style={styles.fabCircleButton}
           onPress={() => setModalVisible(true)}
+          accessibilityLabel="ngopAI Assistant"
         >
-          <View style={styles.fabIconRow}>
-            <Text style={{ fontSize: isCompact ? 18 : 22 }}>☕</Text>
+          <View style={styles.fabIconContainer}>
+            <Text style={styles.fabEmoji}>☕</Text>
             <View style={styles.fabAiBadge}>
               <Text style={styles.fabAiBadgeText}>AI</Text>
             </View>
           </View>
-          {!isCompact && <Text style={styles.fabLabel}>ngopAI</Text>}
-          <TouchableOpacity
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            onPress={(e) => {
-              e.stopPropagation();
-              setIsCompact(!isCompact);
-            }}
-            style={styles.fabMinimizeToggle}
-          >
-            <Ionicons name={isCompact ? 'chevron-forward' : 'remove-circle-outline'} size={isCompact ? 10 : 13} color="#94a3b8" />
-          </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
 
@@ -479,76 +464,57 @@ const styles = StyleSheet.create({
     zIndex: 9997,
   },
   fabDefaultPos: {
-    bottom: 85,
-    right: 14,
+    bottom: 90,
+    right: 16,
   },
   fabGamePos: {
-    top: 72,
-    right: 12,
+    top: 75,
+    right: 14,
   },
   fabChatPos: {
-    bottom: 135,
-    right: 12,
+    bottom: 125,
+    right: 16,
   },
-  fabButton: {
+  fabCircleButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
     backgroundColor: '#26150c',
-    borderRadius: 28,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: coffee.accent,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  fabCompactButton: {
-    backgroundColor: '#26150c',
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 1.5,
-    borderColor: coffee.accent,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOpacity: 0.35,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45,
     shadowRadius: 8,
-    elevation: 8,
-    paddingHorizontal: 4,
+    elevation: 9,
   },
-  fabMinimizeToggle: {
-    marginLeft: 2,
-    padding: 2,
-  },
-  fabIconRow: {
+  fabIconContainer: {
     position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
+    width: 36,
+    height: 36,
+  },
+  fabEmoji: {
+    fontSize: 22,
   },
   fabAiBadge: {
     position: 'absolute',
-    top: -4,
-    right: -6,
+    top: -3,
+    right: -5,
     backgroundColor: '#0284c7',
-    borderRadius: 6,
-    paddingHorizontal: 3,
+    borderRadius: 7,
+    paddingHorizontal: 4,
     paddingVertical: 1,
+    borderWidth: 1,
+    borderColor: '#ffffff',
   },
   fabAiBadgeText: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: 8,
     fontWeight: '900',
-  },
-  fabLabel: {
-    color: coffee.accent,
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.5,
   },
   modalOverlay: {
     flex: 1,

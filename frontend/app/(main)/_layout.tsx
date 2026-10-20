@@ -587,7 +587,7 @@ export default function MainLayout() {
 
   if (isLargeScreen) {
     return (
-      <View style={styles.singleContainer}>
+      <View style={{ flex: 1, position: 'relative' }}>
         <OfflineBanner
           onPressPeers={() => setMeshModalVisible(true)}
           onPressHT={() => setHtModalVisible(true)}
