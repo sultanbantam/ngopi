@@ -33,6 +33,7 @@ import emergencyRoutes from './routes/emergency.routes';
 import albumRoutes from './routes/album.routes';
 import merchantRoutes from './routes/merchant.routes';
 import partnershipRoutes from './routes/partnership.routes';
+import chessProRoutes from './routes/chessPro.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -120,6 +121,7 @@ app.use('/api/emergency', emergencyRoutes);
 app.use('/api/albums', albumRoutes);
 app.use('/api/merchant', merchantRoutes);
 app.use('/api/partnership', partnershipRoutes);
+app.use('/api/chess/pro', chessProRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

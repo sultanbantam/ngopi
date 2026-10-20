@@ -23,6 +23,7 @@
     "@types/sharp": "^0.31.1",
     "axios": "^1.18.1",
     "bcryptjs": "^3.0.3",
+    "chess.js": "^1.4.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
@@ -39,6 +40,8 @@
     "qrcode": "^1.5.4",
     "sharp": "^0.35.3",
     "socket.io": "^4.8.3",
+    "stockfish": "^19.0.1",
+    "stockfish.js": "^10.0.2",
     "ws": "^8.21.0"
   },
   "devDependencies": {

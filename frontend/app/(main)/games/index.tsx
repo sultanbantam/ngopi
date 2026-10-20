@@ -24,6 +24,7 @@ import LeaderboardModal from '../../../src/components/LeaderboardModal';
 import PokemonHubModal from '../../../src/components/PokemonHubModal';
 import GameEventModal from '../../../src/components/GameEventModal';
 import PointsHubModal from '../../../src/components/PointsHubModal';
+import ChessProArenaModal from '../../../src/components/ChessProArenaModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -111,6 +112,8 @@ export default function GamesLobbyScreen() {
   const [pokemonHubVisible, setPokemonHubVisible] = useState<boolean>(false);
   const [eventModalVisible, setEventModalVisible] = useState<boolean>(false);
   const [pointsHubVisible, setPointsHubVisible] = useState<boolean>(false);
+  const [chessProModalVisible, setChessProModalVisible] = useState<boolean>(false);
+  const [chessMode, setChessMode] = useState<'basic' | 'pro'>('basic');
 
   // Join password modal state
   const [passwordModalVisible, setPasswordModalVisible] = useState(false);
@@ -552,11 +555,11 @@ export default function GamesLobbyScreen() {
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.featurePill, { backgroundColor: 'rgba(168, 85, 247, 0.15)', borderColor: '#a855f7' }]}
-            onPress={() => setPokemonHubVisible(true)}
+            style={[styles.featurePill, { backgroundColor: 'rgba(234, 179, 8, 0.15)', borderColor: '#eab308' }]}
+            onPress={() => setChessProModalVisible(true)}
           >
-            <Text style={{ fontSize: 14 }}>🎴</Text>
-            <Text style={[styles.featurePillText, { color: '#e9d5ff' }]}>Binder Kartu Monster</Text>
+            <MaterialCommunityIcons name="chess-king" size={15} color="#eab308" />
+            <Text style={[styles.featurePillText, { color: '#fef08a' }]}>Catur Pro (9 Bot) 🏆</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
@@ -636,6 +639,40 @@ export default function GamesLobbyScreen() {
               </TouchableOpacity>
             </View>
           )}
+
+          {selectedTab === 'catur' && (
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                style={[
+                  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+                  chessMode === 'basic'
+                    ? { backgroundColor: coffee.accent, borderColor: coffee.accent }
+                    : { backgroundColor: 'rgba(212, 163, 115, 0.15)', borderColor: coffee.border },
+                ]}
+                onPress={() => setChessMode('basic')}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '700', color: chessMode === 'basic' ? coffee.buttonText : coffee.text }}>
+                  ♟️ Catur Basic (Santai)
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, borderWidth: 1 },
+                  chessMode === 'pro'
+                    ? { backgroundColor: '#eab308', borderColor: '#eab308' }
+                    : { backgroundColor: 'rgba(234, 179, 8, 0.15)', borderColor: '#ca8a04' },
+                ]}
+                onPress={() => {
+                  setChessMode('pro');
+                  setChessProModalVisible(true);
+                }}
+              >
+                <Text style={{ fontSize: 11, fontWeight: '800', color: chessMode === 'pro' ? '#1e293b' : '#fef08a' }}>
+                  🏆 Catur Pro (Taruhan & 9 Bot)
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
         <TouchableOpacity
           style={styles.quickMatchBtn}
@@ -673,6 +710,46 @@ export default function GamesLobbyScreen() {
             <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>
               Buka Binder Koleksi & Booster Pack (Gacha) ✨
             </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {selectedTab === 'catur' && (
+        <View style={{ marginHorizontal: 16, marginBottom: 10 }}>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: '#26170d',
+              borderColor: '#eab308',
+              borderWidth: 1.5,
+              borderRadius: 12,
+              paddingVertical: 12,
+              paddingHorizontal: 14,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.3,
+              shadowRadius: 4,
+              elevation: 4,
+            }}
+            onPress={() => setChessProModalVisible(true)}
+          >
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                <MaterialCommunityIcons name="chess-king" size={18} color="#eab308" />
+                <Text style={{ color: '#fef08a', fontWeight: '900', fontSize: 13, letterSpacing: 0.3 }}>
+                  CATUR PROFESIONAL (STOCKFISH 19)
+                </Text>
+              </View>
+              <Text style={{ color: coffee.secondary, fontSize: 11, lineHeight: 15 }}>
+                Tantang 9 Bot (Tonah s/d Messi) dengan taruhan poin warkop! Saldo 0 atau minus tetap bisa tanding.
+              </Text>
+            </View>
+            <View style={{ backgroundColor: '#eab308', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+              <Text style={{ color: '#1e293b', fontWeight: '900', fontSize: 11 }}>TANTANG ⚔️</Text>
+            </View>
           </TouchableOpacity>
         </View>
       )}
@@ -1255,6 +1332,12 @@ export default function GamesLobbyScreen() {
       <PointsHubModal
         visible={pointsHubVisible}
         onClose={() => setPointsHubVisible(false)}
+      />
+
+      {/* Chess Pro Arena Modal */}
+      <ChessProArenaModal
+        visible={chessProModalVisible}
+        onClose={() => setChessProModalVisible(false)}
       />
     </View>
   );

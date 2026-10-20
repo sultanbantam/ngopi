@@ -37,18 +37,18 @@ export class PointsManager {
     return userPoints.get(key) || 0;
   }
 
-  public static setPoints(key: string, balance: number): number {
+  public static setPoints(key: string, balance: number, allowNegative: boolean = true): number {
     if (!key) return 0;
-    const finalBalance = Math.max(0, balance);
+    const finalBalance = allowNegative ? balance : Math.max(0, balance);
     userPoints.set(key, finalBalance);
     savePoints(userPoints);
     return finalBalance;
   }
 
-  public static addPoints(key: string, amount: number): number {
+  public static addPoints(key: string, amount: number, allowNegative: boolean = true): number {
     if (!key) return 0;
     const current = userPoints.get(key) || 0;
-    const updated = Math.max(0, current + amount);
+    const updated = allowNegative ? current + amount : Math.max(0, current + amount);
     userPoints.set(key, updated);
     savePoints(userPoints);
 
@@ -60,7 +60,7 @@ export class PointsManager {
           key,
           amount,
           amount > 0 ? 'game_won' : 'custom_reward',
-          amount > 0 ? 'Poin aktivitas permainan/tebak-tebakan warkop' : 'Pengurangan poin'
+          amount > 0 ? 'Poin aktivitas permainan/tebak-tebakan warkop' : 'Pengurangan poin taruhan catur'
         );
       }
     } catch (_) {}

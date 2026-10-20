@@ -713,3 +713,36 @@ model MerchantAgreement {
 
   @@map("merchant_agreements")
 }
+
+// ==========================================
+// CATUR PROFESIONAL (PRO CHESS & STOCKFISH)
+// ==========================================
+
+model ChessProMatch {
+  id                 String   @id @default(cuid())
+  user_id            String   @map("user_id")
+  bot_level          Int      @map("bot_level")
+  bot_name           String   @map("bot_name")
+  result             String   // "win", "lose", "draw"
+  points_changed     Int      // Positif jika menang, negatif jika kalah (misal: -50)
+  user_points_before Int      @map("user_points_before")
+  user_points_after  Int      @map("user_points_after")
+  pgn                String?  // Simpan notasi langkah untuk replay
+  duration_sec       Int
+  created_at         DateTime @default(now())
+
+  @@map("chess_pro_matches")
+}
+
+model BotChessProfile {
+  id            String   @id @default(cuid())
+  name          String   @unique // "Tonah", "Messi", dll
+  level         Int      @unique // 0-8
+  total_matches Int      @default(0)
+  total_wins    Int      @default(0)
+  total_losses  Int      @default(0)
+  updated_at    DateTime @updatedAt
+
+  @@map("bot_chess_profiles")
+}
+
