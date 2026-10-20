@@ -34,7 +34,7 @@ const sanitizeInputValue = (value: unknown, key = ''): unknown => {
 };
 
 const encodeOutputValue = (value: unknown, key = ''): unknown => {
-  if (typeof value === 'string') return SENSITIVE_KEYS.has(key) ? value : escapeHtml(value);
+  if (typeof value === 'string') return SENSITIVE_KEYS.has(key) ? value : cleanString(value);
   if (Array.isArray(value)) return value.map((item) => encodeOutputValue(item, key));
   if (value instanceof Date) return value;
   if (value && typeof value === 'object') {

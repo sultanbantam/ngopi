@@ -25,6 +25,17 @@ const coffee = {
 
 const API_BASE = 'https://api.ngopi.top/api';
 
+export const decodeHtmlEntities = (str?: string | null): string => {
+  if (!str) return '';
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+};
+
 interface AgentStep {
   step: number;
   type: 'thought' | 'action' | 'observation' | 'final_answer';
@@ -325,7 +336,7 @@ export default function NgopAIFloatingAgent() {
                       <Text style={styles.messageTime}>{m.timestamp}</Text>
                     </View>
 
-                    <Text style={styles.messageText}>{m.text}</Text>
+                    <Text style={styles.messageText}>{decodeHtmlEntities(m.text)}</Text>
 
                     {/* ReAct Step Viewer Toggle */}
                     {hasSteps && (
@@ -363,7 +374,7 @@ export default function NgopAIFloatingAgent() {
                                       {step.type.toUpperCase()}{step.tool ? `: ${step.tool}` : ''}
                                     </Text>
                                   </View>
-                                  <Text style={styles.stepContent}>{step.content}</Text>
+                                  <Text style={styles.stepContent}>{decodeHtmlEntities(step.content)}</Text>
                                 </View>
                               );
                             })}

@@ -26,6 +26,17 @@ const coffee = {
 
 const API_BASE = 'https://api.ngopi.top/api';
 
+export const decodeHtmlEntities = (str?: string | null): string => {
+  if (!str) return '';
+  return str
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>');
+};
+
 interface MerchantDashboardModalProps {
   visible: boolean;
   onClose: () => void;
@@ -63,7 +74,7 @@ export default function MerchantDashboardModal({
   const [savingProfile, setSavingProfile] = useState(false);
 
   const handleRunAgentDemo = async (
-    trigger: 'low_traffic' | 'ambience_autopilot' | 'mou_automation',
+    trigger: 'low_traffic' | 'ambience_autopilot' | 'mou_automation' | 'supply_chain_autopilot',
     customPrompt?: string
   ) => {
     try {
@@ -765,7 +776,7 @@ export default function MerchantDashboardModal({
                         <View style={{ flex: 1 }}>
                           <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>1. Skenario: Anomali Low Traffic (-42%)</Text>
                           <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 2 }}>
-                            Otomatis deteksi sepi ➔ Buat promo diskon 20% ➔ Kirim push notification radius 5km ➔ Siarkan di HT Radio Warkop.
+                            Otomatis deteksi sepi ➔ Buat promo 20% ➔ Blast ke WA, Email, HT Radio, Chatroom Warung Kopi &amp; DM username 5km.
                           </Text>
                         </View>
                         <Ionicons name="play" size={18} color="#38bdf8" />
@@ -800,6 +811,21 @@ export default function MerchantDashboardModal({
                         </View>
                         <Ionicons name="play" size={18} color="#f59e0b" />
                       </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#ec4899', borderRadius: 10, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+                        disabled={agentLoading}
+                        onPress={() => handleRunAgentDemo('supply_chain_autopilot')}
+                      >
+                        <Text style={{ fontSize: 24 }}>📦</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>4. Skenario: Low Stock &amp; Supply Chain Auto-Pilot</Text>
+                          <Text style={{ color: '#94a3b8', fontSize: 10, marginTop: 2 }}>
+                            Otomatis periksa stok 6 jam ➔ Deteksi biji kopi &amp; susu &lt; 20% ➔ Cari supplier terbaik ➔ Draft Purchase Order (Perlu Approval Pemilik).
+                          </Text>
+                        </View>
+                        <Ionicons name="play" size={18} color="#ec4899" />
+                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -827,8 +853,8 @@ export default function MerchantDashboardModal({
 
                       {/* Summary Outcome */}
                       <View style={{ backgroundColor: '#0284c722', borderWidth: 1, borderColor: '#0284c7', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                        <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: 'bold' }}>{agentResult.title}</Text>
-                        <Text style={{ color: '#f8fafc', fontSize: 12, marginTop: 4, lineHeight: 17 }}>{agentResult.summary}</Text>
+                        <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: 'bold' }}>{decodeHtmlEntities(agentResult.title)}</Text>
+                        <Text style={{ color: '#f8fafc', fontSize: 12, marginTop: 4, lineHeight: 17 }}>{decodeHtmlEntities(agentResult.summary)}</Text>
                       </View>
 
                       {/* Steps List */}
@@ -852,7 +878,7 @@ export default function MerchantDashboardModal({
                                     </Text>
                                   </View>
                                 </View>
-                                <Text style={{ color: '#e2e8f0', fontSize: 11, lineHeight: 16 }}>{st.content}</Text>
+                                <Text style={{ color: '#e2e8f0', fontSize: 11, lineHeight: 16 }}>{decodeHtmlEntities(st.content)}</Text>
                               </View>
                             );
                           })}

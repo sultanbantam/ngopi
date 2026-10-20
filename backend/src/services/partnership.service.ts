@@ -276,7 +276,7 @@ Dengan menekan tombol "Setuju & Tandatangani" pada pop-up verifikasi yang muncul
 
     // 3. Create or update MerchantProfile
     try {
-      await MerchantService.createOrUpdateProfile(userId, {
+      await MerchantService.registerOrUpdateProfile(userId, {
         cafe_name: existing.cafe_name,
         address: existing.address,
         phone: existing.phone,
