@@ -325,7 +325,7 @@ export default function ChessProArenaModal({
   const handleResign = () => {
     Alert.alert(
       'Menyerah?',
-      `Apakah Anda yakin ingin menyerah melawan ${activeBot?.name || 'Bot'}? Taruhan ${activeBot?.stake || 50} poin akan dipotong dari saldo Anda.`,
+      `Apakah Anda yakin ingin menyerah melawan ${activeBot?.name || 'Bot'}? Penalti ${activeBot?.stake || 50} poin kompetisi akan dipotong dari saldo Anda.`,
       [
         { text: 'Lanjut Main', style: 'cancel' },
         {
@@ -650,7 +650,7 @@ export default function ChessProArenaModal({
           >
             {/* Arena Intro Banner */}
             <View style={styles.arenaBanner}>
-              <Text style={styles.arenaBannerTitle}>🏆 Arena Taruhan Catur Stockfish</Text>
+              <Text style={styles.arenaBannerTitle}>🏆 Arena Asah Otak & Strategi Catur Stockfish</Text>
               <Text style={styles.arenaBannerDesc}>
                 Setiap bot memiliki kedalaman analisis taktik catur yang berbeda. Menangkan pertandingan untuk meraup poin warkop, atau hadapi resiko pengurangan poin jika kalah. Saldo 0 atau minus tetap bisa bermain!
               </Text>
@@ -696,7 +696,7 @@ export default function ChessProArenaModal({
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
                           <Text style={styles.botElo}>🎯 Elo ~{bot.elo_estimate}</Text>
                           <Text style={[styles.botStake, isMax && { color: '#fbbf24', fontWeight: '900' }]}>
-                            💰 Taruhan: ±{bot.stake.toLocaleString('id-ID')} Poin
+                            ⚔️ Bobot Poin: ±{bot.stake.toLocaleString('id-ID')} Poin
                           </Text>
                         </View>
                       </View>
@@ -794,7 +794,7 @@ export default function ChessProArenaModal({
                     </View>
                   </View>
                   <Text style={styles.opponentElo}>
-                    Elo ~{activeBot?.elo_estimate} • Taruhan: ±{activeBot?.stake} Poin
+                    Elo ~{activeBot?.elo_estimate} • Bobot Poin: ±{activeBot?.stake} Poin
                   </Text>
                 </View>
               </View>
@@ -925,7 +925,7 @@ export default function ChessProArenaModal({
 
               {/* Points Adjustment Box */}
               <View style={styles.outcomePointsBox}>
-                <Text style={styles.outcomePointsLabel}>HASIL TARUHAN POIN</Text>
+                <Text style={styles.outcomePointsLabel}>HASIL POIN ADU STRATEGI</Text>
                 <Text
                   style={[
                     styles.outcomePointsVal,

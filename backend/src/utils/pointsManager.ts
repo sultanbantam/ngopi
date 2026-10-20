@@ -60,7 +60,7 @@ export class PointsManager {
           key,
           amount,
           amount > 0 ? 'game_won' : 'custom_reward',
-          amount > 0 ? 'Poin aktivitas permainan/tebak-tebakan warkop' : 'Pengurangan poin taruhan catur'
+          amount > 0 ? 'Poin aktivitas permainan/tebak-tebakan warkop' : 'Penyesuaian poin tanding catur strategi'
         );
       }
     } catch (_) {}

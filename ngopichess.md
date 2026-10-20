@@ -1,4 +1,4 @@
-Berikut adalah PROMPT\_NGOPI\_CHESS\_PRO.md — prompt lengkap untuk membangun kategori Catur Profesional dengan sistem level bot yang spesifik, poin taruhan (bisa minus), dan kepribadian bot. Prompt ini siap dijalankan di Antigravity IDE.
+Berikut adalah PROMPT\_NGOPI\_CHESS\_PRO.md — prompt lengkap untuk membangun kategori Catur Profesional dengan sistem level bot yang spesifik, bobot poin kompetisi (bisa minus), dan kepribadian bot. Prompt ini siap dijalankan di Antigravity IDE.
 
 \---
 
@@ -9,8 +9,8 @@ Berikut adalah PROMPT\_NGOPI\_CHESS\_PRO.md — prompt lengkap untuk membangun k
 
 \- \*\*Aplikasi\*\*: Ngopi (https\://ngopi.top)  
 \- \*\*Tujuan\*\*: Menambahkan kategori \*\*Catur Profesional\*\* di samping kategori \*\*Basic\*\* (sistem catur lama tidak boleh diubah/dirusak).  
-\- \*\*Sistem Poin\*\*: User bisa menang atau kalah taruhan poin. Jika poin tidak cukup, saldo user \*\*boleh menjadi minus (-)\*\*.  
-\- \*\*Level Bot\*\*: Terdiri dari 9 level (0-8), dengan nama karakter dan nilai taruhan poin yang berbeda-beda. Level 8 harus benar-benar selevel dengan Master Catur Dunia (menggunakan engine Stockfish dengan settingan maksimal).
+\- \*\*Sistem Poin\*\*: User mengadu kecerdasan dan strategi untuk meraih poin atau mengalami pengurangan poin. Jika poin tidak cukup, saldo user \*\*boleh menjadi minus (-)\*\*.  
+\- \*\*Level Bot\*\*: Terdiri dari 9 level (0-8), dengan nama karakter dan bobot nilai poin yang berbeda-beda. Level 8 harus benar-benar selevel dengan Master Catur Dunia (menggunakan engine Stockfish dengan settingan maksimal).
 
 \---
 
@@ -116,7 +116,7 @@ A. Halaman Pemilihan Mode
 
 · Di menu Game \> Catur, tampilkan 2 pilihan tab/kartu:  
   1\. Basic (Main Biasa) \-\> Route ke sistem catur lama.  
-  2\. Profesional (Taruhan Poin) \-\> Route ke sistem baru.
+  2\. Profesional (Kompetisi Poin) \-\> Route ke sistem baru.
 
 B. Halaman Pemilihan Lawan (Catur Profesional)
 
@@ -125,7 +125,7 @@ B. Halaman Pemilihan Lawan (Catur Profesional)
   · Avatar (bisa pakai emoji/ilustrasi catur).  
   · Nama Bot (Tonah, Pe'i, Juned, dll).  
   · Kelas (Bulu, Dasar, Menengah, dll).  
-  · Taruhan Poin: \+50 / \-50 (warna hijau untuk plus, merah untuk minus).  
+  · Bobot Poin: \+50 / \-50 (warna hijau untuk plus, merah untuk minus).  
   · Tombol "Tantang".
 
 C. Halaman Permainan (Papan Catur)
@@ -133,7 +133,7 @@ C. Halaman Permainan (Papan Catur)
 · Gunakan library react-chessboard.  
 · Tampilkan informasi di atas papan:  
   · Lawan: Tonah (Kelas Bulu)  
-  · Taruhan: ±50 Poin  
+  · Bobot Poin: ±50 Poin  
   · Poin Anda: 10 Poin (atau \-40 Poin jika minus)  
 · Indikator loading saat bot berpikir ("Tonah sedang berpikir...").
 
@@ -171,8 +171,8 @@ Langkah Eksekusi:
 
 1\. Database: Buat tabel ChessProMatch dan BotChessProfile. Pastikan field balance di tabel poin user mengizinkan angka negatif.  
 2\. Backend \- Bot Engine: Setup Stockfish (pastikan binary stockfish atau stockfish.js terinstall). Buat fungsi untuk mengonfigurasi Skill Level, Depth, dan Time berdasarkan konfigurasi 9 level di atas.  
-3\. Backend \- API: Buat endpoint /api/chess/pro/start, /api/chess/pro/move, dan /api/chess/pro/finish. Implementasikan logika penambahan/pengurangan poin taruhan, termasuk update ke database yang bisa minus.  
-4\. Frontend \- UI: Buat halaman pemilihan lawan (menampilkan 9 bot dengan nama dan taruhan poinnya). Buat halaman papan catur yang menampilkan status taruhan poin.  
+3\. Backend \- API: Buat endpoint /api/chess/pro/start, /api/chess/pro/move, dan /api/chess/pro/finish. Implementasikan logika penambahan/pengurangan poin kompetisi catur, termasuk update ke database yang bisa minus.  
+4\. Frontend \- UI: Buat halaman pemilihan lawan (menampilkan 9 bot dengan nama dan bobot poin kompetisinya). Buat halaman papan catur yang menampilkan status poin.  
 5\. Frontend \- Hasil: Buat modal kemenangan/kekalahan yang menampilkan perubahan poin secara jelas (termasuk peringatan jika poin menjadi minus).  
 6\. Testing: Buat unit test untuk memastikan jika user kalah di Level 0 (Tonah), poinnya berkurang 50 dan bisa menjadi \-50.  
 7\. Laporkan file apa saja yang dibuat/diubah setelah selesai."

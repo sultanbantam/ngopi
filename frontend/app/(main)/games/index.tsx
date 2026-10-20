@@ -668,7 +668,7 @@ export default function GamesLobbyScreen() {
                 }}
               >
                 <Text style={{ fontSize: 11, fontWeight: '800', color: chessMode === 'pro' ? '#1e293b' : '#fef08a' }}>
-                  🏆 Catur Pro (Taruhan & 9 Bot)
+                  🏆 Catur Pro (Kompetisi 9 Bot)
                 </Text>
               </TouchableOpacity>
             </View>
@@ -744,7 +744,7 @@ export default function GamesLobbyScreen() {
                 </Text>
               </View>
               <Text style={{ color: coffee.secondary, fontSize: 11, lineHeight: 15 }}>
-                Tantang 9 Bot (Tonah s/d Messi) dengan taruhan poin warkop! Saldo 0 atau minus tetap bisa tanding.
+                Tantang 9 Bot (Tonah s/d Messi) dalam kompetisi adu strategi poin! Saldo 0 atau minus tetap bisa tanding.
               </Text>
             </View>
             <View style={{ backgroundColor: '#eab308', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
