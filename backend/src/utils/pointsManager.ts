@@ -42,6 +42,15 @@ export class PointsManager {
     const finalBalance = allowNegative ? balance : Math.max(0, balance);
     userPoints.set(key, finalBalance);
     savePoints(userPoints);
+
+    // Sync to pointsEconomyService if available
+    try {
+      const { pointsEconomyService } = require('../services/points.service');
+      if (pointsEconomyService && typeof pointsEconomyService.syncWithPointsManager === 'function') {
+        pointsEconomyService.syncWithPointsManager(key);
+      }
+    } catch (_) {}
+
     return finalBalance;
   }
 

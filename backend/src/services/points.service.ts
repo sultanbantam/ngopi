@@ -180,17 +180,19 @@ export class PointsEconomyService {
     try {
       const { PointsManager } = require('../utils/pointsManager');
       if (!PointsManager) return;
-      const ptsById = PointsManager.getPoints(userId);
-      const ptsByName = username ? PointsManager.getPoints(username) : 0;
-      const maxPts = Math.max(ptsById, ptsByName);
-      if (maxPts > 0) {
+      const allPoints = PointsManager.getAllPoints();
+      const hasByName = Boolean(username && allPoints[username!] !== undefined);
+      const hasById = allPoints[userId] !== undefined;
+
+      if (hasByName || hasById) {
+        const pmBalance = hasByName ? PointsManager.getPoints(username!) : PointsManager.getPoints(userId);
         const up = this.getOrCreateUserPoints(userId);
-        if (maxPts > up.balance) {
-          up.balance = maxPts;
-          up.lifetime = Math.max(up.lifetime, maxPts);
-          up.updated_at = Date.now();
-          this.saveToDisk();
+        up.balance = pmBalance;
+        if (pmBalance > up.lifetime) {
+          up.lifetime = pmBalance;
         }
+        up.updated_at = Date.now();
+        this.saveToDisk();
       }
     } catch (_) {}
   }
@@ -213,7 +215,7 @@ export class PointsEconomyService {
     return up.balance;
   }
 
-  private recordTransaction(
+  public recordTransaction(
     userId: string,
     amount: number,
     type: PointsTransactionType,

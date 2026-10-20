@@ -589,6 +589,34 @@ export class ChessProServiceClass {
       PointsManager.setPoints(params.userId, pointsAfter, true);
     }
 
+    // Sync to pointsEconomyService and record transaction for Points Hub
+    try {
+      const { pointsEconomyService } = require('./points.service');
+      if (pointsEconomyService) {
+        const targetUserId = params.userId || pointsKey;
+        const up = pointsEconomyService.getOrCreateUserPoints(targetUserId);
+        up.balance = pointsAfter;
+        if (pointsAfter > up.lifetime) {
+          up.lifetime = pointsAfter;
+        }
+        up.updated_at = Date.now();
+        if (pointsChanged !== 0) {
+          pointsEconomyService.recordTransaction(
+            targetUserId,
+            pointsChanged,
+            pointsChanged > 0 ? 'game_won' : 'custom_reward',
+            params.matchId,
+            pointsChanged > 0
+              ? `Kemenangan Catur Pro vs ${botConfig.name} (${botConfig.class_title}) (+${pointsChanged})`
+              : `Penalti Catur Pro vs ${botConfig.name} (${botConfig.class_title}) (${pointsChanged})`
+          );
+        }
+        pointsEconomyService.saveToDisk();
+      }
+    } catch (e) {
+      console.warn('Sync chess points to economy service warning:', e);
+    }
+
     const duration = params.durationSec || (match ? Math.round((Date.now() - match.startTime) / 1000) : 60);
 
     // Save to Database (Prisma) with fallback
