@@ -558,17 +558,20 @@ export class MerchantService {
     this.saveData(data);
 
     try {
-      await prisma.merchantPromo.create({
-        data: {
-          merchant_id: merchantId,
-          title: newPromo.title,
-          description: newPromo.description,
-          discount: newPromo.discount,
-          image_url: newPromo.image_url,
-          valid_until: new Date(newPromo.valid_until),
-          is_active: true,
-        },
-      });
+      const dbMerchant = await prisma.merchantProfile.findUnique({ where: { id: merchantId } });
+      if (dbMerchant) {
+        await prisma.merchantPromo.create({
+          data: {
+            merchant_id: merchantId,
+            title: newPromo.title,
+            description: newPromo.description,
+            discount: newPromo.discount,
+            image_url: newPromo.image_url,
+            valid_until: new Date(newPromo.valid_until),
+            is_active: true,
+          },
+        });
+      }
     } catch (_) {}
 
     return { success: true, promo: newPromo };

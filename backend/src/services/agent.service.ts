@@ -54,6 +54,7 @@ class AgentServiceClass {
   private isAutonomousLoopActive: boolean = true;
   private lastLoopCheckTime: string = new Date().toISOString();
   private autonomousInterventionsCount: number = 44;
+  private backgroundIntervalId: NodeJS.Timeout | null = null;
   private autonomousLogs: AutonomousLog[] = [
     {
       id: 'log_auto_1',
@@ -88,6 +89,47 @@ class AgentServiceClass {
       status: 'pending_approval',
     },
   ];
+
+  constructor() {
+    this.startAutonomousDaemon();
+  }
+
+  public startAutonomousDaemon() {
+    if (this.backgroundIntervalId) {
+      clearInterval(this.backgroundIntervalId);
+    }
+    // Background daemon scanner: scans every 60 seconds
+    this.backgroundIntervalId = setInterval(async () => {
+      try {
+        if (!this.isAutonomousLoopActive) return;
+        this.lastLoopCheckTime = new Date().toISOString();
+
+        // Check active merchant partners
+        const partners = await MerchantService.listPartners();
+        if (partners && partners.length > 0) {
+          const target = partners[0];
+          if (!target) return;
+          // Check stock condition
+          const inv = await this.checkInventory(target.id);
+          if (inv.requires_restock) {
+            const lastPoLog = this.autonomousLogs.find((l) => l.trigger.includes('Supply Chain'));
+            const lastPoTime = lastPoLog ? new Date(lastPoLog.timestamp).getTime() : 0;
+            // Restock alert interval: at most once every 6 hours
+            if (Date.now() - lastPoTime > 6 * 3600 * 1000) {
+              console.log(`[ngopAI Daemon] Auto-triggering supply chain check for ${target.cafe_name}...`);
+              await this.executeAgent({
+                role: 'merchant',
+                trigger: 'supply_chain_autopilot',
+                cafeId: target.id,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[ngopAI Daemon Error]', err);
+      }
+    }, 60000);
+  }
 
   // =========================================================================
   // TOOL 1: get_merchant_analytics

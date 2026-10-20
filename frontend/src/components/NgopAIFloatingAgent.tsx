@@ -10,7 +10,9 @@ import {
   ActivityIndicator,
   Animated,
   Platform,
+  PanResponder,
 } from 'react-native';
+import { usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { coffee as baseCoffee } from '../theme/coffee';
 import axios from 'axios';
@@ -59,6 +61,38 @@ export default function NgopAIFloatingAgent() {
   const [loading, setLoading] = useState(false);
   const [inputText, setInputText] = useState('');
   const [expandedStepsId, setExpandedStepsId] = useState<string | null>(null);
+
+  const pathname = usePathname() || '';
+  const isGameScreen = pathname.includes('/games');
+  const isChatScreen = pathname.includes('/warkop') || pathname.includes('/chat');
+  const [isCompact, setIsCompact] = useState(isGameScreen);
+
+  React.useEffect(() => {
+    if (isGameScreen) {
+      setIsCompact(true);
+    }
+  }, [isGameScreen]);
+
+  const pan = useRef(new Animated.ValueXY()).current;
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return Math.abs(gestureState.dx) > 6 || Math.abs(gestureState.dy) > 6;
+      },
+      onPanResponderGrant: () => {
+        pan.setOffset({
+          x: (pan.x as any)._value || 0,
+          y: (pan.y as any)._value || 0,
+        });
+        pan.setValue({ x: 0, y: 0 });
+      },
+      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], { useNativeDriver: false }),
+      onPanResponderRelease: () => {
+        pan.flattenOffset();
+      },
+    })
+  ).current;
 
   // Messages thread
   const [messages, setMessages] = useState<ChatMessage[]>([
@@ -230,10 +264,17 @@ export default function NgopAIFloatingAgent() {
 
   return (
     <>
-      {/* Floating Action Button */}
+      {/* Floating Action Button - Draggable & Screen-Aware */}
       <Animated.View
+        {...panResponder.panHandlers}
         style={[
           styles.fabWrapper,
+          isGameScreen
+            ? styles.fabGamePos
+            : isChatScreen
+            ? styles.fabChatPos
+            : styles.fabDefaultPos,
+          pan.getLayout(),
           {
             transform: [{ scale: pulseAnim }],
           },
@@ -241,16 +282,26 @@ export default function NgopAIFloatingAgent() {
       >
         <TouchableOpacity
           activeOpacity={0.85}
-          style={styles.fabButton}
+          style={isCompact ? styles.fabCompactButton : styles.fabButton}
           onPress={() => setModalVisible(true)}
         >
           <View style={styles.fabIconRow}>
-            <Text style={{ fontSize: 22 }}>☕</Text>
+            <Text style={{ fontSize: isCompact ? 18 : 22 }}>☕</Text>
             <View style={styles.fabAiBadge}>
               <Text style={styles.fabAiBadgeText}>AI</Text>
             </View>
           </View>
-          <Text style={styles.fabLabel}>ngopAI</Text>
+          {!isCompact && <Text style={styles.fabLabel}>ngopAI</Text>}
+          <TouchableOpacity
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={(e) => {
+              e.stopPropagation();
+              setIsCompact(!isCompact);
+            }}
+            style={styles.fabMinimizeToggle}
+          >
+            <Ionicons name={isCompact ? 'chevron-forward' : 'remove-circle-outline'} size={isCompact ? 10 : 13} color="#94a3b8" />
+          </TouchableOpacity>
         </TouchableOpacity>
       </Animated.View>
 
@@ -425,24 +476,54 @@ export default function NgopAIFloatingAgent() {
 const styles = StyleSheet.create({
   fabWrapper: {
     position: 'absolute',
-    bottom: 96,
-    right: 18,
     zIndex: 9997,
+  },
+  fabDefaultPos: {
+    bottom: 85,
+    right: 14,
+  },
+  fabGamePos: {
+    top: 72,
+    right: 12,
+  },
+  fabChatPos: {
+    bottom: 135,
+    right: 12,
   },
   fabButton: {
     backgroundColor: '#26150c',
     borderRadius: 28,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderWidth: 1.5,
     borderColor: coffee.accent,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
     shadowColor: '#000',
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 8,
+  },
+  fabCompactButton: {
+    backgroundColor: '#26150c',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: coffee.accent,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 8,
+    paddingHorizontal: 4,
+  },
+  fabMinimizeToggle: {
+    marginLeft: 2,
+    padding: 2,
   },
   fabIconRow: {
     position: 'relative',
