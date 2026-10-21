@@ -468,6 +468,8 @@ export class ChessProServiceClass {
 
       return {
         success: true,
+        status: 'finished',
+        winner: finalResult === 'win' ? match.userColor : 'draw',
         user_move: userExecuted,
         bot_move: null,
         fen: match.fen,
@@ -478,6 +480,7 @@ export class ChessProServiceClass {
         is_game_over: true,
         result: finalResult,
         finish_data: finishData,
+        points_result: finishData,
         bot_comment: finalResult === 'win' ? 'Luar biasa... langkahmu sangat brilian!' : 'Pertandingan berakhir remis.',
       };
     }
@@ -539,6 +542,8 @@ export class ChessProServiceClass {
 
     return {
       success: true,
+      status: isGameOver ? 'finished' : 'in_progress',
+      winner: finalResult === 'win' ? match.userColor : finalResult === 'lose' ? (match.userColor === 'white' ? 'black' : 'white') : finalResult === 'draw' ? 'draw' : null,
       user_move: userExecuted,
       bot_move: botExecuted ? {
         from: botExecuted.from,
@@ -554,6 +559,7 @@ export class ChessProServiceClass {
       is_game_over: isGameOver,
       result: finalResult,
       finish_data: finishData,
+      points_result: finishData,
       bot_comment: botComment,
     };
   }
@@ -570,7 +576,22 @@ export class ChessProServiceClass {
     durationSec?: number;
   }) {
     const match = this.activeMatches.get(params.matchId);
-    const botLevel = match ? match.botLevel : 0;
+    if (!match) {
+      // Match was already finished or concluded
+      const pointsKey = params.username || params.userId;
+      const currentPts = PointsManager.getPoints(pointsKey);
+      return {
+        success: true,
+        match_id: params.matchId,
+        result: params.result,
+        points_changed: 0,
+        points_after: currentPts,
+        new_balance: currentPts,
+        warning_message: currentPts < 0 ? `Poin Anda sekarang ${currentPts}. Terus main dan menangkan kembali poin Anda!` : null,
+      };
+    }
+
+    const botLevel = match.botLevel;
     const botConfig = this.getBotConfig(botLevel);
     const stake = botConfig.stake;
 

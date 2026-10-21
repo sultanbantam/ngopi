@@ -300,17 +300,56 @@ export default function ChessProArenaModal({
           }
         }
 
-        // Check if game concluded
-        if (apiRes.data.status === 'finished') {
-          const res = apiRes.data.winner === userColor ? 'win' : apiRes.data.winner === 'draw' ? 'draw' : 'lose';
-          const ptsResult = apiRes.data.points_result;
-          handleMatchConclusion(
-            res,
-            ptsResult?.points_changed ?? (res === 'win' ? (activeBot?.stake || 50) : -(activeBot?.stake || 50)),
-            ptsResult?.new_balance ?? userBalance,
-            ptsResult?.warning_message,
-            apiRes.data.bot_comment
-          );
+        // Check if game concluded via backend or local board
+        let isLocalGameOver = false;
+        try {
+          isLocalGameOver = chessInstance.isGameOver();
+        } catch (_) {}
+
+        const isFinished =
+          apiRes.data.status === 'finished' ||
+          Boolean(apiRes.data.is_game_over) ||
+          Boolean(apiRes.data.is_checkmate) ||
+          isLocalGameOver;
+
+        if (isFinished) {
+          const res =
+            apiRes.data.result ||
+            (apiRes.data.winner === userColor ? 'win' : apiRes.data.winner === 'draw' ? 'draw' : 'lose');
+          const ptsResult = apiRes.data.points_result || apiRes.data.finish_data;
+          const pointsChanged =
+            typeof ptsResult?.points_changed === 'number'
+              ? ptsResult.points_changed
+              : res === 'win'
+              ? (activeBot?.stake || 50)
+              : -(activeBot?.stake || 50);
+
+          const newBal =
+            typeof ptsResult?.points_after === 'number'
+              ? ptsResult.points_after
+              : typeof ptsResult?.new_balance === 'number'
+              ? ptsResult.new_balance
+              : userBalance + pointsChanged;
+
+          const isMate = Boolean(apiRes.data.is_checkmate) || (res === 'lose' && chessInstance.isCheckmate());
+          const reasonText = isMate
+            ? res === 'win'
+              ? 'Skakmat! Anda memenangkan pertandingan!'
+              : `Skakmat! ${activeBot?.name || 'Bot'} memenangkan pertandingan.`
+            : 'Pertandingan selesai.';
+
+          // Delay slightly so the player sees the final checkmate move on the board
+          setTimeout(() => {
+            handleMatchConclusion(
+              res,
+              pointsChanged,
+              newBal,
+              ptsResult?.warning_message,
+              apiRes.data.bot_comment,
+              reasonText
+            );
+          }, 600);
+          return;
         }
       } else {
         Alert.alert('Gagal Gerak', apiRes.data?.error || 'Langkah tidak valid.');
@@ -323,18 +362,27 @@ export default function ChessProArenaModal({
 
   // Surrender / Resign button
   const handleResign = () => {
-    Alert.alert(
-      'Menyerah?',
-      `Apakah Anda yakin ingin menyerah melawan ${activeBot?.name || 'Bot'}? Penalti ${activeBot?.stake || 50} poin kompetisi akan dipotong dari saldo Anda.`,
-      [
-        { text: 'Lanjut Main', style: 'cancel' },
-        {
-          text: 'Ya, Menyerah',
-          style: 'destructive',
-          onPress: () => finishWithResult('lose', 'Anda menyerah.'),
-        },
-      ]
-    );
+    const confirmMessage = `Apakah Anda yakin ingin menyerah melawan ${activeBot?.name || 'Bot'}? Penalti ${activeBot?.stake || 50} poin kompetisi akan dipotong dari saldo Anda.`;
+
+    if (Platform.OS === 'web') {
+      const ok = typeof window !== 'undefined' ? window.confirm(confirmMessage) : true;
+      if (ok) {
+        finishWithResult('lose', 'Anda menyerah.');
+      }
+    } else {
+      Alert.alert(
+        'Menyerah?',
+        confirmMessage,
+        [
+          { text: 'Lanjut Main', style: 'cancel' },
+          {
+            text: 'Ya, Menyerah',
+            style: 'destructive',
+            onPress: () => finishWithResult('lose', 'Anda menyerah.'),
+          },
+        ]
+      );
+    }
   };
 
   // Conclude match via /finish API
@@ -357,19 +405,41 @@ export default function ChessProArenaModal({
         { headers }
       );
 
-      if (res.data?.success) {
-        const ptsResult = res.data.points_result;
-        handleMatchConclusion(
-          result,
-          ptsResult?.points_changed ?? 0,
-          ptsResult?.new_balance ?? userBalance,
-          ptsResult?.warning_message,
-          activeBot?.quotes?.game_over,
-          reason
-        );
-      }
+      const ptsResult = res.data?.points_result || res.data?.finish_data || res.data;
+      const ptsChanged =
+        typeof ptsResult?.points_changed === 'number'
+          ? ptsResult.points_changed
+          : result === 'win'
+          ? (activeBot?.stake || 50)
+          : -(activeBot?.stake || 50);
+
+      const newBal =
+        typeof ptsResult?.new_balance === 'number'
+          ? ptsResult.new_balance
+          : typeof ptsResult?.points_after === 'number'
+          ? ptsResult.points_after
+          : userBalance + ptsChanged;
+
+      handleMatchConclusion(
+        result,
+        ptsChanged,
+        newBal,
+        ptsResult?.warning_message,
+        activeBot?.quotes?.game_over,
+        reason
+      );
     } catch (err: any) {
-      console.warn('Gagal mengakhiri pertandingan:', err);
+      console.warn('Gagal mengakhiri pertandingan via API:', err);
+      // Fallback: ALWAYS conclude locally so the user is never stuck
+      const ptsChanged = result === 'win' ? (activeBot?.stake || 50) : -(activeBot?.stake || 50);
+      handleMatchConclusion(
+        result,
+        ptsChanged,
+        userBalance + ptsChanged,
+        undefined,
+        activeBot?.quotes?.game_over,
+        reason
+      );
     } finally {
       setLoading(false);
     }
@@ -555,21 +625,25 @@ export default function ChessProArenaModal({
             style={styles.backButton}
             onPress={() => {
               if (viewState === 'playing') {
-                Alert.alert(
-                  'Keluar Pertandingan?',
-                  'Pertandingan sedang berjalan. Jika keluar sekarang, Anda dianggap menyerah!',
-                  [
-                    { text: 'Tetap Main', style: 'cancel' },
-                    {
-                      text: 'Keluar & Menyerah',
-                      style: 'destructive',
-                      onPress: () => {
-                        finishWithResult('lose', 'Pemain meninggalkan papan.');
-                        setViewState('lobby');
+                const leaveMsg = 'Pertandingan sedang berjalan. Jika keluar sekarang, Anda dianggap menyerah!';
+                if (Platform.OS === 'web') {
+                  if (typeof window !== 'undefined' && window.confirm(leaveMsg)) {
+                    finishWithResult('lose', 'Pemain meninggalkan papan.');
+                  }
+                } else {
+                  Alert.alert(
+                    'Keluar Pertandingan?',
+                    leaveMsg,
+                    [
+                      { text: 'Tetap Main', style: 'cancel' },
+                      {
+                        text: 'Keluar & Menyerah',
+                        style: 'destructive',
+                        onPress: () => finishWithResult('lose', 'Pemain meninggalkan papan.'),
                       },
-                    },
-                  ]
-                );
+                    ]
+                  );
+                }
               } else {
                 onClose();
               }
@@ -820,12 +894,18 @@ export default function ChessProArenaModal({
               </View>
             ) : null}
 
-            {/* Check Warning Banner */}
-            {inCheck && (
+            {/* Check / Checkmate Warning Banner */}
+            {chessInstance.isCheckmate() ? (
+              <View style={[styles.checkAlertBanner, { backgroundColor: 'rgba(239, 68, 68, 0.35)', borderColor: '#ef4444' }]}>
+                <Text style={[styles.checkAlertText, { color: '#fca5a5', fontSize: 12 }]}>
+                  💀 SKAKMAT! PERTANDINGAN SELESAI
+                </Text>
+              </View>
+            ) : inCheck ? (
               <View style={styles.checkAlertBanner}>
                 <Text style={styles.checkAlertText}>🚨 SKAK! RAJA DALAM ANCAMAN BAHAYA!</Text>
               </View>
-            )}
+            ) : null}
 
             {/* 8x8 Chessboard */}
             <View style={{ marginVertical: 10 }}>
