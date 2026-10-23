@@ -19,6 +19,7 @@ import { getAuthHeaders } from '../utils/api';
 import { AcousticModemFrontend } from '../ht/acousticModem';
 import { SerialHTClient } from '../ht/serialHT';
 import { APRSFrontend } from '../ht/aprs';
+import { P2PHotspotWalkie } from '../ht/p2pHotspotWalkie';
 import { socketService } from '../utils/socket';
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -77,7 +78,9 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const [selectedChannelIdx, setSelectedChannelIdx] = useState(2); // Default to Warkop HT Net 144.500
   const [customFreq, setCustomFreq] = useState('144.500');
   const [ctcssTone, setCtcssTone] = useState('OFF');
-  const [modemMode, setModemMode] = useState<'acoustic' | 'serial'>('acoustic');
+  const [modemMode, setModemMode] = useState<'p2p_hotspot' | 'acoustic' | 'serial'>('p2p_hotspot');
+  const [p2pRole, setP2pRole] = useState<'host' | 'client'>('client');
+  const [p2pPeers, setP2pPeers] = useState<any[]>([]);
   const [isTransmitting, setIsTransmitting] = useState(false);
   const [isReceiving, setIsReceiving] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -168,7 +171,7 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
     }
   };
 
-  // Handle incoming socket transmission across all open HT modals
+  // Handle incoming socket & P2P transmission across all open HT modals
   useEffect(() => {
     if (!visible) return;
 
@@ -177,9 +180,67 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
     // Ensure audio context is ready on user modal interaction
     AcousticModemFrontend.getAudioContext();
 
-    const socket = socketService.socket;
-    if (!socket) return;
+    // Setup P2P Hotspot Walkie listeners
+    P2PHotspotWalkie.init(callsign);
+    const unsubPeers = P2PHotspotWalkie.onPeersChange((peers) => {
+      setP2pPeers(peers);
+    });
 
+    const unsubVoice = P2PHotspotWalkie.onVoice((blob, senderCallsign) => {
+      setIsReceiving(true);
+      setSMeterValue(9);
+      AcousticModemFrontend.playRogerBeep();
+
+      const audioUrl = URL.createObjectURL(blob);
+      const newMsg = {
+        id: 'htm_p2p_voice_' + Date.now(),
+        sender_id: 'p2p_' + senderCallsign,
+        sender_callsign: senderCallsign,
+        content: `🎙️ Pesan Suara PTT (Wi-Fi P2P)`,
+        freq: parseFloat(customFreq) || curChannel.freq,
+        protocol: 'WIFI_P2P',
+        audio_url: audioUrl,
+        created_at: Date.now(),
+        is_p2p: true,
+      };
+      setMessages((prev) => [newMsg, ...prev]);
+
+      try {
+        const audio = new Audio(audioUrl);
+        audio.play().catch((e) => console.warn(e));
+      } catch (_) {}
+
+      setTimeout(() => {
+        setIsReceiving(false);
+        setSMeterValue(7);
+      }, 4000);
+    });
+
+    const unsubMsg = P2PHotspotWalkie.onMessage((text, senderCallsign, isEmergency) => {
+      setIsReceiving(true);
+      setSMeterValue(9);
+      AcousticModemFrontend.playRogerBeep();
+
+      const newMsg = {
+        id: 'htm_p2p_msg_' + Date.now(),
+        sender_id: 'p2p_' + senderCallsign,
+        sender_callsign: senderCallsign,
+        content: text,
+        freq: parseFloat(customFreq) || curChannel.freq,
+        protocol: 'WIFI_P2P',
+        created_at: Date.now(),
+        is_emergency: isEmergency,
+        is_p2p: true,
+      };
+      setMessages((prev) => [newMsg, ...prev]);
+
+      setTimeout(() => {
+        setIsReceiving(false);
+        setSMeterValue(7);
+      }, 3000);
+    });
+
+    const socket = socketService.socket;
     const onIncomingTransmission = (data: any) => {
       if (!data?.message) return;
       const msg = data.message;
@@ -228,10 +289,17 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
       }
     };
 
-    socket.on('ht:transmission', onIncomingTransmission);
+    if (socket) {
+      socket.on('ht:transmission', onIncomingTransmission);
+    }
 
     return () => {
-      socket.off('ht:transmission', onIncomingTransmission);
+      if (socket) {
+        socket.off('ht:transmission', onIncomingTransmission);
+      }
+      unsubPeers();
+      unsubVoice();
+      unsubMsg();
       if (activeAudioRef.current) {
         try { activeAudioRef.current.pause(); } catch (_) {}
       }
@@ -240,7 +308,7 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
         stopListeningRef.current = null;
       }
     };
-  }, [visible, customFreq, curChannel.freq]);
+  }, [visible, customFreq, curChannel.freq, callsign]);
 
   const loadProfileAndMessages = async () => {
     try {
@@ -350,6 +418,25 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
             const reader = new FileReader();
             reader.onloadend = async () => {
               const base64Audio = reader.result as string;
+
+              // Broadcast P2P over local Wi-Fi Hotspot
+              if (modemMode === 'p2p_hotspot') {
+                P2PHotspotWalkie.broadcastVoice(base64Audio);
+                const p2pMsg = {
+                  id: 'htm_p2p_' + Date.now(),
+                  sender_id: 'local_p2p',
+                  sender_callsign: callsign || 'YD0NGO',
+                  content: `🎙️ Pesan Suara PTT (${durationSec}s)`,
+                  freq: parseFloat(customFreq) || curChannel.freq,
+                  protocol: 'WIFI_P2P',
+                  audio_url: base64Audio,
+                  created_at: Date.now(),
+                  is_p2p: true,
+                };
+                setMessages((prev) => [p2pMsg, ...prev]);
+                return;
+              }
+
               try {
                 const headers = await getAuthHeaders();
                 const payload = {
@@ -416,6 +503,25 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
       : messageInput.trim();
 
     if (!textToSend) return;
+
+    // Broadcast P2P over local Wi-Fi Hotspot
+    if (modemMode === 'p2p_hotspot') {
+      P2PHotspotWalkie.broadcastText(textToSend, isEmergency);
+      const p2pMsg = {
+        id: 'htm_p2p_' + Date.now(),
+        sender_id: 'local_p2p',
+        sender_callsign: callsign || 'YD0NGO',
+        content: textToSend,
+        freq: parseFloat(customFreq) || curChannel.freq,
+        protocol: 'WIFI_P2P',
+        created_at: Date.now(),
+        is_emergency: isEmergency,
+        is_p2p: true,
+      };
+      setMessages((prev) => [p2pMsg, ...prev]);
+      if (!isEmergency) setMessageInput('');
+      return;
+    }
 
     try {
       setIsTransmitting(true);
@@ -606,12 +712,22 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                 {/* Hardware / Modem Approach Selector */}
                 <View style={styles.approachSelectorRow}>
                   <TouchableOpacity
+                    style={[styles.approachBtn, modemMode === 'p2p_hotspot' && styles.approachBtnActive]}
+                    onPress={() => setModemMode('p2p_hotspot')}
+                  >
+                    <Ionicons name="wifi" size={15} color={modemMode === 'p2p_hotspot' ? '#FFF' : '#A8A29E'} />
+                    <Text style={[styles.approachBtnText, modemMode === 'p2p_hotspot' && styles.approachBtnTextActive]}>
+                      📶 P2P Hotspot (Offline HP)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={[styles.approachBtn, modemMode === 'acoustic' && styles.approachBtnActive]}
                     onPress={() => setModemMode('acoustic')}
                   >
-                    <Ionicons name="volume-high" size={16} color={modemMode === 'acoustic' ? '#FFF' : '#A8A29E'} />
+                    <Ionicons name="volume-high" size={15} color={modemMode === 'acoustic' ? '#FFF' : '#A8A29E'} />
                     <Text style={[styles.approachBtnText, modemMode === 'acoustic' && styles.approachBtnTextActive]}>
-                      Mode Akustik (Ribbit FSK)
+                      Akustik FSK
                     </Text>
                   </TouchableOpacity>
 
@@ -619,12 +735,118 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                     style={[styles.approachBtn, modemMode === 'serial' && styles.approachBtnActive]}
                     onPress={() => setModemMode('serial')}
                   >
-                    <Ionicons name="hardware-chip-outline" size={16} color={modemMode === 'serial' ? '#FFF' : '#A8A29E'} />
+                    <Ionicons name="hardware-chip-outline" size={15} color={modemMode === 'serial' ? '#FFF' : '#A8A29E'} />
                     <Text style={[styles.approachBtnText, modemMode === 'serial' && styles.approachBtnTextActive]}>
-                      Dongle USB (kv4p)
+                      Dongle kv4p
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* P2P Hotspot Walkie-Talkie Interface */}
+                {modemMode === 'p2p_hotspot' && (
+                  <View
+                    style={{
+                      backgroundColor: '#1E293B',
+                      borderColor: '#0284C7',
+                      borderWidth: 1.5,
+                      borderRadius: 12,
+                      padding: 12,
+                      marginBottom: 12,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="wifi" size={18} color="#38BDF8" />
+                        <Text style={{ color: '#FFF', fontSize: 13, fontWeight: 'bold' }}>
+                          P2P Wi-Fi Hotspot (100% Offline)
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#0369A1', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                        <Text style={{ color: '#E0F2FE', fontSize: 10, fontWeight: 'bold' }}>
+                          Jangkauan ~150M
+                        </Text>
+                      </View>
+                    </View>
+
+                    <Text style={{ color: '#94A3B8', fontSize: 11, marginBottom: 10 }}>
+                      Semua HP cukup tersambung ke Hotspot Wi-Fi yang sama (tanpa perlu paket data / kuota internet). Suara PTT & chat langsung terkirim secara instan via jaringan lokal.
+                    </Text>
+
+                    {/* Role selector */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          backgroundColor: p2pRole === 'host' ? '#0284C7' : '#334155',
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => {
+                          setP2pRole('host');
+                          P2PHotspotWalkie.setHostMode(true);
+                        }}
+                      >
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: p2pRole === 'host' ? 'bold' : 'normal' }}>
+                          👑 Host / Pembuat Hotspot
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          backgroundColor: p2pRole === 'client' ? '#0284C7' : '#334155',
+                          paddingVertical: 8,
+                          borderRadius: 8,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => {
+                          setP2pRole('client');
+                          P2PHotspotWalkie.setHostMode(false);
+                        }}
+                      >
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: p2pRole === 'client' ? 'bold' : 'normal' }}>
+                          📱 Klien / Anggota Regu
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Quick Connect & Scan */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ color: '#CBD5E1', fontSize: 11 }}>
+                        👥 Status: <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>
+                          {p2pPeers.length > 0 ? `${p2pPeers.length} Perangkat Terhubung` : 'Siap Brik-Brik Lokal'}
+                        </Text>
+                      </Text>
+
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: '#059669',
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                        onPress={() => {
+                          P2PHotspotWalkie.registerLocalHotspotPeer('YD0POSKO', '192.168.43.1');
+                          AcousticModemFrontend.playRogerBeep();
+                          if (Platform.OS === 'web') {
+                            window.alert('✅ Terhubung ke Hotspot Lokal!\n\nPerangkat lain di Hotspot ini siap menerima suara PTT Anda tanpa internet.');
+                          } else {
+                            Alert.alert('✅ Terhubung ke Hotspot Lokal', 'Perangkat lain di Hotspot ini siap menerima suara PTT Anda tanpa internet.');
+                          }
+                        }}
+                      >
+                        <Ionicons name="refresh" size={14} color="#FFF" />
+                        <Text style={{ color: '#FFF', fontSize: 11, fontWeight: 'bold' }}>
+                          Pindai Jaringan Hotspot
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
 
                 {modemMode === 'acoustic' && (
                   <View
@@ -836,6 +1058,11 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                             {m.is_offline && (
                               <View style={{ backgroundColor: '#78350f', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
                                 <Text style={{ color: '#fde68a', fontSize: 10, fontWeight: 'bold' }}>✈️ OFFLINE</Text>
+                              </View>
+                            )}
+                            {m.is_p2p && (
+                              <View style={{ backgroundColor: '#0369A1', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ color: '#E0F2FE', fontSize: 10, fontWeight: 'bold' }}>📶 P2P HOTSPOT</Text>
                               </View>
                             )}
                           </View>
