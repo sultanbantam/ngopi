@@ -682,23 +682,26 @@ export default function GameTableScreen() {
         {gameState?.lastAction && (
           <View
             style={{
-              backgroundColor: 'rgba(212, 163, 115, 0.2)',
+              backgroundColor: 'rgba(212, 163, 115, 0.25)',
               borderColor: coffee.accent,
-              borderWidth: 1,
+              borderWidth: 1.5,
               borderRadius: 10,
-              paddingHorizontal: isDesktop ? 14 : 8,
-              paddingVertical: isDesktop ? 5 : 3,
-              marginBottom: isDesktop ? 8 : 4,
+              paddingHorizontal: isDesktop ? 16 : 10,
+              paddingVertical: isDesktop ? 6 : 4,
+              marginBottom: isDesktop ? 10 : 6,
               maxWidth: size,
+              width: '100%',
+              alignItems: 'center',
             }}
           >
             <Text
-              numberOfLines={1}
+              numberOfLines={2}
               style={{
                 color: coffee.accent,
-                fontSize: isDesktop ? 12 : 10,
-                fontWeight: '700',
+                fontSize: isDesktop ? 12.5 : 10,
+                fontWeight: '800',
                 textAlign: 'center',
+                lineHeight: isDesktop ? 16 : 13,
               }}
             >
               {gameState.lastAction.message}
@@ -1972,11 +1975,11 @@ export default function GameTableScreen() {
             style={[
               styles.tableFelt,
               {
-                width: monopolyBoardSize + 32,
-                height: monopolyBoardSize + 32,
-                maxWidth: monopolyBoardSize + 32,
-                maxHeight: monopolyBoardSize + 32,
-                padding: 12,
+                width: monopolyBoardSize + 36,
+                minHeight: monopolyBoardSize + 76,
+                maxWidth: monopolyBoardSize + 36,
+                paddingHorizontal: 16,
+                paddingVertical: 14,
                 justifyContent: 'center',
                 alignItems: 'center',
                 borderRadius: 24,

@@ -234,9 +234,15 @@ export class BotProfileService {
       }
     }
 
+    const isCardGame = ['gapleh', 'remi', 'truf', 'bridge', 'poker', 'uno'].includes(normalizedGame || '');
     const banter = BOT_BANTERS[botId] || DEFAULT_BOT_BANTER;
-    const quotes = type === 'turn' ? banter.turnQuotes : type === 'win' ? banter.winQuotes : banter.passQuotes;
-    if (!quotes || quotes.length === 0) return '';
+    let quotes = type === 'turn' ? banter.turnQuotes : type === 'win' ? banter.winQuotes : banter.passQuotes;
+    if (!isCardGame && quotes) {
+      quotes = quotes.filter(q => !/kartu|balak|truf|remi|jagal|koleksi biji/i.test(q));
+    }
+    if (!quotes || quotes.length === 0) {
+      return type === 'turn' ? 'Giliran saya ya... ☕' : type === 'win' ? 'Alhamdulillah menang! ☕🎉' : 'Lewat dulu ya... ☕';
+    }
     return quotes[Math.floor(Math.random() * quotes.length)]!;
   }
 
