@@ -98,20 +98,145 @@ export class AcousticModem {
    * Decode raw Float32 audio samples ke string teks
    */
   public static decodeSamples(samples: Float32Array, sampleRate = this.SAMPLE_RATE): string {
-    const samplesPerBit = Math.round(sampleRate / 1200);
-    if (samples.length < samplesPerBit * 8) return '';
-
-    const bitstream: number[] = [];
-
-    for (let i = 0; i < samples.length; i += samplesPerBit) {
-      const segment = samples.slice(i, i + samplesPerBit);
-      if (segment.length < samplesPerBit) break;
-      const markEnergy = this.goertzel(segment, this.FREQ_MARK, sampleRate);
-      const spaceEnergy = this.goertzel(segment, this.FREQ_SPACE, sampleRate);
-      bitstream.push(markEnergy >= spaceEnergy ? 1 : 0);
+    let sumSq = 0;
+    for (let i = 0; i < samples.length; i++) {
+      sumSq += samples[i]! * samples[i]!;
+    }
+    const rms = Math.sqrt(sumSq / samples.length);
+    // Squelch: ignore ambient silence and low-level room noise
+    if (rms < 0.015) {
+      return '';
     }
 
-    return this.bitsToText(bitstream);
+    const samplesPerBit = Math.round(sampleRate / 1200);
+    if (samples.length < samplesPerBit * 24) return '';
+
+    // Sample across different phase offsets to maximize symbol synchronization
+    const offsets = [
+      0,
+      Math.round(samplesPerBit * 0.25),
+      Math.round(samplesPerBit * 0.5),
+      Math.round(samplesPerBit * 0.75),
+    ];
+
+    for (const offset of offsets) {
+      const bitstream: number[] = [];
+      for (let i = offset; i + samplesPerBit <= samples.length; i += samplesPerBit) {
+        const segment = samples.slice(i, i + samplesPerBit);
+        const markEnergy = this.goertzel(segment, this.FREQ_MARK, sampleRate);
+        const spaceEnergy = this.goertzel(segment, this.FREQ_SPACE, sampleRate);
+        bitstream.push(markEnergy >= spaceEnergy ? 1 : 0);
+      }
+
+      const decoded = this.extractFrameFromBits(bitstream);
+      if (decoded && decoded.length >= 2) {
+        return decoded;
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Cari HDLC flag 0x7E (01111110) LSB dan ekstrak payload frame Bell 202
+   */
+  private static extractFrameFromBits(bits: number[]): string {
+    if (bits.length < 32) return '';
+
+    // Cari pola 0x7E LSB: [0, 1, 1, 1, 1, 1, 1, 0]
+    let syncIdx = -1;
+    for (let i = 0; i <= bits.length - 8; i++) {
+      if (
+        bits[i] === 0 &&
+        bits[i + 1] === 1 &&
+        bits[i + 2] === 1 &&
+        bits[i + 3] === 1 &&
+        bits[i + 4] === 1 &&
+        bits[i + 5] === 1 &&
+        bits[i + 6] === 1 &&
+        bits[i + 7] === 0
+      ) {
+        syncIdx = i;
+        break;
+      }
+    }
+
+    if (syncIdx === -1) return '';
+
+    // Lewati seluruh deretan preamble 0x7E flags
+    let cursor = syncIdx;
+    while (cursor + 8 <= bits.length) {
+      let bVal = 0;
+      for (let b = 0; b < 8; b++) {
+        bVal |= (bits[cursor + b]! << b);
+      }
+      if (bVal === 0x7E) {
+        cursor += 8;
+      } else {
+        break;
+      }
+    }
+
+    if (cursor + 16 > bits.length) return '';
+
+    // Baca 2 bytes panjang payload: (high << 8) | low
+    let lenHigh = 0;
+    for (let b = 0; b < 8; b++) lenHigh |= (bits[cursor + b]! << b);
+    let lenLow = 0;
+    for (let b = 0; b < 8; b++) lenLow |= (bits[cursor + 8 + b]! << b);
+    const length = (lenHigh << 8) | lenLow;
+    cursor += 16;
+
+    if (length > 0 && length <= 200 && cursor + length * 8 <= bits.length) {
+      const payloadBytes = new Uint8Array(length);
+      for (let i = 0; i < length; i++) {
+        let bVal = 0;
+        for (let b = 0; b < 8; b++) {
+          bVal |= (bits[cursor + i * 8 + b]! << b);
+        }
+        payloadBytes[i] = bVal;
+      }
+      const rawText = new TextDecoder().decode(payloadBytes);
+      return this.cleanAprsText(rawText);
+    }
+
+    // Fallback: scan printable ASCII characters jika header panjang terdistorsi
+    let fallbackText = '';
+    for (let i = cursor; i + 8 <= bits.length; i += 8) {
+      let bVal = 0;
+      for (let b = 0; b < 8; b++) {
+        bVal |= (bits[i + b]! << b);
+      }
+      if (bVal === 0x7E) break;
+      if (bVal >= 32 && bVal <= 126) {
+        fallbackText += String.fromCharCode(bVal);
+      }
+    }
+
+    const letters = (fallbackText.match(/[a-zA-Z0-9 ]/g) || []).length;
+    if (fallbackText.length >= 4 && letters / fallbackText.length > 0.6) {
+      return this.cleanAprsText(fallbackText);
+    }
+
+    return '';
+  }
+
+  /**
+   * Bersihkan format APRS (ekstrak pesan obrolan asli)
+   */
+  public static cleanAprsText(text: string): string {
+    if (!text) return '';
+    // Format: CALL>APNGO1,WIDE1-1:!lat/lon-Pesan Obrolan
+    const aprsMatch = text.match(/:(?:!)?[^ -]*-(.+)$/);
+    if (aprsMatch && aprsMatch[1]) {
+      return aprsMatch[1].trim();
+    }
+    const colonIdx = text.lastIndexOf(':');
+    if (colonIdx !== -1 && colonIdx < text.length - 1) {
+      const candidate = text.substring(colonIdx + 1).replace(/^![^ -]*-/, '').trim();
+      if (candidate.length > 0) return candidate;
+    }
+    return text.trim();
   }
 
   /**
@@ -348,6 +473,8 @@ export class AcousticModem {
       this.activeProcessor = processor;
 
       let accumulatedSamples: number[] = [];
+      let lastReceivedText = '';
+      let lastReceivedTime = 0;
 
       processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
@@ -355,14 +482,17 @@ export class AcousticModem {
           accumulatedSamples.push(inputData[i]!);
         }
 
-        // Ketika terkumpul ~1 detik audio (~44100 samples), coba decode
-        if (accumulatedSamples.length >= ctx.sampleRate) {
+        // Ketika terkumpul ~1.2 detik audio, coba decode
+        if (accumulatedSamples.length >= Math.round(ctx.sampleRate * 1.2)) {
           const sampleArray = new Float32Array(accumulatedSamples);
-          accumulatedSamples = accumulatedSamples.slice(Math.round(ctx.sampleRate * 0.5)); // 50% overlap
+          accumulatedSamples = accumulatedSamples.slice(Math.round(ctx.sampleRate * 0.6)); // 50% overlap
 
           const decoded = this.decodeSamples(sampleArray, ctx.sampleRate);
           const cleanText = decoded.trim().replace(/[\x00-\x1F\x7F]/g, '');
-          if (cleanText.length >= 2) {
+          const now = Date.now();
+          if (cleanText.length >= 2 && (cleanText !== lastReceivedText || now - lastReceivedTime > 4000)) {
+            lastReceivedText = cleanText;
+            lastReceivedTime = now;
             onReceive(cleanText);
           }
         }
