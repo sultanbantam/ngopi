@@ -355,6 +355,58 @@ export class HTManagerService {
     return grp;
   }
 
+  // --- 4b. ACTIVE CHANNELS & TRAFFIC SCANNER ---
+  public getChannelActivity(): Array<{
+    freq: number;
+    name: string;
+    messageCount: number;
+    activeUsersCount: number;
+    lastMessageAt: number | null;
+    isBusy: boolean;
+  }> {
+    const now = Date.now();
+    const fifteenMinutesAgo = now - 15 * 60 * 1000;
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+    const monitoredChannels = [
+      { freq: 144.390, name: 'APRS 144.390 (Paket Data/GPS)' },
+      { freq: 145.000, name: 'ORARI 145.000 (Darurat Bencana/SAR)' },
+      { freq: 144.500, name: 'Warkop HT Net 144.500 (Ngobrol Santai)' },
+      { freq: 142.100, name: 'RAPI Nusantara 142.100 (Brik Warga)' },
+      { freq: 146.820, name: 'Repeater 146.820 (Antar Kota)' },
+      { freq: 435.000, name: 'UHF Repeater 435.000 (Digital DMR)' },
+      { freq: 143.550, name: 'Relawan SAR 143.550 (Siaga Bencana)' },
+      { freq: 145.500, name: 'Panggilan 145.500 (VHF 2-Meter)' },
+    ];
+
+    return monitoredChannels.map((ch) => {
+      const chMsgs = this.messages.filter((m) => Math.abs(Number(m.freq) - ch.freq) < 0.05);
+      const recentMsgs = chMsgs.filter((m) => {
+        const t = typeof m.created_at === 'number' ? m.created_at : new Date(m.created_at).getTime();
+        return t >= oneDayAgo;
+      });
+      const veryRecentMsgs = chMsgs.filter((m) => {
+        const t = typeof m.created_at === 'number' ? m.created_at : new Date(m.created_at).getTime();
+        return t >= fifteenMinutesAgo;
+      });
+
+      const uniqueUsers = new Set(recentMsgs.map((m) => m.sender_id || m.sender_callsign)).size;
+      const lastMsg = chMsgs.length > 0 ? chMsgs[chMsgs.length - 1] : null;
+      const lastTime = lastMsg
+        ? (typeof lastMsg.created_at === 'number' ? lastMsg.created_at : new Date(lastMsg.created_at).getTime())
+        : null;
+
+      return {
+        freq: ch.freq,
+        name: ch.name,
+        messageCount: recentMsgs.length,
+        activeUsersCount: uniqueUsers,
+        lastMessageAt: lastTime,
+        isBusy: veryRecentMsgs.length > 0 || (ch.freq === 144.500 && chMsgs.length > 0),
+      };
+    });
+  }
+
   // --- 5. LOGS & COMPLIANCE ---
 
   public getTransmissionLogs(userId?: string): HTTransmissionLog[] {

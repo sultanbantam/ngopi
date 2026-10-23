@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -65,12 +65,44 @@ const PRESET_CHANNELS: HTChannel[] = [
     color: '#D97706',
   },
   {
+    name: 'RAPI Nusantara 142.100 (Brik Warga)',
+    freq: 142.100,
+    ctcss: 'OFF',
+    protocol: 'AFSK',
+    tag: 'RAPI',
+    color: '#8B5CF6',
+  },
+  {
+    name: 'Repeater 146.820 (Antar Kota)',
+    freq: 146.820,
+    ctcss: '88.5',
+    protocol: 'ANALOG_VOICE',
+    tag: 'REPEATER',
+    color: '#EC4899',
+  },
+  {
     name: 'UHF Repeater 435.000 (Digital DMR)',
     freq: 435.000,
     ctcss: '100.0',
     protocol: 'DMR',
     tag: 'UHF DMR',
     color: '#10B981',
+  },
+  {
+    name: 'Relawan SAR 143.550 (Siaga Bencana)',
+    freq: 143.550,
+    ctcss: 'OFF',
+    protocol: 'AFSK',
+    tag: 'SAR',
+    color: '#F59E0B',
+  },
+  {
+    name: 'Panggilan 145.500 (VHF 2-Meter)',
+    freq: 145.500,
+    ctcss: 'OFF',
+    protocol: 'ANALOG_VOICE',
+    tag: 'CALLING',
+    color: '#06B6D4',
   },
 ];
 
@@ -98,6 +130,13 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const [isListeningAcoustic, setIsListeningAcoustic] = useState(false);
   const [pttMode, setPttMode] = useState<'toggle' | 'hold'>('toggle');
   const [txDuration, setTxDuration] = useState(0);
+
+  // Auto-Scan State
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanStatusMsg, setScanStatusMsg] = useState('');
+  const [channelActivityMap, setChannelActivityMap] = useState<Record<string, { messageCount: number; activeUsersCount: number; isBusy: boolean }>>({});
+  const scanIntervalRef = useRef<any>(null);
+  const isScanningRef = useRef(false);
 
   const mediaRecorderRef = useRef<any>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -308,8 +347,130 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
         try { stopListeningRef.current(); } catch (_) {}
         stopListeningRef.current = null;
       }
+      stopAutoScan();
     };
   }, [visible, customFreq, curChannel.freq, callsign]);
+
+  const fetchChannelActivity = async () => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await axios.get(`${API_URL}/ht/active-channels`, { headers });
+      if (res.data?.channels && Array.isArray(res.data.channels)) {
+        const map: Record<string, any> = {};
+        res.data.channels.forEach((c: any) => {
+          map[c.freq.toFixed(3)] = c;
+        });
+        setChannelActivityMap(map);
+        return res.data;
+      }
+    } catch (e) {
+      console.warn('Failed to fetch channel activity:', e);
+    }
+    return null;
+  };
+
+  const stopAutoScan = useCallback(() => {
+    isScanningRef.current = false;
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
+    }
+    setIsScanning(false);
+  }, []);
+
+  const startAutoScan = async () => {
+    if (isScanning) {
+      stopAutoScan();
+      return;
+    }
+
+    setIsScanning(true);
+    isScanningRef.current = true;
+    setScanStatusMsg('🔍 MEMINDAI FREKUENSI AKTIF...');
+    AcousticModemFrontend.playScanStepTone();
+
+    // 1. Fetch live activity report from server
+    const activityData = await fetchChannelActivity();
+    const busiest = activityData?.busiestChannel;
+
+    let step = 0;
+    const totalSteps = PRESET_CHANNELS.length * 2;
+    let currentIdx = selectedChannelIdx;
+
+    if (scanIntervalRef.current) {
+      clearInterval(scanIntervalRef.current);
+    }
+
+    scanIntervalRef.current = setInterval(() => {
+      if (!isScanningRef.current) {
+        clearInterval(scanIntervalRef.current);
+        return;
+      }
+
+      currentIdx = (currentIdx + 1) % PRESET_CHANNELS.length;
+      const ch = PRESET_CHANNELS[currentIdx];
+      step++;
+
+      // Audio blip on frequency shift
+      AcousticModemFrontend.playScanStepTone();
+
+      // Update frequency tuner UI rapidly
+      setSelectedChannelIdx(currentIdx);
+      setCustomFreq(ch.freq.toFixed(3));
+      setCtcssTone(ch.ctcss);
+
+      // Fluctuate S-Meter during scan
+      const simS = Math.floor(Math.random() * 4) + 2;
+      setSMeterValue(simS);
+      setScanStatusMsg(`🔍 SCAN CH ${currentIdx + 1}: ${ch.freq.toFixed(3)} MHz...`);
+
+      // Check if this channel has live chatter or active traffic
+      const act = activityData?.channels?.find((c: any) => Math.abs(c.freq - ch.freq) < 0.05);
+      const isCandidate = act?.isBusy || (act && act.messageCount > 0);
+
+      // Lock condition: if active candidate found after at least 3 steps, OR we reached max search steps
+      if ((isCandidate && step >= 3) || step >= totalSteps) {
+        stopAutoScan();
+
+        // Lock onto candidate or busiest
+        const targetIdx = isCandidate
+          ? currentIdx
+          : busiest
+          ? PRESET_CHANNELS.findIndex((c) => Math.abs(c.freq - busiest.freq) < 0.05)
+          : currentIdx;
+        const validIdx = targetIdx >= 0 ? targetIdx : currentIdx;
+        const targetCh = PRESET_CHANNELS[validIdx];
+
+        setSelectedChannelIdx(validIdx);
+        setCustomFreq(targetCh.freq.toFixed(3));
+        setCtcssTone(targetCh.ctcss);
+
+        // Sound Lock Alert & Light S-meter S9
+        AcousticModemFrontend.playLockOnBeep();
+        setIsReceiving(true);
+        setSMeterValue(9);
+
+        const lockMsg = `🔒 TERKUNCI: CH ${validIdx + 1} (${targetCh.name}) [AKTIF 🟢]`;
+        setScanStatusMsg(lockMsg);
+
+        // Load messages for the locked channel
+        axios.get(`${API_URL}/ht/messages?freq=${targetCh.freq}`)
+          .then((res) => {
+            if (res.data?.messages) setMessages(res.data.messages);
+          })
+          .catch(() => {});
+
+        setTimeout(() => {
+          setIsReceiving(false);
+          setSMeterValue(7);
+        }, 3500);
+
+        setTimeout(() => {
+          setScanStatusMsg('');
+        }, 8000);
+      }
+    }, 280);
+  };
 
   const loadProfileAndMessages = async () => {
     try {
@@ -331,6 +492,9 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
       if (msgRes.data?.messages) {
         setMessages(msgRes.data.messages);
       }
+
+      // Fetch active channel activity
+      fetchChannelActivity();
     } catch (e) {
       console.warn('Failed to load HT profile/messages (using local cache):', e);
     } finally {
@@ -681,10 +845,63 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
             {/* S-Meter & Callsign Status */}
             <View style={styles.lcdFooterRow}>
               <Text style={styles.lcdSmeter}>
-                S: <Text style={{ color: '#F59E0B' }}>S{isTransmitting ? '9+20dB' : '7'}</Text> [====... ]
+                S: <Text style={{ color: '#F59E0B' }}>S{isTransmitting ? '9+20dB' : sMeterValue >= 9 ? '9+10dB' : sMeterValue}</Text> [{sMeterValue >= 9 ? '========' : sMeterValue >= 6 ? '====....' : '==......'}]
               </Text>
               <Text style={styles.lcdCallsign}>CALL: {callsign}</Text>
             </View>
+
+            {/* Scanner Status Banner inside LCD */}
+            {(isScanning || Boolean(scanStatusMsg)) && (
+              <View
+                style={{
+                  backgroundColor: isScanning ? 'rgba(34, 197, 94, 0.2)' : 'rgba(56, 189, 248, 0.25)',
+                  borderColor: isScanning ? '#22C55E' : '#38BDF8',
+                  borderWidth: 1,
+                  borderRadius: 6,
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  marginTop: 6,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: isScanning ? '#86EFAC' : '#7DD3FC', fontSize: 10.5, fontWeight: '800', textAlign: 'center' }}>
+                  {scanStatusMsg || `[ 🔍 SCANNING CH ${selectedChannelIdx + 1}... ]`}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Quick Auto-Scan Bar */}
+          <View style={{ paddingHorizontal: 12, paddingTop: 4, paddingBottom: 6 }}>
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                backgroundColor: isScanning ? '#7F1D1D' : '#1C1917',
+                borderColor: isScanning ? '#EF4444' : '#22C55E',
+                borderWidth: 1.5,
+                borderRadius: 10,
+                paddingVertical: 7,
+                paddingHorizontal: 12,
+                shadowColor: isScanning ? '#EF4444' : '#22C55E',
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.4,
+                shadowRadius: 4,
+                elevation: 3,
+              }}
+              onPress={isScanning ? stopAutoScan : startAutoScan}
+            >
+              <Ionicons
+                name={isScanning ? 'stop-circle' : 'search'}
+                size={16}
+                color={isScanning ? '#FCA5A5' : '#86EFAC'}
+              />
+              <Text style={{ color: isScanning ? '#FCA5A5' : '#86EFAC', fontSize: 11, fontWeight: '800', letterSpacing: 0.5 }}>
+                {isScanning ? '⏹️ HENTIKAN SCANNING FREKUENSI' : '🔍 SCAN OTOMATIS FREKUENSI RAMAI / OBROLAN'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Mode Navigation Tabs */}
@@ -1126,27 +1343,99 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
 
             {activeTab === 'channels' && (
               <View style={styles.channelsList}>
-                <Text style={styles.sectionHeading}>Pilih Kanal Warung HT Resmi:</Text>
-                {PRESET_CHANNELS.map((ch, idx) => (
-                  <TouchableOpacity
-                    key={idx}
-                    style={[styles.channelCard, selectedChannelIdx === idx && styles.channelCardActive]}
-                    onPress={() => handleChannelSelect(idx)}
-                  >
-                    <View style={styles.channelCardLeft}>
-                      <View style={[styles.channelTagBadge, { backgroundColor: ch.color }]}>
-                        <Text style={styles.channelTagText}>{ch.tag}</Text>
-                      </View>
-                      <View>
-                        <Text style={styles.channelCardName}>{ch.name}</Text>
-                        <Text style={styles.channelCardFreq}>{ch.freq.toFixed(3)} MHz • CTCSS: {ch.ctcss}</Text>
-                      </View>
+                {/* Auto-Scan Active Channels Feature Card */}
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: isScanning ? '#7F1D1D' : '#172554',
+                    borderColor: isScanning ? '#EF4444' : '#3B82F6',
+                    borderWidth: 1.5,
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 12,
+                    shadowColor: isScanning ? '#EF4444' : '#3B82F6',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.35,
+                    shadowRadius: 5,
+                    elevation: 4,
+                  }}
+                  onPress={isScanning ? stopAutoScan : startAutoScan}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View
+                      style={{
+                        width: 38,
+                        height: 38,
+                        borderRadius: 19,
+                        backgroundColor: isScanning ? '#DC2626' : '#2563EB',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name={isScanning ? 'stop-circle' : 'search'} size={20} color="#FFF" />
                     </View>
-                    {selectedChannelIdx === idx && (
-                      <Ionicons name="checkmark-circle" size={22} color="#10B981" />
-                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '800' }}>
+                        {isScanning ? 'Sedang Memindai Frekuensi...' : '🔍 Cari Frekuensi Ramai / Ada Obrolan'}
+                      </Text>
+                      <Text style={{ color: '#93C5FD', fontSize: 11, marginTop: 2 }}>
+                        {isScanning
+                          ? (scanStatusMsg || 'Menyapu seluruh saluran radio VHF/UHF...')
+                          : 'Pindai otomatis semua frekuensi dan langsung kunci saluran yang paling ramai / ada orang bicara.'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={styles.sectionHeading}>Daftar Kanal Warung HT ({PRESET_CHANNELS.length}):</Text>
+                  <TouchableOpacity onPress={fetchChannelActivity} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="refresh" size={13} color="#38BDF8" />
+                    <Text style={{ color: '#38BDF8', fontSize: 11, fontWeight: '700' }}>Cek Obrolan</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
+
+                {PRESET_CHANNELS.map((ch, idx) => {
+                  const act = channelActivityMap[ch.freq.toFixed(3)];
+                  const isBusy = act?.isBusy;
+                  const msgCount = act?.messageCount || 0;
+                  const isSelected = selectedChannelIdx === idx;
+
+                  return (
+                    <TouchableOpacity
+                      key={idx}
+                      style={[styles.channelCard, isSelected && styles.channelCardActive]}
+                      onPress={() => handleChannelSelect(idx)}
+                    >
+                      <View style={[styles.channelCardLeft, { flex: 1 }]}>
+                        <View style={[styles.channelTagBadge, { backgroundColor: ch.color }]}>
+                          <Text style={styles.channelTagText}>{ch.tag}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.channelCardName}>{ch.name}</Text>
+                            {isBusy ? (
+                              <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.25)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                                <Text style={{ color: '#86efac', fontSize: 9.5, fontWeight: '800' }}>🟢 RAMAI ({msgCount})</Text>
+                              </View>
+                            ) : msgCount > 0 ? (
+                              <View style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', borderColor: '#eab308', borderWidth: 1, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                                <Text style={{ color: '#fde047', fontSize: 9.5, fontWeight: '700' }}>🟡 {msgCount} PESAN</Text>
+                              </View>
+                            ) : (
+                              <View style={{ backgroundColor: 'rgba(100, 116, 139, 0.2)', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 1 }}>
+                                <Text style={{ color: '#94a3b8', fontSize: 9.5 }}>⚪ SIAGA</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.channelCardFreq}>{ch.freq.toFixed(3)} MHz • CTCSS: {ch.ctcss}</Text>
+                        </View>
+                      </View>
+                      {isSelected && (
+                        <Ionicons name="checkmark-circle" size={22} color="#10B981" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
 
                 {/* Custom Frequency Input */}
                 <View style={styles.customFreqBox}>
@@ -1322,6 +1611,19 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                     • <Text style={{ color: '#10B981', fontWeight: 'bold' }}>"Roger / 10-4":</Text> Pesan dimengerti dengan baik.{'\n'}
                     • <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>"Ganti (Over)":</Text> Selesai bicara, giliran rekan membalas.{'\n'}
                     • <Text style={{ color: '#A78BFA', fontWeight: 'bold' }}>"10-20":</Text> Posisi / lokasi stasiun saat ini.
+                  </Text>
+                </View>
+
+                {/* Card 5: Auto-Scan Frekuensi Ramai */}
+                <View style={styles.guideQuickCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Ionicons name="search" size={18} color="#22C55E" />
+                    <Text style={styles.guideCardTitle}>5. Fitur Auto-Scan Frekuensi Ramai 🔍</Text>
+                  </View>
+                  <Text style={styles.guideCardText}>
+                    • <Text style={{ color: '#22C55E', fontWeight: 'bold' }}>Pencarian Otomatis:</Text> Tekan tombol <Text style={{ color: '#F59E0B' }}>[ 🔍 SCAN OTOMATIS ]</Text> di bawah layar LCD atau di tab Kanal.{'\n'}
+                    • <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>Deteksi Suara & Sinyal:</Text> Radio akan menyapu seluruh frekuensi VHF/UHF, mendeteksi transmisi suara yang sedang aktif, dan otomatis mengunci ke saluran yang paling ramai obrolannya.{'\n'}
+                    • <Text style={{ color: '#A78BFA', fontWeight: 'bold' }}>Kunci Langsung:</Text> S-meter akan melompat ke S9 dan LED hijau RX menyala seketika saat saluran aktif ditemukan.
                   </Text>
                 </View>
 

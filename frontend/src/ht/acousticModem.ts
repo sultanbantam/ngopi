@@ -361,6 +361,63 @@ export class AcousticModem {
   }
 
   /**
+   * Play rapid frequency stepping click during Auto-Scan
+   */
+  public static playScanStepTone(): void {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(1400, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(700, ctx.currentTime + 0.025);
+
+      gain.gain.setValueAtTime(0.04, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.025);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.025);
+    } catch {
+      // Non-critical sound effect
+    }
+  }
+
+  /**
+   * Play distinctive lock-on alert tone when active chatter channel is found
+   */
+  public static playLockOnBeep(): void {
+    const ctx = this.getAudioContext();
+    if (!ctx) return;
+
+    try {
+      const osc1 = ctx.createOscillator();
+      const osc2 = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc1.type = 'square';
+      osc1.frequency.setValueAtTime(1050, ctx.currentTime);
+      osc1.frequency.setValueAtTime(1750, ctx.currentTime + 0.08);
+
+      gain.gain.setValueAtTime(0.12, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.22);
+
+      osc1.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc1.start(ctx.currentTime);
+      osc1.stop(ctx.currentTime + 0.22);
+    } catch {
+      // Non-critical
+    }
+  }
+
+  /**
    * Sintesis dan putar nada AFSK Bell 202 dengan sinkronisasi preamble + CRC
    */
   public static async playAfsktone(text: string, onFinish?: () => void): Promise<void> {

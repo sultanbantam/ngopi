@@ -164,6 +164,25 @@ router.get('/groups', (_req: Request, res: Response) => {
   }
 });
 
+// GET /api/ht/active-channels - Auto-scan and identify active frequencies with chatter/talkers
+router.get('/active-channels', (_req: Request, res: Response) => {
+  try {
+    const channels = htManagerService.getChannelActivity();
+    const sorted = [...channels].sort(
+      (a, b) => (b.messageCount * 2 + (b.isBusy ? 10 : 0)) - (a.messageCount * 2 + (a.isBusy ? 10 : 0))
+    );
+    const busiest = sorted[0] || channels[2];
+    res.json({
+      success: true,
+      count: channels.length,
+      channels,
+      busiestChannel: busiest,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Failed to scan active channels' });
+  }
+});
+
 // POST /api/ht/groups - Create a new Warung HT channel
 router.post('/groups', (req: Request, res: Response) => {
   try {

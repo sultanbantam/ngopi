@@ -217,6 +217,14 @@ const HT_GUIDE_DATA: GuideSection[] = [
         title: 'Q3: Apakah teman saya yang mantan pemain HT brik-brik bisa gabung?',
         content: 'Sangat bisa! Ajak teman-teman komunitas brik-brik Anda bernostalgia. Di Ngopi, sensasi klasik radio HT (S-Meter jarum, lampu TX/RX, Roger Beep, pilihan kanal frekuensi, dan sandi radio) dikemas secara modern di smartphone tanpa harus membeli perangkat radio mahal.',
       },
+      {
+        title: 'Q4: Apakah bisa mencari sendiri frekuensi yang sedang ada obrolan atau sedang ramai?',
+        content: 'Bisa banget! Di Ngopi HT sudah ada fitur "Auto-Scan Frekuensi Ramai". Cukup tekan tombol [ 🔍 SCAN OTOMATIS FREKUENSI RAMAI ] di bawah layar LCD radio atau di tab Kanal. Radio akan otomatis menyapu seluruh saluran radio VHF/UHF, memeriksa ada tidaknya transmisi suara atau obrolan aktif secara real-time, lalu langsung mengunci (lock-on) frekuensi tersebut dengan indikator S-Meter S9 dan lampu hijau RX menyala!',
+        tips: [
+          'Tekan tombol kapan saja untuk menemukan frekuensi warkop yang paling aktif nongkrongnya.',
+          'Di tab Kanal, Anda juga bisa melihat label real-time seperti 🟢 RAMAI, 🟡 ADA PESAN, atau ⚪ SIAGA di setiap saluran.',
+        ],
+      },
     ],
   },
 ];

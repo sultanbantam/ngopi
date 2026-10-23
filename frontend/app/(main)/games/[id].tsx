@@ -360,7 +360,13 @@ function PlayingCardTile({
 
 export default function GameTableScreen() {
   const { id: tableId, spectate } = useLocalSearchParams<{ id: string; spectate?: string }>();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const isDesktop = width >= 768;
+  const monopolyBoardSize = isDesktop
+    ? Math.min(Math.round(width * 0.42), Math.round(height * 0.54), 480)
+    : Math.min(width - 24, Math.max(250, Math.floor(height * 0.36)), 310);
+  const mEdgeHeight = Math.round(monopolyBoardSize * 0.15);
+  const mSideWidth = Math.round(monopolyBoardSize * 0.145);
 
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -589,20 +595,20 @@ export default function GameTableScreen() {
         }}
       >
         {stripeColor !== 'transparent' && (
-          <View style={{ width: '100%', height: 4, backgroundColor: stripeColor }} />
+          <View style={{ width: '100%', height: isDesktop ? 5 : 3.5, backgroundColor: stripeColor }} />
         )}
 
-        <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1, paddingHorizontal: 1 }}>
           {displayIcon ? (
-            <Text style={{ fontSize: 9 }}>{displayIcon}</Text>
+            <Text style={{ fontSize: isDesktop ? 13 : 9 }}>{displayIcon}</Text>
           ) : (
-            <Text numberOfLines={1} style={{ fontSize: 7, color: '#f3e8dc', fontWeight: '700', textAlign: 'center' }}>
+            <Text numberOfLines={1} style={{ fontSize: isDesktop ? 8.5 : 6.5, color: '#f3e8dc', fontWeight: '700', textAlign: 'center' }}>
               {sq.name}
             </Text>
           )}
 
           {sq.price && (
-            <Text style={{ fontSize: 6.5, color: '#94a3b8' }}>
+            <Text style={{ fontSize: isDesktop ? 8 : 6, color: '#94a3b8', fontWeight: '600' }}>
               {prop?.houses >= 5 ? '🏨' : prop?.houses > 0 ? `🏠${prop.houses}` : `Rp${sq.price}`}
             </Text>
           )}
@@ -610,9 +616,9 @@ export default function GameTableScreen() {
           {owner && (
             <View
               style={{
-                width: 4,
-                height: 4,
-                borderRadius: 2,
+                width: isDesktop ? 5 : 4,
+                height: isDesktop ? 5 : 4,
+                borderRadius: isDesktop ? 2.5 : 2,
                 backgroundColor: owner.user_id === currentUserId ? '#38bdf8' : '#f59e0b',
                 marginTop: 1,
               }}
@@ -626,9 +632,9 @@ export default function GameTableScreen() {
               <View
                 key={idx}
                 style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: 3.5,
+                  width: isDesktop ? 9 : 6.5,
+                  height: isDesktop ? 9 : 6.5,
+                  borderRadius: isDesktop ? 4.5 : 3.25,
                   backgroundColor: cp.userId === currentUserId ? '#38bdf8' : idx === 1 ? '#ef4444' : '#22c55e',
                   borderWidth: 0.5,
                   borderColor: '#ffffff',
@@ -1463,8 +1469,30 @@ export default function GameTableScreen() {
       </View>
 
       {/* Area Meja Permainan Warkop (Oval Felt Coffee Table) */}
-      <View style={styles.tableArenaWrapper}>
-        <View style={styles.tableFelt}>
+      <View
+        style={[
+          styles.tableArenaWrapper,
+          table.game_type === 'monopoly' && {
+            padding: isDesktop ? 16 : 4,
+            paddingVertical: isDesktop ? 16 : 4,
+          },
+        ]}
+      >
+        <View
+          style={[
+            styles.tableFelt,
+            table.game_type === 'monopoly' && {
+              maxWidth: isDesktop ? 680 : '100%',
+              width: isDesktop ? 680 : '100%',
+              height: isDesktop ? monopolyBoardSize + 64 : '100%',
+              maxHeight: isDesktop ? 620 : undefined,
+              paddingVertical: isDesktop ? 16 : 4,
+              paddingHorizontal: isDesktop ? 20 : 4,
+              justifyContent: 'center',
+              alignItems: 'center',
+            },
+          ]}
+        >
           {isPlaying ? (
             table.game_type === 'gapleh' && gameState?.board ? (
               <View style={{ width: '100%', alignItems: 'center' }}>
@@ -1905,7 +1933,7 @@ export default function GameTableScreen() {
               </View>
             ) : table.game_type === 'monopoly' ? (
               /* Monopoly 24-Square Perimeter Board */
-              <View style={{ alignItems: 'center', paddingVertical: 4 }}>
+              <View style={{ alignItems: 'center', width: '100%', justifyContent: 'center' }}>
                 {/* Last Action Announcement Banner */}
                 {gameState?.lastAction && (
                   <View
@@ -1914,13 +1942,21 @@ export default function GameTableScreen() {
                       borderColor: coffee.accent,
                       borderWidth: 1,
                       borderRadius: 10,
-                      paddingHorizontal: 12,
-                      paddingVertical: 5,
-                      marginBottom: 6,
-                      maxWidth: 340,
+                      paddingHorizontal: isDesktop ? 14 : 8,
+                      paddingVertical: isDesktop ? 5 : 3,
+                      marginBottom: isDesktop ? 8 : 4,
+                      maxWidth: monopolyBoardSize,
                     }}
                   >
-                    <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '700', textAlign: 'center' }}>
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        color: coffee.accent,
+                        fontSize: isDesktop ? 12 : 10,
+                        fontWeight: '700',
+                        textAlign: 'center',
+                      }}
+                    >
                       {gameState.lastAction.message}
                     </Text>
                   </View>
@@ -1929,25 +1965,30 @@ export default function GameTableScreen() {
                 {/* 24-Square Board Container */}
                 <View
                   style={{
-                    width: 330,
-                    height: 330,
+                    width: monopolyBoardSize,
+                    height: monopolyBoardSize,
                     borderWidth: 2,
                     borderColor: '#5c3d24',
-                    borderRadius: 10,
+                    borderRadius: 12,
                     backgroundColor: '#1b130e',
                     padding: 3,
                     justifyContent: 'space-between',
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 4 },
+                    shadowOpacity: 0.5,
+                    shadowRadius: 8,
+                    elevation: 6,
                   }}
                 >
                   {/* Top Edge (Squares 12, 13, 14, 15, 16, 17, 18) */}
-                  <View style={{ flexDirection: 'row', height: 48, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', height: mEdgeHeight, gap: 2 }}>
                     {[12, 13, 14, 15, 16, 17, 18].map((sqId) => renderMonopolyTile(sqId))}
                   </View>
 
                   {/* Middle Section: Left Edge + Center Area + Right Edge */}
                   <View style={{ flexDirection: 'row', flex: 1, justifyContent: 'space-between', paddingVertical: 2 }}>
                     {/* Left Edge (Squares 11, 10, 9, 8, 7 - top to bottom) */}
-                    <View style={{ width: 44, justifyContent: 'space-between', gap: 2 }}>
+                    <View style={{ width: mSideWidth, justifyContent: 'space-between', gap: 2 }}>
                       {[11, 10, 9, 8, 7].map((sqId) => renderMonopolyTile(sqId))}
                     </View>
 
@@ -1955,58 +1996,93 @@ export default function GameTableScreen() {
                     <View
                       style={{
                         flex: 1,
-                        marginHorizontal: 4,
+                        marginHorizontal: 3,
                         backgroundColor: '#140d08',
                         borderRadius: 8,
                         borderWidth: 1,
                         borderColor: '#3d2516',
-                        padding: 6,
+                        padding: isDesktop ? 10 : 4,
                         justifyContent: 'center',
                         alignItems: 'center',
-                        gap: 6,
+                        gap: isDesktop ? 8 : 3,
                       }}
                     >
-                      <Text style={{ color: coffee.accent, fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>
+                      <Text
+                        style={{
+                          color: coffee.accent,
+                          fontWeight: '900',
+                          fontSize: isDesktop ? 15 : 11,
+                          letterSpacing: 0.5,
+                        }}
+                      >
                         🏢 MONOPOLI WARKOP
                       </Text>
 
                       {/* Dice display */}
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#25170e', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                        <Text style={{ fontSize: 18 }}>🎲</Text>
-                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: 13 }}>
+                      <View
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: '#25170e',
+                          paddingHorizontal: isDesktop ? 12 : 8,
+                          paddingVertical: isDesktop ? 6 : 3,
+                          borderRadius: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: isDesktop ? 20 : 15 }}>🎲</Text>
+                        <Text style={{ color: '#ffffff', fontWeight: '800', fontSize: isDesktop ? 14 : 11 }}>
                           [{gameState?.dice?.[0] || 1}] + [{gameState?.dice?.[1] || 1}] = {(gameState?.dice?.[0] || 1) + (gameState?.dice?.[1] || 1)}
                         </Text>
                         {gameState?.isDouble && (
-                          <Text style={{ color: '#f59e0b', fontSize: 10, fontWeight: '800' }}>KEMBAR! 🔥</Text>
+                          <Text style={{ color: '#f59e0b', fontSize: isDesktop ? 11 : 9, fontWeight: '800' }}>KEMBAR! 🔥</Text>
                         )}
                       </View>
 
                       {/* Pending Action Box in Center */}
                       {gameState?.pendingAction?.type === 'buy_property' ? (
-                        <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', borderColor: '#22c55e', borderWidth: 1, borderRadius: 8, padding: 6, alignItems: 'center', width: '100%' }}>
-                          <Text style={{ color: '#86efac', fontSize: 10, fontWeight: '700', textAlign: 'center' }}>
+                        <View
+                          style={{
+                            backgroundColor: 'rgba(34, 197, 94, 0.15)',
+                            borderColor: '#22c55e',
+                            borderWidth: 1,
+                            borderRadius: 8,
+                            padding: isDesktop ? 8 : 4,
+                            alignItems: 'center',
+                            width: '100%',
+                          }}
+                        >
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: '#86efac',
+                              fontSize: isDesktop ? 12 : 9.5,
+                              fontWeight: '700',
+                              textAlign: 'center',
+                            }}
+                          >
                             Tawaran: {gameState?.squares?.[gameState.pendingAction.squareId]?.name || `Kotak ${gameState.pendingAction.squareId}`} (Rp {gameState.pendingAction.amount})
                           </Text>
                           {isMyTurn && !isSpectator && (
                             <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
                               <TouchableOpacity
-                                style={{ backgroundColor: '#15803d', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}
+                                style={{ backgroundColor: '#15803d', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 5 }}
                                 onPress={handleMonopolyBuyProperty}
                               >
-                                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>Beli 💰</Text>
+                                <Text style={{ color: '#ffffff', fontSize: isDesktop ? 11 : 9.5, fontWeight: '800' }}>Beli 💰</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
-                                style={{ backgroundColor: '#b91c1c', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 5 }}
+                                style={{ backgroundColor: '#b91c1c', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 5 }}
                                 onPress={handleMonopolySkipBuy}
                               >
-                                <Text style={{ color: '#ffffff', fontSize: 10, fontWeight: '800' }}>Lewat ❌</Text>
+                                <Text style={{ color: '#ffffff', fontSize: isDesktop ? 11 : 9.5, fontWeight: '800' }}>Lewat ❌</Text>
                               </TouchableOpacity>
                             </View>
                           )}
                         </View>
                       ) : (
                         <View style={{ alignItems: 'center' }}>
-                          <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                          <Text style={{ color: coffee.muted, fontSize: isDesktop ? 11 : 9.5 }}>
                             Giliran: <Text style={{ color: isMyTurn ? '#38bdf8' : coffee.accent, fontWeight: '700' }}>
                               {table.players?.find((p: any) => p.user_id === gameState?.currentTurn)?.display_name || 'Menunggu'}
                             </Text>
@@ -2016,13 +2092,13 @@ export default function GameTableScreen() {
                     </View>
 
                     {/* Right Edge (Squares 19, 20, 21, 22, 23 - top to bottom) */}
-                    <View style={{ width: 44, justifyContent: 'space-between', gap: 2 }}>
+                    <View style={{ width: mSideWidth, justifyContent: 'space-between', gap: 2 }}>
                       {[19, 20, 21, 22, 23].map((sqId) => renderMonopolyTile(sqId))}
                     </View>
                   </View>
 
                   {/* Bottom Edge (Squares 6, 5, 4, 3, 2, 1, 0 - left to right) */}
-                  <View style={{ flexDirection: 'row', height: 48, gap: 2 }}>
+                  <View style={{ flexDirection: 'row', height: mEdgeHeight, gap: 2 }}>
                     {[6, 5, 4, 3, 2, 1, 0].map((sqId) => renderMonopolyTile(sqId))}
                   </View>
                 </View>
@@ -2801,8 +2877,17 @@ export default function GameTableScreen() {
             </View>
           ) : table.game_type === 'monopoly' ? (
             /* Monopoly Player Asset & Balance Cards */
-            <View style={{ paddingVertical: 4, gap: 6 }}>
-              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <View style={{ paddingVertical: 2, gap: 4 }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{
+                  gap: 6,
+                  paddingHorizontal: 2,
+                  justifyContent: isDesktop ? 'center' : 'flex-start',
+                  minWidth: isDesktop ? '100%' : undefined,
+                }}
+              >
                 {Object.values(gameState?.players || {}).map((pl: any) => {
                   const pInfo = table.players?.find((p: any) => p.user_id === pl.userId);
                   const isCurrent = gameState?.currentTurn === pl.userId;
@@ -2817,28 +2902,28 @@ export default function GameTableScreen() {
                         borderWidth: isMe ? 2 : 1,
                         borderRadius: 8,
                         paddingHorizontal: 8,
-                        paddingVertical: 5,
-                        minWidth: 100,
+                        paddingVertical: 4,
+                        minWidth: isDesktop ? 120 : 96,
                       }}
                     >
-                      <Text style={{ color: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.text, fontSize: 11, fontWeight: '800' }}>
+                      <Text numberOfLines={1} style={{ color: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.text, fontSize: 10.5, fontWeight: '800' }}>
                         {pInfo?.display_name || pl.userId} {isMe ? '(Anda)' : ''} {isCurrent ? '🎲' : ''}
                       </Text>
-                      <Text style={{ color: pl.isBankrupt ? '#ef4444' : '#22c55e', fontSize: 11, fontWeight: '700' }}>
+                      <Text style={{ color: pl.isBankrupt ? '#ef4444' : '#22c55e', fontSize: 10, fontWeight: '700' }}>
                         {pl.isBankrupt ? '💀 BANGKRUT' : `💰 Rp ${pl.money}`}
                       </Text>
-                      <Text style={{ color: coffee.muted, fontSize: 9 }}>
+                      <Text style={{ color: coffee.muted, fontSize: 8.5 }}>
                         🏠 {propCount} Properti {pl.inJail ? '• 🔒 Penjara' : ''}
                       </Text>
                     </View>
                   );
                 })}
-              </View>
+              </ScrollView>
 
               {/* My Owned Properties with Build House option */}
               {gameState?.players?.[currentUserId]?.properties?.length > 0 && (
-                <View style={{ marginTop: 4 }}>
-                  <Text style={{ fontSize: 10, color: coffee.muted, marginBottom: 4, textAlign: 'center' }}>
+                <View style={{ marginTop: 2 }}>
+                  <Text style={{ fontSize: 9.5, color: coffee.muted, marginBottom: 2, textAlign: 'center' }}>
                     Properti Anda (Klik untuk bangun Rumah jika punya 1 kelompok warna):
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 4 }}>
