@@ -138,24 +138,32 @@ export class AcousticModem {
   }
 
   /**
-   * Cari HDLC flag 0x7E (01111110) LSB dan ekstrak payload frame Bell 202
+   * Cari HDLC flag 0x7E (01111110) LSB ganda (16 bit) dan ekstrak payload frame Bell 202
    */
   private static extractFrameFromBits(bits: number[]): string {
     if (bits.length < 32) return '';
 
-    // Cari pola 0x7E LSB: [0, 1, 1, 1, 1, 1, 1, 0]
+    // Cari pola 2x flag 0x7E berturut-turut (16 bits) untuk mencegah false sync pada derau
     let syncIdx = -1;
-    for (let i = 0; i <= bits.length - 8; i++) {
-      if (
-        bits[i] === 0 &&
-        bits[i + 1] === 1 &&
-        bits[i + 2] === 1 &&
-        bits[i + 3] === 1 &&
-        bits[i + 4] === 1 &&
-        bits[i + 5] === 1 &&
-        bits[i + 6] === 1 &&
-        bits[i + 7] === 0
-      ) {
+    for (let i = 0; i <= bits.length - 16; i++) {
+      let match = true;
+      for (let f = 0; f < 2; f++) {
+        const offset = i + f * 8;
+        if (
+          !(bits[offset] === 0 &&
+            bits[offset + 1] === 1 &&
+            bits[offset + 2] === 1 &&
+            bits[offset + 3] === 1 &&
+            bits[offset + 4] === 1 &&
+            bits[offset + 5] === 1 &&
+            bits[offset + 6] === 1 &&
+            bits[offset + 7] === 0)
+        ) {
+          match = false;
+          break;
+        }
+      }
+      if (match) {
         syncIdx = i;
         break;
       }
@@ -189,33 +197,23 @@ export class AcousticModem {
 
     if (length > 0 && length <= 200 && cursor + length * 8 <= bits.length) {
       const payloadBytes = new Uint8Array(length);
+      let allPrintable = true;
       for (let i = 0; i < length; i++) {
         let bVal = 0;
         for (let b = 0; b < 8; b++) {
           bVal |= (bits[cursor + i * 8 + b]! << b);
         }
         payloadBytes[i] = bVal;
+        // Pastikan hanya karakter teks yang valid (ASCII printable atau UTF-8)
+        if (bVal < 32 && bVal !== 9 && bVal !== 10 && bVal !== 13) {
+          allPrintable = false;
+          break;
+        }
       }
+      if (!allPrintable) return '';
+
       const rawText = new TextDecoder().decode(payloadBytes);
       return this.cleanAprsText(rawText);
-    }
-
-    // Fallback: scan printable ASCII characters jika header panjang terdistorsi
-    let fallbackText = '';
-    for (let i = cursor; i + 8 <= bits.length; i += 8) {
-      let bVal = 0;
-      for (let b = 0; b < 8; b++) {
-        bVal |= (bits[i + b]! << b);
-      }
-      if (bVal === 0x7E) break;
-      if (bVal >= 32 && bVal <= 126) {
-        fallbackText += String.fromCharCode(bVal);
-      }
-    }
-
-    const letters = (fallbackText.match(/[a-zA-Z0-9 ]/g) || []).length;
-    if (fallbackText.length >= 4 && letters / fallbackText.length > 0.6) {
-      return this.cleanAprsText(fallbackText);
     }
 
     return '';
@@ -493,6 +491,7 @@ export class AcousticModem {
           if (cleanText.length >= 2 && (cleanText !== lastReceivedText || now - lastReceivedTime > 4000)) {
             lastReceivedText = cleanText;
             lastReceivedTime = now;
+            accumulatedSamples = [];
             onReceive(cleanText);
           }
         }

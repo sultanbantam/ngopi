@@ -388,8 +388,7 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
 
       // Encode & play audible AFSK tone burst through speaker
       if (modemMode === 'acoustic') {
-        const aprsPacket = APRSFrontend.buildAprsPacket(callsign, textToSend);
-        await AcousticModemFrontend.playAfsktone(aprsPacket, () => {
+        await AcousticModemFrontend.playAfsktone(textToSend, () => {
           setIsTransmitting(false);
         });
       }
