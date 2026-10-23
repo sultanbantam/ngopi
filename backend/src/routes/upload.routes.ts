@@ -72,6 +72,12 @@ const ALLOWED_EXTENSIONS = new Set([
   '.zip', '.rar', '.7z', '.tar', '.gz', '.bin',
 ]);
 
+const DANGEROUS_EXTENSIONS = new Set([
+  '.php', '.phtml', '.php3', '.php4', '.php5', '.php7', '.php8', '.phar', '.inc',
+  '.sh', '.bash', '.exe', '.bat', '.cmd', '.com', '.vbs', '.ps1',
+  '.py', '.pl', '.cgi', '.jsp', '.asp', '.aspx', '.shtml', '.htaccess',
+]);
+
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
     cb(null, path.join(__dirname, '../../uploads'));
@@ -91,7 +97,10 @@ const upload = multer({
   },
   fileFilter: (_req, file, cb) => {
     const ext = path.extname(file.originalname || '').toLowerCase();
-    if (ALLOWED_MIME_TYPES.has(file.mimetype) || ALLOWED_EXTENSIONS.has(ext)) {
+    if (DANGEROUS_EXTENSIONS.has(ext)) {
+      return cb(new Error(`File berekstensi '${ext}' dilarang demi keamanan!`));
+    }
+    if (ALLOWED_MIME_TYPES.has(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
       cb(null, true);
     } else {
       cb(new Error(`Tipe file tidak didukung (${file.mimetype || 'unknown'})`));

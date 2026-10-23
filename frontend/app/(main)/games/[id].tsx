@@ -362,11 +362,13 @@ export default function GameTableScreen() {
   const { id: tableId, spectate } = useLocalSearchParams<{ id: string; spectate?: string }>();
   const { width, height } = useWindowDimensions();
   const isDesktop = width >= 768;
-  const monopolyBoardSize = isDesktop
+  const [monopolyZoom, setMonopolyZoom] = useState<number>(1.0);
+  const baseMonopolyBoardSize = isDesktop
     ? Math.min(Math.round(height * 0.76), Math.round((width - 440) * 0.95), 580)
-    : Math.min(width - 24, Math.max(250, Math.floor(height * 0.36)), 310);
-  const mEdgeHeight = isDesktop ? Math.round(monopolyBoardSize * 0.165) : Math.round(monopolyBoardSize * 0.15);
-  const mSideWidth = isDesktop ? Math.round(monopolyBoardSize * 0.165) : Math.round(monopolyBoardSize * 0.145);
+    : Math.min(width - 20, Math.max(260, Math.floor(height * 0.42)), 330);
+  const monopolyBoardSize = Math.round(baseMonopolyBoardSize * (isDesktop ? 1 : monopolyZoom));
+  const mEdgeHeight = isDesktop ? Math.round(monopolyBoardSize * 0.165) : Math.round(monopolyBoardSize * (monopolyZoom > 1.1 ? 0.16 : 0.152));
+  const mSideWidth = isDesktop ? Math.round(monopolyBoardSize * 0.165) : Math.round(monopolyBoardSize * (monopolyZoom > 1.1 ? 0.155 : 0.148));
 
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string>('');
@@ -600,16 +602,16 @@ export default function GameTableScreen() {
 
         <View style={{ alignItems: 'center', justifyContent: 'center', flex: 1, paddingHorizontal: 1, width: '100%' }}>
           {displayIcon ? (
-            <Text style={{ fontSize: isDesktop ? 22 : 9 }}>{displayIcon}</Text>
+            <Text style={{ fontSize: isDesktop ? 22 : Math.round(9 * (isDesktop ? 1 : Math.max(0.85, monopolyZoom))) }}>{displayIcon}</Text>
           ) : (
             <Text
               numberOfLines={2}
               style={{
-                fontSize: isDesktop ? 11 : 6.5,
+                fontSize: isDesktop ? 11 : Math.max(6.5, Math.round(7 * (isDesktop ? 1 : Math.max(0.85, monopolyZoom)))),
                 color: '#f3e8dc',
                 fontWeight: '700',
                 textAlign: 'center',
-                lineHeight: isDesktop ? 13 : 8,
+                lineHeight: isDesktop ? 13 : Math.round(9 * (isDesktop ? 1 : Math.max(0.85, monopolyZoom))),
               }}
             >
               {sq.name}
@@ -619,7 +621,7 @@ export default function GameTableScreen() {
           {sq.price && (
             <Text
               style={{
-                fontSize: isDesktop ? 10.5 : 6,
+                fontSize: isDesktop ? 10.5 : Math.max(6, Math.round(6.5 * (isDesktop ? 1 : Math.max(0.85, monopolyZoom)))),
                 color: '#fcd34d',
                 fontWeight: '800',
                 marginTop: isDesktop ? 2 : 0,
@@ -709,10 +711,77 @@ export default function GameTableScreen() {
           </View>
         )}
 
-        {/* 24-Square Board Container */}
-        <View
-          style={{
-            width: size,
+        {/* Zoom Controls for Mobile */}
+        {!isDesktop && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 6 }}>
+            <TouchableOpacity
+              onPress={() => setMonopolyZoom((z) => Math.max(0.8, parseFloat((z - 0.15).toFixed(2))))}
+              style={{
+                backgroundColor: 'rgba(30, 20, 13, 0.9)',
+                borderColor: coffee.border,
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <Ionicons name="remove-circle-outline" size={13} color={coffee.secondary} />
+              <Text style={{ color: coffee.secondary, fontSize: 10, fontWeight: '700' }}>Perkecil</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setMonopolyZoom(1.0)}
+              style={{
+                backgroundColor: monopolyZoom === 1.0 ? 'rgba(212, 163, 115, 0.25)' : 'rgba(30, 20, 13, 0.9)',
+                borderColor: monopolyZoom === 1.0 ? coffee.accent : coffee.border,
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingHorizontal: 10,
+                paddingVertical: 3,
+              }}
+            >
+              <Text style={{ color: monopolyZoom === 1.0 ? coffee.accent : coffee.secondary, fontSize: 10, fontWeight: '800' }}>
+                {Math.round(monopolyZoom * 100)}% (Pas)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setMonopolyZoom((z) => Math.min(1.4, parseFloat((z + 0.15).toFixed(2))))}
+              style={{
+                backgroundColor: 'rgba(30, 20, 13, 0.9)',
+                borderColor: coffee.border,
+                borderWidth: 1,
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={13} color={coffee.accent} />
+              <Text style={{ color: coffee.accent, fontSize: 10, fontWeight: '700' }}>Perbesar</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        <ScrollView
+          horizontal
+          scrollEnabled={!isDesktop && size > width - 24}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            minWidth: '100%',
+          }}
+        >
+          {/* 24-Square Board Container */}
+          <View
+            style={{
+              width: size,
             height: size,
             borderWidth: 2,
             borderColor: '#5c3d24',
@@ -849,8 +918,9 @@ export default function GameTableScreen() {
             {[6, 5, 4, 3, 2, 1, 0].map((sqId) => renderMonopolyTile(sqId))}
           </View>
         </View>
-      </View>
-    );
+      </ScrollView>
+    </View>
+  );
   };
 
   const renderMonopolyDesktopSidebar = () => {
@@ -1319,46 +1389,9 @@ export default function GameTableScreen() {
     });
   };
 
-  // Share Victory to Social Media
-  const handleShareVictory = async () => {
-    if (table?.game_type === 'gapleh') {
-      setShareModalVisible(true);
-      return;
-    }
-
-    const gameLabel = (table?.game_type || 'GAPLEH').toUpperCase();
-    const winnerName = currentUsername || 'albantani';
-    const hookText = `menang maen ${gameLabel} sambil Ngopi! 🏆✨\n\nNongkrong santai di warkop digital: maen Gapleh, Catur, UNO, Pokemon, Monopoly, Truf, Bridge, Remi, Ulartangga, Poker, Remi! Kumpulin Poin Warkop & tukar Token BaMbooChain (BMC)! Gas maen bareng ${winnerName} sekarang, klik: https://ngopi.top?ref=${encodeURIComponent(winnerName)} ☕🚀`;
-
-    if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
-      if (navigator.share) {
-        try {
-          await navigator.share({
-            title: 'Kemenangan di Ngopi.top!',
-            text: hookText,
-          });
-          return;
-        } catch {
-          // ignore or fallback
-        }
-      }
-      try {
-        if (navigator.clipboard) {
-          await navigator.clipboard.writeText(hookText);
-        }
-        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(hookText)}`, '_blank');
-      } catch {
-        alert('Tautan kemenangan telah disiapkan!');
-      }
-    } else {
-      try {
-        await Share.share({
-          message: hookText,
-        });
-      } catch (e) {
-        console.warn(e);
-      }
-    }
+  // Share Victory to Social Media (Opens Universal In-App Share Modal)
+  const handleShareVictory = () => {
+    setShareModalVisible(true);
   };
 
   // Chess Action: Move Piece
@@ -1998,7 +2031,8 @@ export default function GameTableScreen() {
             styles.tableArenaWrapper,
             table.game_type === 'monopoly' && {
               padding: 4,
-              paddingVertical: 4,
+              paddingVertical: 2,
+              flex: undefined,
             },
           ]}
         >
@@ -2008,11 +2042,13 @@ export default function GameTableScreen() {
               table.game_type === 'monopoly' && {
                 maxWidth: '100%',
                 width: '100%',
-                height: '100%',
-                paddingVertical: 4,
+                height: 'auto',
+                minHeight: monopolyBoardSize + 16,
+                paddingVertical: 6,
                 paddingHorizontal: 4,
                 justifyContent: 'center',
                 alignItems: 'center',
+                overflow: 'visible',
               },
             ]}
           >
@@ -3232,54 +3268,11 @@ export default function GameTableScreen() {
               </View>
             </View>
           ) : table.game_type === 'monopoly' ? (
-            /* Monopoly Player Asset & Balance Cards */
+            /* Monopoly Player Owned Properties & House Building (Duplicate cards removed) */
             <View style={{ paddingVertical: 2, gap: 4 }}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{
-                  gap: 6,
-                  paddingHorizontal: 2,
-                  justifyContent: isDesktop ? 'center' : 'flex-start',
-                  minWidth: isDesktop ? '100%' : undefined,
-                }}
-              >
-                {Object.values(gameState?.players || {}).map((pl: any) => {
-                  const pInfo = table.players?.find((p: any) => p.user_id === pl.userId);
-                  const isCurrent = gameState?.currentTurn === pl.userId;
-                  const isMe = pl.userId === currentUserId;
-                  const propCount = pl.properties?.length || 0;
-                  return (
-                    <View
-                      key={pl.userId}
-                      style={{
-                        backgroundColor: isCurrent ? 'rgba(212, 163, 115, 0.25)' : '#2c1e14',
-                        borderColor: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.border,
-                        borderWidth: isMe ? 2 : 1,
-                        borderRadius: 8,
-                        paddingHorizontal: 8,
-                        paddingVertical: 4,
-                        minWidth: isDesktop ? 120 : 96,
-                      }}
-                    >
-                      <Text numberOfLines={1} style={{ color: isMe ? '#38bdf8' : isCurrent ? coffee.accent : coffee.text, fontSize: 10.5, fontWeight: '800' }}>
-                        {pInfo?.display_name || pl.userId} {isMe ? '(Anda)' : ''} {isCurrent ? '🎲' : ''}
-                      </Text>
-                      <Text style={{ color: pl.isBankrupt ? '#ef4444' : '#22c55e', fontSize: 10, fontWeight: '700' }}>
-                        {pl.isBankrupt ? '💀 BANGKRUT' : `💰 Rp ${pl.money}`}
-                      </Text>
-                      <Text style={{ color: coffee.muted, fontSize: 8.5 }}>
-                        🏠 {propCount} Properti {pl.inJail ? '• 🔒 Penjara' : ''}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </ScrollView>
-
-              {/* My Owned Properties with Build House option */}
-              {gameState?.players?.[currentUserId]?.properties?.length > 0 && (
+              {gameState?.players?.[currentUserId]?.properties?.length > 0 ? (
                 <View style={{ marginTop: 2 }}>
-                  <Text style={{ fontSize: 9.5, color: coffee.muted, marginBottom: 2, textAlign: 'center' }}>
+                  <Text style={{ fontSize: 9.5, color: coffee.muted, marginBottom: 4, textAlign: 'center' }}>
                     Properti Anda (Klik untuk bangun Rumah jika punya 1 kelompok warna):
                   </Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 4 }}>
@@ -3310,6 +3303,12 @@ export default function GameTableScreen() {
                       );
                     })}
                   </ScrollView>
+                </View>
+              ) : (
+                <View style={{ paddingVertical: 4, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, color: coffee.muted, fontStyle: 'italic' }}>
+                    Belum memiliki properti. Beli tanah saat dadu mendarat di petak kosong! 🏘️
+                  </Text>
                 </View>
               )}
             </View>
@@ -3717,17 +3716,22 @@ export default function GameTableScreen() {
         </View>
       </Modal>
 
-      {/* Gapleh Viral Social Media Share Modal (Task 3) */}
+      {/* Universal Viral Social Media Share Modal */}
       <GaplehShareModal
         visible={shareModalVisible}
         onClose={() => setShareModalVisible(false)}
         data={{
+          gameType: table?.game_type,
           winType: gameResult?.winType || (gameState as any)?.winType || 'gapleh_biasa',
           username: currentUsername || 'Ngopikawan',
           pointsEarned: gameResult?.pointsAwarded ?? 50,
           streakCount: gameResult?.pointsDetails?.streakCount ?? 1,
           isFirstNutup: Boolean(gameResult?.pointsDetails?.isFirstNutup),
           totalPoints: gameResult?.playerPoints?.[currentUserId] ?? 500,
+          gameStats: {
+            money: gameState?.players?.[currentUserId]?.money,
+            propertiesCount: gameState?.players?.[currentUserId]?.properties?.length,
+          },
         }}
       />
 

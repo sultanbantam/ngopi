@@ -20,12 +20,18 @@ const API_URL = 'https://api.ngopi.top/api';
 export type DesignTemplateType = 'neon_cyberpunk' | 'retro_warkop' | 'modern_minimalist' | 'cinematic_dramatic';
 
 export interface GaplehShareData {
-  winType: 'nutup_balak6' | 'nutup_balak0' | 'digapleh' | 'gapleh_biasa' | string;
+  gameType?: string;
+  winType?: 'nutup_balak6' | 'nutup_balak0' | 'digapleh' | 'gapleh_biasa' | string;
   username: string;
   pointsEarned: number;
   streakCount?: number;
   isFirstNutup?: boolean;
   totalPoints?: number;
+  gameStats?: {
+    money?: number;
+    propertiesCount?: number;
+    rank?: number;
+  };
 }
 
 interface GaplehShareModalProps {
@@ -47,16 +53,36 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
   const [hooksList, setHooksList] = useState<string[]>([]);
   const [hookIndex, setHookIndex] = useState<number>(0);
   const [hashtags, setHashtags] = useState<string[]>(['NgopiGapleh', 'GaplehIndonesia']);
-  const [shareLinks, setShareLinks] = useState<{ whatsapp: string; twitter: string; facebook: string }>({
-    whatsapp: '',
-    twitter: '',
-    facebook: '',
-  });
   const [copySuccess, setCopySuccess] = useState(false);
 
   // Fetch or generate share hooks
   useEffect(() => {
     if (!visible) return;
+
+    const cleanUser = (data.username || '').replace(/^@/, '');
+
+    if (data.gameType === 'monopoly') {
+      const monopolyCaption = `🎩 KONGGLOMERAT WARKOP! @${cleanUser || 'Ngopikawan'} baru aja memborong aset properti dan jadi Juara Monopoli di Ngopi! ☕🏆\n\nNongkrong santai main Monopoli, Gapleh, Catur & kumpulin Token BaMbooChain (BMC)!`;
+      setCaption(monopolyCaption);
+      setHooksList([
+        monopolyCaption,
+        `🏆 Menang telak main Monopoli Warkop! Semua tanah terbeli bareng @${cleanUser || 'Ngopikawan'} di https://ngopi.top ☕🚀`,
+        `💸 Saldo tebel, aset hotel berjejer! Sensasi serunya Monopoli digital di Ngopi bareng kawan warkop! 🎩✨`,
+      ]);
+      setHashtags(['NgopiMonopoly', 'WarkopDigital', 'BaMbooChain', 'NgopiTop']);
+      setHookIndex(0);
+      return;
+    }
+
+    if (data.gameType && data.gameType !== 'gapleh') {
+      const gName = data.gameType.toUpperCase();
+      const genericCaption = `🏆 MENANG TELAK MAIN ${gName}! @${cleanUser || 'Ngopikawan'} baru aja meraih kemenangan di warkop digital Ngopi.top! ☕✨\n\nYuk nongkrong santai & kumpulin Token BaMbooChain (BMC)!`;
+      setCaption(genericCaption);
+      setHooksList([genericCaption]);
+      setHashtags([`Ngopi${gName}`, 'WarkopDigital', 'NgopiTop']);
+      setHookIndex(0);
+      return;
+    }
 
     const fetchShareContent = async () => {
       try {
@@ -73,10 +99,9 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
           setCaption(res.data.caption || '');
           setHooksList(res.data.hooks || [res.data.caption]);
           setHashtags(res.data.hashtags || ['NgopiGapleh', 'GaplehIndonesia']);
-          setShareLinks(res.data.share_links || { whatsapp: '', twitter: '', facebook: '' });
           setHookIndex(0);
         }
-      } catch (err) {
+      } catch {
         // Local fallback if offline
         const fallbackCaption = data.winType === 'nutup_balak6'
           ? `NUTUP PAKAI BALAK 6! 💀🔥 @${data.username} baru aja bikin lawan nelangsa di Ngopi!`
@@ -91,7 +116,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
     };
 
     fetchShareContent();
-  }, [visible, data.winType, data.username, data.pointsEarned, data.streakCount, data.isFirstNutup, currentTemplate]);
+  }, [visible, data.winType, data.username, data.pointsEarned, data.streakCount, data.isFirstNutup, currentTemplate, data.gameType]);
 
   // Cycle next hook
   const handleCycleHook = () => {
@@ -115,46 +140,54 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
       if (Platform.OS !== 'web') {
         Alert.alert('Berhasil', 'Caption & link referral kemenangan berhasil disalin!');
       }
-    } catch (err) {
+    } catch {
       Alert.alert('Info', fullText);
     }
   };
 
   // Open Social Deep Links
-  const handleShareSocial = async (platform: 'whatsapp' | 'twitter' | 'facebook' | 'native') => {
+  const handleShareSocial = async (platform: 'whatsapp' | 'telegram' | 'twitter' | 'facebook' | 'native') => {
     const cleanUser = (data.username || '').replace(/^@/, '');
     const targetUrl = cleanUser ? `https://ngopi.top?ref=${encodeURIComponent(cleanUser)}` : 'https://ngopi.top';
-    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\n${targetUrl}`;
+    const fullText = `${caption}\n\n${hashtags.map((h) => `#${h}`).join(' ')}\nMain di: ${targetUrl}`;
 
     if (platform === 'native') {
       try {
         if (Platform.OS === 'web' && typeof navigator !== 'undefined' && (navigator as any).share) {
           await (navigator as any).share({
-            title: 'Kemenangan Gapleh di Ngopi',
-            text: caption,
-            url: targetUrl,
+            title: 'Kemenangan di Ngopi.top',
+            text: fullText,
           });
           return;
         }
         await RNShare.share({
           message: fullText,
-          url: targetUrl,
-          title: 'Kemenangan Gapleh di Ngopi',
+          title: 'Kemenangan di Ngopi.top',
         });
-      } catch (err) {
+      } catch {
         handleCopyCaption();
       }
       return;
     }
 
-    const deepLinkUrl = shareLinks[platform];
-    if (deepLinkUrl) {
+    let url = '';
+    if (platform === 'whatsapp') {
+      url = `https://api.whatsapp.com/send?text=${encodeURIComponent(fullText)}`;
+    } else if (platform === 'telegram') {
+      url = `https://t.me/share/url?url=${encodeURIComponent(targetUrl)}&text=${encodeURIComponent(caption)}`;
+    } else if (platform === 'twitter') {
+      url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(fullText)}`;
+    } else if (platform === 'facebook') {
+      url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(targetUrl)}&quote=${encodeURIComponent(caption)}`;
+    }
+
+    if (url) {
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        window.open(deepLinkUrl, '_blank');
+        window.open(url, '_blank');
       } else {
-        const canOpen = await Linking.canOpenURL(deepLinkUrl);
+        const canOpen = await Linking.canOpenURL(url);
         if (canOpen) {
-          await Linking.openURL(deepLinkUrl);
+          await Linking.openURL(url);
         } else {
           handleCopyCaption();
         }
@@ -227,6 +260,36 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
 
   // Header Title & Emoji per Win Type
   const getWinTypeDetails = () => {
+    if (data.gameType === 'monopoly') {
+      return {
+        title: 'JUARA MONOPOLI!',
+        emoji: '🎩🏰',
+        pointsText: data.gameStats?.money ? `Rp ${data.gameStats.money.toLocaleString('id-ID')}` : `+${data.pointsEarned || 100} POIN`,
+        leftCard: [0, 0],
+        rightCard: [0, 0],
+        badge: 'KONGGLOMERAT WARKOP 👑',
+      };
+    }
+    if (data.gameType === 'catur') {
+      return {
+        title: 'SKAKMAT TELAK!',
+        emoji: '♟️👑',
+        pointsText: `+${data.pointsEarned || 100} POIN`,
+        leftCard: [0, 0],
+        rightCard: [0, 0],
+        badge: 'GRANDMASTER WARKOP',
+      };
+    }
+    if (data.gameType === 'uno') {
+      return {
+        title: 'UNO! MENANG TELAK!',
+        emoji: '🃏⚡',
+        pointsText: `+${data.pointsEarned || 50} POIN`,
+        leftCard: [0, 0],
+        rightCard: [0, 0],
+        badge: 'JAWARA UNO',
+      };
+    }
     if (data.winType === 'nutup_balak6') {
       return {
         title: 'NUTUP BALAK 6!',
@@ -323,7 +386,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
                 {/* Top Badge */}
                 <View style={[styles.cardBrandBadge, { backgroundColor: tStyles.badgeBg }]}>
                   <Text style={[styles.cardBrandText, { color: tStyles.accentColor }]}>
-                    {tStyles.titleBadgeText}
+                    {data.gameType === 'monopoly' ? 'WARKOP MONOPOLY 🎩🏘️' : tStyles.titleBadgeText}
                   </Text>
                 </View>
 
@@ -340,20 +403,48 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
                   </View>
                 </View>
 
-                {/* Visual Domino Tiles */}
-                <View style={styles.tilesVisualContainer}>
-                  <View style={[styles.dominoDisplay, { backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor }]}>
-                    <Text style={[styles.dominoValue, { color: tStyles.tileDotColor }]}>
-                      {winDetails.leftCard[0]} • {winDetails.leftCard[1]}
+                {/* Visual Elements depending on Game */}
+                {data.gameType === 'monopoly' ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10 }}>
+                    <View style={{ backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 20 }}>💰</Text>
+                      <Text style={{ color: tStyles.tileDotColor, fontSize: 13, fontWeight: '900', marginTop: 2 }}>
+                        Rp {data.gameStats?.money ?? 1500}
+                      </Text>
+                      <Text style={{ color: tStyles.tileDotColor, fontSize: 9, opacity: 0.8 }}>Saldo Akhir</Text>
+                    </View>
+                    <Text style={{ fontSize: 18, color: tStyles.subColor, fontWeight: 'bold' }}>⭐</Text>
+                    <View style={{ backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor, borderWidth: 1.5, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 20 }}>🏠</Text>
+                      <Text style={{ color: tStyles.tileDotColor, fontSize: 13, fontWeight: '900', marginTop: 2 }}>
+                        {data.gameStats?.propertiesCount ?? 1} Aset
+                      </Text>
+                      <Text style={{ color: tStyles.tileDotColor, fontSize: 9, opacity: 0.8 }}>Properti Dimiliki</Text>
+                    </View>
+                  </View>
+                ) : data.gameType && data.gameType !== 'gapleh' ? (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 10 }}>
+                    <Text style={{ fontSize: 32 }}>🏆</Text>
+                    <Text style={{ color: tStyles.accentColor, fontSize: 13, fontWeight: '800', marginTop: 4 }}>
+                      {data.gameType.toUpperCase()}
                     </Text>
                   </View>
-                  <Text style={{ fontSize: 18, color: tStyles.subColor, fontWeight: 'bold' }}>⚡</Text>
-                  <View style={[styles.dominoDisplay, { backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor }]}>
-                    <Text style={[styles.dominoValue, { color: tStyles.tileDotColor }]}>
-                      {winDetails.rightCard[0]} • {winDetails.rightCard[1]}
-                    </Text>
+                ) : (
+                  /* Visual Domino Tiles */
+                  <View style={styles.tilesVisualContainer}>
+                    <View style={[styles.dominoDisplay, { backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor }]}>
+                      <Text style={[styles.dominoValue, { color: tStyles.tileDotColor }]}>
+                        {winDetails.leftCard[0]} • {winDetails.leftCard[1]}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 18, color: tStyles.subColor, fontWeight: 'bold' }}>⚡</Text>
+                    <View style={[styles.dominoDisplay, { backgroundColor: tStyles.tileBg, borderColor: tStyles.accentColor }]}>
+                      <Text style={[styles.dominoValue, { color: tStyles.tileDotColor }]}>
+                        {winDetails.rightCard[0]} • {winDetails.rightCard[1]}
+                      </Text>
+                    </View>
                   </View>
-                </View>
+                )}
 
                 {/* Player & Stats Section */}
                 <View style={[styles.cardStatsBox, { backgroundColor: tStyles.badgeBg }]}>
@@ -446,7 +537,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
               </View>
             </View>
 
-            {/* Social Share Buttons (WhatsApp, X, Facebook, Native) */}
+            {/* Social Share Buttons (WhatsApp, Telegram, X, Facebook, Native) */}
             <View style={styles.shareButtonsGrid}>
               <TouchableOpacity
                 style={[styles.socialShareBtn, { backgroundColor: '#25D366' }]}
@@ -454,6 +545,14 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
               >
                 <MaterialCommunityIcons name="whatsapp" size={18} color="#FFF" />
                 <Text style={styles.socialBtnText}>WhatsApp</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.socialShareBtn, { backgroundColor: '#0088cc' }]}
+                onPress={() => handleShareSocial('telegram')}
+              >
+                <MaterialCommunityIcons name="telegram" size={18} color="#FFF" />
+                <Text style={styles.socialBtnText}>Telegram</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -477,7 +576,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
                 onPress={() => handleShareSocial('native')}
               >
                 <Ionicons name="share-social-outline" size={16} color={coffee.buttonText} />
-                <Text style={[styles.socialBtnText, { color: coffee.buttonText }]}>Bagikan</Text>
+                <Text style={[styles.socialBtnText, { color: coffee.buttonText }]}>Lainnya</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
