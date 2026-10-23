@@ -180,20 +180,52 @@ export class PointsEconomyService {
     try {
       const { PointsManager } = require('../utils/pointsManager');
       if (!PointsManager) return;
-      const allPoints = PointsManager.getAllPoints();
-      const hasByName = Boolean(username && allPoints[username!] !== undefined);
-      const hasById = allPoints[userId] !== undefined;
 
-      if (hasByName || hasById) {
-        const pmBalance = hasByName ? PointsManager.getPoints(username!) : PointsManager.getPoints(userId);
-        const up = this.getOrCreateUserPoints(userId);
-        up.balance = pmBalance;
-        if (pmBalance > up.lifetime) {
-          up.lifetime = pmBalance;
+      const pmByName = username ? PointsManager.getPoints(username) : 0;
+      const pmById = PointsManager.getPoints(userId);
+      const maxPm = Math.max(pmByName, pmById);
+
+      const up = this.getOrCreateUserPoints(userId);
+
+      // Merge orphaned records if username key was accidentally used as a user_id
+      if (username && username !== userId && this.userPoints.has(username)) {
+        const orphanUp = this.userPoints.get(username)!;
+        if (orphanUp.balance > 0) {
+          up.balance = Math.max(up.balance, orphanUp.balance);
+          up.lifetime = Math.max(up.lifetime, orphanUp.lifetime, up.balance);
         }
-        up.updated_at = Date.now();
-        this.saveToDisk();
+        for (const tx of this.transactions) {
+          if (tx.user_id === username) {
+            tx.user_id = userId;
+          }
+        }
+        this.userPoints.delete(username);
       }
+
+      // Calculate total earned and spent from all recorded transactions for this user
+      const userTxs = this.transactions.filter((t) => t.user_id === userId);
+      const totalEarned = userTxs.filter((t) => t.amount > 0).reduce((acc, t) => acc + t.amount, 0);
+      const totalSpent = userTxs.filter((t) => t.amount < 0).reduce((acc, t) => acc + Math.abs(t.amount), 0);
+
+      // Lifetime should be at least totalEarned, maxPm, or current lifetime/balance
+      up.lifetime = Math.max(up.lifetime, maxPm, totalEarned, up.balance);
+
+      // If user has not spent any points, balance must equal lifetime
+      if (totalSpent === 0) {
+        up.balance = up.lifetime;
+      } else {
+        // Balance is lifetime minus spent, but at least maxPm or existing balance
+        up.balance = Math.max(up.balance, maxPm, up.lifetime - totalSpent);
+      }
+
+      // Always synchronize PointsManager so both userId and username have the exact canonical balance
+      PointsManager.setPoints(userId, up.balance);
+      if (username && username !== userId) {
+        PointsManager.setPoints(username, up.balance);
+      }
+
+      up.updated_at = Date.now();
+      this.saveToDisk();
     } catch (_) {}
   }
 
@@ -381,6 +413,12 @@ export class PointsEconomyService {
       null,
       `Check-in harian warkop Hari ke-${cycleDay} (+${pointsToAward} Poin, Siklus 07.00)`
     );
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager) {
+        PointsManager.setPoints(userId, up.balance);
+      }
+    } catch (_) {}
     this.saveToDisk();
 
     return {
@@ -399,6 +437,12 @@ export class PointsEconomyService {
     up.lifetime += 50;
     up.updated_at = Date.now();
     this.recordTransaction(userId, 50, 'referral_reward', friendId, 'Mengajak kawan nongkrong aktif di warkop (+50)');
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager) {
+        PointsManager.setPoints(userId, up.balance);
+      }
+    } catch (_) {}
     this.saveToDisk();
     return { pointsAdded: 50, newBalance: up.balance };
   }

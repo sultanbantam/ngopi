@@ -479,7 +479,7 @@ export default function PointsHubModal({ visible, onClose, onOpenWatchParty }: P
 
                     <View style={styles.balanceBottomRow}>
                       <Text style={styles.lifetimeText}>
-                        Total Perolehan: {pointsData?.lifetime?.toLocaleString() || 0} Poin
+                        Total Perolehan: {Math.max(pointsData?.lifetime || 0, pointsData?.balance || 0).toLocaleString()} Poin
                       </Text>
                       <TouchableOpacity style={styles.claimStreakBtn} onPress={handleClaimStreak}>
                         <Text style={styles.claimStreakBtnText}>Klaim Streak Harian</Text>

@@ -54,15 +54,29 @@ export const setupGameSocket = (io: Server) => {
     const awardedMap: Record<string, number> = {};
     const pts = typeof results?.pointsAwarded === 'number' ? results.pointsAwarded : 50;
 
-    if (results?.winners && Array.isArray(results.winners)) {
-      for (const winnerId of results.winners) {
+    const rawWinners = results?.winners || (results?.winner ? [results.winner] : []);
+    const winnersList = Array.isArray(rawWinners) ? rawWinners : [];
+
+    if (winnersList.length > 0) {
+      for (const winnerId of winnersList) {
         const player = table?.players?.find((p) => p.user_id === winnerId);
         if (player && !player.is_bot) {
-          const newPts = PointsManager.addPoints(player.username, pts);
-          if (player.user_id && player.user_id !== player.username) {
-            PointsManager.setPoints(player.user_id, newPts);
+          const targetId = player.user_id;
+          const targetUsername = player.username;
+          const newPts = PointsManager.addPoints(targetId, pts);
+          if (targetUsername && targetUsername !== targetId) {
+            PointsManager.setPoints(targetUsername, newPts);
           }
-          awardedMap[player.user_id] = newPts;
+
+          // Ensure pointsEconomyService is synchronized
+          try {
+            const { pointsEconomyService } = require('../../services/points.service');
+            if (pointsEconomyService) {
+              pointsEconomyService.syncWithPointsManager(targetId, targetUsername);
+            }
+          } catch (_) {}
+
+          awardedMap[targetId] = newPts;
         } else if (player && player.is_bot) {
           // Record bot win & points in BotProfile
           const botRes = BotProfileService.recordBotMatch(player.user_id, 'win');
