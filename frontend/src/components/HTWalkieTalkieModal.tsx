@@ -91,13 +91,65 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const [serialConnected, setSerialConnected] = useState(false);
   const [sMeterValue, setSMeterValue] = useState(7); // 1-9 S-meter
   const [incomingNotice, setIncomingNotice] = useState<{ callsign: string; audioUrl?: string } | null>(null);
+  const [isListeningAcoustic, setIsListeningAcoustic] = useState(false);
 
   const mediaRecorderRef = useRef<any>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const pttStartTimeRef = useRef<number>(0);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+  const stopListeningRef = useRef<(() => void) | null>(null);
 
   const curChannel = PRESET_CHANNELS[selectedChannelIdx] || PRESET_CHANNELS[2]!;
+
+  const toggleAcousticListener = async () => {
+    if (isListeningAcoustic) {
+      if (stopListeningRef.current) {
+        stopListeningRef.current();
+        stopListeningRef.current = null;
+      }
+      setIsListeningAcoustic(false);
+      return;
+    }
+
+    try {
+      const stopFn = await AcousticModemFrontend.startListening((decodedText) => {
+        if (!decodedText || decodedText.length < 2) return;
+
+        setIsReceiving(true);
+        setSMeterValue(9);
+        AcousticModemFrontend.playRogerBeep();
+
+        const newMsg = {
+          id: 'htm_acous_' + Date.now(),
+          sender_id: 'rx_acoustic',
+          sender_callsign: 'AKUSTIK_MIC',
+          content: decodedText,
+          freq: parseFloat(customFreq) || curChannel.freq,
+          protocol: 'AFSK',
+          created_at: Date.now(),
+          is_offline: true,
+        };
+
+        setMessages((prev) => [newMsg, ...prev]);
+
+        setTimeout(() => {
+          setIsReceiving(false);
+          setSMeterValue(7);
+        }, 4000);
+      });
+
+      stopListeningRef.current = stopFn;
+      setIsListeningAcoustic(true);
+      if (Platform.OS === 'web') {
+        window.alert('👂 RX Mic Listener Aktif!\n\nDekatkan speaker HP ke mikrofon Laptop untuk menerima pesan suara/teks FSK tanpa internet.');
+      } else {
+        Alert.alert('👂 RX Mic Listener Aktif', 'Dekatkan speaker HP ke mikrofon Laptop untuk menerima pesan suara/teks FSK tanpa internet.');
+      }
+    } catch (err: any) {
+      console.warn('Gagal mengaktifkan RX Mic:', err);
+      Alert.alert('Izin Mikrofon Diperlukan', 'Harap izinkan akses mikrofon di browser untuk mendengarkan gelombang suara FSK.');
+    }
+  };
 
   // Handle incoming socket transmission across all open HT modals
   useEffect(() => {
@@ -165,6 +217,10 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
       socket.off('ht:transmission', onIncomingTransmission);
       if (activeAudioRef.current) {
         try { activeAudioRef.current.pause(); } catch (_) {}
+      }
+      if (stopListeningRef.current) {
+        try { stopListeningRef.current(); } catch (_) {}
+        stopListeningRef.current = null;
       }
     };
   }, [visible, customFreq, curChannel.freq]);
@@ -286,7 +342,19 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                   setMessages((prev) => [res.data.message, ...prev]);
                 }
               } catch (txErr: any) {
-                console.warn('[HT] Gagal memancarkan transmisi suara:', txErr?.message);
+                console.warn('[HT] Jaringan offline/gagal, simpan lokal:', txErr?.message);
+                const offlineMsg = {
+                  id: 'htm_off_' + Date.now(),
+                  sender_id: 'local_offline',
+                  sender_callsign: callsign || 'YD0NGO',
+                  content: `🎙️ Pesan Suara PTT (${durationSec}s)`,
+                  freq: parseFloat(customFreq) || curChannel.freq,
+                  protocol: curChannel.protocol,
+                  audio_url: base64Audio,
+                  created_at: Date.now(),
+                  is_offline: true,
+                };
+                setMessages((prev) => [offlineMsg, ...prev]);
               }
             };
             reader.readAsDataURL(audioBlob);
@@ -337,9 +405,24 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
         is_emergency: isEmergency,
       };
 
-      const res = await axios.post(`${API_URL}/ht/transmit`, payload, { headers });
-      if (res.data?.message) {
-        setMessages(prev => [res.data.message, ...prev]);
+      try {
+        const res = await axios.post(`${API_URL}/ht/transmit`, payload, { headers });
+        if (res.data?.message) {
+          setMessages(prev => [res.data.message, ...prev]);
+        }
+      } catch (apiErr: any) {
+        console.warn('[HT] Transmisi offline (tanpa internet):', apiErr?.message);
+        const offlineMsg = {
+          id: 'htm_off_' + Date.now(),
+          sender_id: 'local_offline',
+          sender_callsign: callsign || 'YD0NGO',
+          content: textToSend,
+          freq: parseFloat(customFreq) || curChannel.freq,
+          protocol: curChannel.protocol,
+          created_at: Date.now(),
+          is_offline: true,
+        };
+        setMessages(prev => [offlineMsg, ...prev]);
       }
 
       if (!isEmergency) {
@@ -509,6 +592,46 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                   </TouchableOpacity>
                 </View>
 
+                {modemMode === 'acoustic' && (
+                  <View
+                    style={{
+                      backgroundColor: isListeningAcoustic ? '#064e3b' : '#1e293b',
+                      borderColor: isListeningAcoustic ? '#10b981' : '#334155',
+                      borderWidth: 1.5,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>
+                        {isListeningAcoustic ? '👂 RX Mic Sedang Mendengarkan...' : '🎙️ Terima Gelombang Suara / HT'}
+                      </Text>
+                      <Text style={{ color: isListeningAcoustic ? '#a7f3d0' : '#94a3b8', fontSize: 11, marginTop: 2 }}>
+                        {isListeningAcoustic
+                          ? 'Mikrofon aktif mendengarkan nada FSK dari speaker HP / HT fisik secara offline!'
+                          : 'Aktifkan di Laptop jika HP sedang offline (nada FSK HP akan didekode oleh laptop).'}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: isListeningAcoustic ? '#ef4444' : '#059669',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                      }}
+                      onPress={toggleAcousticListener}
+                    >
+                      <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                        {isListeningAcoustic ? 'Matikan RX' : '👂 Aktifkan RX Mic'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
                 {modemMode === 'serial' && (
                   <View style={styles.serialBanner}>
                     <Text style={styles.serialBannerText}>
@@ -627,9 +750,16 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                     messages.map((m, idx) => (
                       <View key={m.id || idx} style={[styles.trafficBubble, m.is_emergency && styles.trafficEmergencyBubble]}>
                         <View style={styles.trafficBubbleHeader}>
-                          <Text style={[styles.trafficCallsign, m.is_emergency && { color: '#EF4444' }]}>
-                            📻 @{m.sender_callsign || m.sender_id}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={[styles.trafficCallsign, m.is_emergency && { color: '#EF4444' }]}>
+                              📻 @{m.sender_callsign || m.sender_id}
+                            </Text>
+                            {m.is_offline && (
+                              <View style={{ backgroundColor: '#78350f', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ color: '#fde68a', fontSize: 10, fontWeight: 'bold' }}>✈️ OFFLINE</Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.trafficTime}>
                             {new Date(m.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
                           </Text>
@@ -637,31 +767,29 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                         <Text style={styles.trafficContent}>{m.content}</Text>
                         <View style={styles.trafficMetaRow}>
                           <Text style={styles.trafficMetaText}>{m.protocol} • {m.freq} MHz</Text>
-                          {m.audio_url && (
-                            <TouchableOpacity
-                              style={styles.playAudioBubbleBtn}
-                              onPress={() => {
-                                if (m.audio_url?.startsWith('data:audio') || m.audio_url?.startsWith('http')) {
-                                  try {
-                                    AcousticModemFrontend.playPttChirp();
-                                    const audio = new Audio(m.audio_url);
-                                    audio.play().then(() => {
-                                      audio.onended = () => AcousticModemFrontend.playRogerBeep();
-                                    }).catch((err) => console.warn('[HT] Audio play error:', err));
-                                  } catch (e) {
-                                    console.warn('[HT] Audio exception:', e);
-                                  }
-                                } else {
-                                  AcousticModemFrontend.playAfsktone(m.content);
+                          <TouchableOpacity
+                            style={styles.playAudioBubbleBtn}
+                            onPress={() => {
+                              if (m.audio_url && (m.audio_url.startsWith('data:audio') || m.audio_url.startsWith('http'))) {
+                                try {
+                                  AcousticModemFrontend.playPttChirp();
+                                  const audio = new Audio(m.audio_url);
+                                  audio.play().then(() => {
+                                    audio.onended = () => AcousticModemFrontend.playRogerBeep();
+                                  }).catch((err) => console.warn('[HT] Audio play error:', err));
+                                } catch (e) {
+                                  console.warn('[HT] Audio exception:', e);
                                 }
-                              }}
-                            >
-                              <Ionicons name="volume-high" size={14} color="#D97706" />
-                              <Text style={styles.playAudioBubbleBtnText}>
-                                {m.content?.includes('Pesan Suara') || m.content?.includes('Suara') ? 'Putar Suara 🎙️' : 'Putar Audio 📻'}
-                              </Text>
-                            </TouchableOpacity>
-                          )}
+                              } else {
+                                AcousticModemFrontend.playAfsktone(m.content);
+                              }
+                            }}
+                          >
+                            <Ionicons name="volume-high" size={14} color="#D97706" />
+                            <Text style={styles.playAudioBubbleBtnText}>
+                              {m.audio_url ? 'Putar Suara 🎙️' : 'Pancarkan Nada FSK 📻'}
+                            </Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
                     ))

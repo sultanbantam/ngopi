@@ -368,8 +368,12 @@ export class AcousticModem {
         }
       };
 
+      const muteGain = ctx.createGain();
+      muteGain.gain.setValueAtTime(0, ctx.currentTime);
+
       micSource.connect(processor);
-      processor.connect(ctx.destination);
+      processor.connect(muteGain);
+      muteGain.connect(ctx.destination);
 
       return () => {
         this.stopListening();
