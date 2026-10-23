@@ -68,6 +68,131 @@ const MONOPOLY_GROUP_COLORS: Record<string, string> = {
   utility: '#eab308',
 };
 
+export const getGameReadySymbol = (gameType?: string): string => {
+  switch (gameType?.toLowerCase()) {
+    case 'monopoly':
+      return '☕🏢'; // Cangkir kopi & simbol monopoli gedung/properti
+    case 'catur':
+      return '☕♟️';
+    case 'gapleh':
+      return '☕🁫';
+    case 'snake_ladder':
+      return '☕🎲🐍';
+    case 'ludo':
+      return '☕🎲🎯';
+    case 'uno':
+      return '☕🎴';
+    case 'karambol':
+      return '☕🎯';
+    case 'billiard':
+      return '☕🎱';
+    case 'daku':
+      return '☕🐚';
+    case 'pokemon':
+      return '☕⚡';
+    case 'mahyong':
+      return '☕🀄';
+    case 'halma':
+      return '☕⭐';
+    case 'poker':
+      return '☕♠️';
+    case 'bridge':
+      return '☕♥️';
+    case 'truf':
+      return '☕♦️';
+    case 'remi':
+    default:
+      return '☕🃏';
+  }
+};
+
+export const getGameQuickChats = (gameType?: string): string[] => {
+  switch (gameType?.toLowerCase()) {
+    case 'monopoly':
+      return [
+        'Kocok dadu dulu! 🎲',
+        'Beli properti dulu biar nambah aset 🏢',
+        'Awas kena denda sewa tanah! 💸',
+        'Kena penjara euy 🚔',
+        'Tawar aset properti dong! 🤝',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'catur':
+      return [
+        'Skak! ♟️',
+        'Kalkulasi langkah dulu 🤔',
+        'Langkah cantik 👑',
+        'Hati-hati blunder ⚠️',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'snake_ladder':
+      return [
+        'Kocok dadu! 🎲',
+        'Awas dipatuk ular! 🐍',
+        'Naik tangga meluncur 🪜',
+        'Sedikit lagi menang! 🌟',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'ludo':
+      return [
+        'Kocok angka 6! 🎲',
+        'Awas pion ditabrak! 🎯',
+        'Pion masuk kandang 🏠',
+        'Kejar pion depan! 🏃',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'karambol':
+      return [
+        'Bidik koin merah! 🎯',
+        'Striker mantul sudut! 🎱',
+        'Tembakan master!',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'billiard':
+      return [
+        'Incar bola 8! 🎱',
+        'Kapur stik dulu',
+        'Pukulan mantap! 🎯',
+        'Awas bola putih masuk',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'daku':
+      return [
+        'Lumbung penuh! 🐚',
+        'Awas lubang kosong',
+        'Koleksi biji dulu',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'uno':
+      return [
+        'UNO! 🎴',
+        'Awas kena Draw 4! 😈',
+        'Ubah warna dulu 🔄',
+        'Lewat dulu...',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'gapleh':
+      return [
+        'Balak keluar! 🁫',
+        'Jagal telak!',
+        'Tutup ujungnya lur!',
+        'Lewat dulu ya...',
+        'Sambil ngopi santai ☕',
+      ];
+    case 'remi':
+    case 'truf':
+    case 'bridge':
+    case 'poker':
+    default:
+      return [
+        'Giliran saya ya...',
+        'Mainkan kartu dulu 🃏',
+        'Hitung poin dulu...',
+        'Sambil ngopi santai ☕',
+      ];
+  }
+};
+
 const GAPLEH_BOTS: Array<{
   id: string;
   name: string;
@@ -1237,18 +1362,75 @@ export default function GameTableScreen() {
               )}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={styles.cardCountText}>
-                  {player.is_bot ? '🤖 Bot' : table.game_type === 'gapleh' ? '🁫' : '🃏'}{' '}
-                  {isPlaying
-                    ? table.game_type === 'catur'
-                      ? gameState?.whitePlayerId === player.user_id
-                        ? 'Putih ⚪'
-                        : 'Hitam ⚫'
-                      : table.game_type === 'truf' && gameState?.phase !== 'bidding'
-                      ? `${cardCount} kartu • 🏆 ${gameState?.tricksWon?.[player.user_id] || 0}${gameState?.bids?.[player.user_id]?.target !== undefined ? `/${gameState.bids[player.user_id].target}` : ''}`
-                      : `${cardCount} kartu`
-                    : player.is_ready
-                    ? 'Siap'
-                    : 'Menunggu'}
+                  {(() => {
+                    const gameType = table.game_type?.toLowerCase();
+                    const isMonopoly = gameType === 'monopoly';
+                    const isCatur = gameType === 'catur';
+                    const isSnakeLadder = gameType === 'snake_ladder';
+                    const isLudo = gameType === 'ludo';
+                    const isKarambol = gameType === 'karambol';
+                    const isBilliard = gameType === 'billiard';
+                    const isDaku = gameType === 'daku';
+                    const isGapleh = gameType === 'gapleh';
+
+                    const baseIcon = player.is_bot
+                      ? '🤖'
+                      : isMonopoly
+                      ? '🏢'
+                      : isCatur
+                      ? '♟️'
+                      : isGapleh
+                      ? '🁫'
+                      : isSnakeLadder || isLudo
+                      ? '🎲'
+                      : isKarambol
+                      ? '🎯'
+                      : isBilliard
+                      ? '🎱'
+                      : isDaku
+                      ? '🐚'
+                      : '🃏';
+
+                    if (!isPlaying) {
+                      return `${baseIcon} ${player.is_bot ? 'Bot Siap' : player.is_ready ? 'Siap' : 'Menunggu'}`;
+                    }
+
+                    if (isMonopoly) {
+                      const mState = gameState?.players?.[player.user_id];
+                      const money = mState?.money !== undefined ? mState.money : 1500;
+                      const props = mState?.properties?.length || 0;
+                      return `${baseIcon} Rp ${money} • ${props} Aset`;
+                    }
+
+                    if (isCatur) {
+                      const colorText = gameState?.whitePlayerId === player.user_id ? 'Putih ⚪' : 'Hitam ⚫';
+                      return `${baseIcon} ${colorText}`;
+                    }
+
+                    if (isSnakeLadder) {
+                      const pos = gameState?.players?.[player.user_id]?.position ?? 1;
+                      return `${baseIcon} Kotak ${pos}`;
+                    }
+
+                    if (isLudo) {
+                      return `${baseIcon} Pion Ludo`;
+                    }
+
+                    if (isKarambol) {
+                      const score = gameState?.scores?.[player.user_id] ?? 0;
+                      return `${baseIcon} Skor ${score}`;
+                    }
+
+                    if (isGapleh) {
+                      return `${baseIcon} ${cardCount} balak`;
+                    }
+
+                    if (table.game_type === 'truf' && gameState?.phase !== 'bidding') {
+                      return `${baseIcon} ${cardCount} kartu • 🏆 ${gameState?.tricksWon?.[player.user_id] || 0}${gameState?.bids?.[player.user_id]?.target !== undefined ? `/${gameState.bids[player.user_id].target}` : ''}`;
+                    }
+
+                    return `${baseIcon} ${cardCount} kartu`;
+                  })()}
                 </Text>
               </View>
               {isTurn && <Text style={styles.turnIndicatorBadge}>Gilirannya</Text>}
@@ -2290,7 +2472,7 @@ export default function GameTableScreen() {
           ) : (
             <View style={styles.idleTablePlaceholder}>
               <Text style={{ fontSize: 38, marginBottom: 8 }}>
-                {table.game_type === 'catur' ? '♟️♞' : table.game_type === 'gapleh' ? '☕🁫' : '☕🃏'}
+                {getGameReadySymbol(table.game_type)}
               </Text>
               <Text style={styles.idleTableTitle}>Meja {table.game_type?.toUpperCase()} Siap Digelar</Text>
               <Text style={styles.idleTableSub}>
@@ -3139,6 +3321,31 @@ export default function GameTableScreen() {
               )}
             </ScrollView>
 
+            {/* Quick Game-Themed Chat Presets */}
+            <View style={{ borderTopWidth: 1, borderTopColor: '#2b1a10', paddingTop: 6, backgroundColor: '#18110b' }}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 10, paddingVertical: 4, gap: 6 }}
+              >
+                {getGameQuickChats(table.game_type).map((qc, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.quickChatChip}
+                    onPress={() => {
+                      if (!socketRef.current || !tableId) return;
+                      socketRef.current.emit('table:chat', {
+                        tableId,
+                        message: qc,
+                      });
+                    }}
+                  >
+                    <Text style={styles.quickChatChipText}>{qc}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
             <View style={styles.chatInputRow}>
               <TextInput
                 style={styles.chatTextInput}
@@ -3655,5 +3862,18 @@ const styles = StyleSheet.create({
     backgroundColor: coffee.button,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  quickChatChip: {
+    backgroundColor: '#2b1a10',
+    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: '#4a2c1a',
+  },
+  quickChatChipText: {
+    color: coffee.text,
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

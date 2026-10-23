@@ -224,14 +224,28 @@ export class BotProfileService {
     return { profile, pointsAwarded, leveledUp, newBadge };
   }
 
-  public static getRandomBanter(botId: string, type: 'turn' | 'win' | 'pass'): string {
+  public static getRandomBanter(botId: string, type: 'turn' | 'win' | 'pass', gameType?: string): string {
+    const normalizedGame = gameType?.toLowerCase();
+    const gameBanter = normalizedGame && GAME_SPECIFIC_BANTERS[normalizedGame];
+    if (gameBanter) {
+      const quotes = type === 'turn' ? gameBanter.turnQuotes : type === 'win' ? gameBanter.winQuotes : gameBanter.passQuotes;
+      if (quotes && quotes.length > 0) {
+        return quotes[Math.floor(Math.random() * quotes.length)]!;
+      }
+    }
+
     const banter = BOT_BANTERS[botId] || DEFAULT_BOT_BANTER;
     const quotes = type === 'turn' ? banter.turnQuotes : type === 'win' ? banter.winQuotes : banter.passQuotes;
     if (!quotes || quotes.length === 0) return '';
     return quotes[Math.floor(Math.random() * quotes.length)]!;
   }
 
-  public static getRandomEmote(botId: string): string {
+  public static getRandomEmote(botId: string, gameType?: string): string {
+    const normalizedGame = gameType?.toLowerCase();
+    const gameBanter = normalizedGame && GAME_SPECIFIC_BANTERS[normalizedGame];
+    if (gameBanter && gameBanter.emotes && gameBanter.emotes.length > 0) {
+      return gameBanter.emotes[Math.floor(Math.random() * gameBanter.emotes.length)]!;
+    }
     const banter = BOT_BANTERS[botId] || DEFAULT_BOT_BANTER;
     if (!banter.emotes || banter.emotes.length === 0) return '☕';
     return banter.emotes[Math.floor(Math.random() * banter.emotes.length)]!;
@@ -246,10 +260,236 @@ export interface BotBanterData {
 }
 
 export const DEFAULT_BOT_BANTER: BotBanterData = {
-  turnQuotes: ['Giliran saya ya...', 'Buang satu kartu dulu ☕', 'Sambil ngopi santai...'],
+  turnQuotes: ['Giliran saya ya...', 'Sambil ngopi santai... ☕', 'Fokus langkah dulu nih...'],
   winQuotes: ['Mantap menang! ☕🎉', 'Alhamdulillah bungkus!'],
-  passQuotes: ['Lewat dulu ya...', 'Pas, gak ada kartu cocok.'],
+  passQuotes: ['Lewat dulu ya...', 'Pas dulu sejenak...'],
   emotes: ['☕', '👏', '😂'],
+};
+
+export const GAME_SPECIFIC_BANTERS: Record<string, BotBanterData> = {
+  monopoly: {
+    turnQuotes: [
+      'Giliran saya kocok dadu ya... 🎲',
+      'Beli properti dulu biar aset nambah 🏢',
+      'Tanah strategis warkop harus dibeli ini ☕',
+      'Semoga dapat angka hoki dan gak mampir ke komplek mahal 😅',
+      'Bangun rumah dulu, siap-siap narik sewa! 🏠',
+      'Investasi masa depan di warkop digital 💼',
+      'Lempar dadu dulu lur, bismillah hoki 🎲',
+      'Sambil ngopi santai, pantau pasar properti ☕',
+    ],
+    winQuotes: [
+      'Monopoli dikuasai! Juragan properti warkop sejati! 🏢👑🎉',
+      'Alhamdulillah borong semua komplek warkop! 💰🔥',
+      'Sewa properti mengalir deras, kemenangan mutlak! 🏆',
+    ],
+    passQuotes: [
+      'Lewat dulu, simpan modal kas warkop 💸',
+      'Gak beli tanah dulu, tunggu putaran berikutnya ☕',
+      'Aduh kena penjara, lewat giliran ya... 🚔',
+    ],
+    emotes: ['🏢', '💰', '🎲', '☕'],
+  },
+  catur: {
+    turnQuotes: [
+      'Kalkulasi posisi dulu, jangan sampai blunder ♟️',
+      'Kuda melompat dengan anggun ♞',
+      'Menteri siap bermanuver di sayap raja ♛',
+      'Fokus perwira tengah sambil seruput kopi ☕',
+      'Taktik skakmat mulai disusun pelan-pelan... 🤔',
+    ],
+    winQuotes: [
+      'Skakmat! Permainan yang luar biasa kawan! ♟️👑',
+      'Pertahanan runtuh! Kemenangan telak di atas papan catur! 🏆',
+    ],
+    passQuotes: [
+      'Posisi bertahan dulu ya, tahan gempuran...',
+      'Remis nih kayaknya kalau begini...',
+    ],
+    emotes: ['♟️', '👑', '🤔', '☕'],
+  },
+  snake_ladder: {
+    turnQuotes: [
+      'Bismillah lempar dadu, jangan kena kepala ular! 🎲🐍',
+      'Incar kotak tangga biar langsung meluncur ke atas 🪜✨',
+      'Kocok dadu dulu sambil ngopi ☕🎲',
+      'Awas ekor ular di depan mata... 😅',
+    ],
+    winQuotes: [
+      'Tembus kotak 100! Juara Ular Tangga Warkop! 🪜🎉🏆',
+      'Hoki maksimal melesat ke puncak! Mantap! 🌟',
+    ],
+    passQuotes: [
+      'Yah kena patuk ular, turun lagi deh 🐍😢',
+      'Lewat dulu, lagi istirahat di bawah...',
+    ],
+    emotes: ['🎲', '🪜', '🐍', '☕'],
+  },
+  ludo: {
+    turnQuotes: [
+      'Kocok angka 6 dong biar pion keluar kandang! 🎲',
+      'Maju pelan-pelan yang penting pion gak dimakan lawan 🎯',
+      'Pion meluncur ke jalur aman sambil ngopi ☕',
+      'Awas pionmu di depan, siap ditabrak! 😈',
+    ],
+    winQuotes: [
+      'Semua pion masuk segitiga akhir! Juara Ludo! 🏆🎉',
+      'Kemenangan telak, semua pion pulang selamat! 👑',
+    ],
+    passQuotes: [
+      'Belum dapet angka 6, sabar dulu di kandang 😅',
+      'Gak bisa gerak, lewat giliran ya...',
+    ],
+    emotes: ['🎲', '🎯', '🏠', '☕'],
+  },
+  karambol: {
+    turnQuotes: [
+      'Bidik striker ke koin merah dulu 🎯',
+      'Pukulan pantul sudut warkop! 🎱',
+      'Bedak karambol licin, tembakan akurat nih!',
+      'Fokus bidik lubang sudut sambil ngopi ☕',
+    ],
+    winQuotes: [
+      'Koin merah bungkus! Juara karambol warkop malam ini! 🏆🔥',
+      'Tembakan terakhir masuk bersih! Kemenangan mutlak! 👑',
+    ],
+    passQuotes: [
+      'Meleset dikit, giliranmu lur...',
+      'Foul dikit, lewat dulu...',
+    ],
+    emotes: ['🎯', '🔥', '☕'],
+  },
+  billiard: {
+    turnQuotes: [
+      'Kapur stik dulu biar pukulan gak culas 🎱',
+      'Pukulan bola sasaran ke lubang sudut...',
+      'Fokus sudut pantul, santai sambil ngopi ☕',
+      'Break bola pembuka yang mantap!',
+    ],
+    winQuotes: [
+      'Bola 8 masuk bersih! Game over, mantap kawan! 🎱👑',
+      'Pukulan master tak terbendung! 🏆',
+    ],
+    passQuotes: [
+      'Foul, bola di tanganmu...',
+      'Gak masuk, giliranmu...',
+    ],
+    emotes: ['🎱', '🎯', '☕'],
+  },
+  daku: {
+    turnQuotes: [
+      'Koleksi biji ke lumbung sendiri 🐚',
+      'Putaran biji jangan sampai mati di lubang kosong!',
+      'Hitung langkah biji congklak dulu...',
+      'Lumbung warkop mulai terisi penuh ☕',
+    ],
+    winQuotes: [
+      'Lumbung penuh biji kemenangan! Juara Congklak! 🐚🏆',
+      'Strategi putaran biji sempurna! 👑',
+    ],
+    passQuotes: [
+      'Biji habis di lubang kosong, giliranmu...',
+    ],
+    emotes: ['🐚', '👑', '☕'],
+  },
+  uno: {
+    turnQuotes: [
+      'Keluarkan warna yang cocok dulu nih 🎨',
+      'Awas kena Draw 4 ya teman-teman! 😈',
+      'Ubah warna dulu biar pada pusing 🔄',
+      'Sisa sedikit lagi nih kartuku... 🎴',
+    ],
+    winQuotes: [
+      'UNO! Kartu habis telak, bungkus kawan! 🎉🏆',
+      'Draw 4 terakhir mengunci kemenangan! 🔥',
+    ],
+    passQuotes: [
+      'Gak ada warna cocok, tarik kartu dulu...',
+    ],
+    emotes: ['🎴', '🔥', '😂', '☕'],
+  },
+  gapleh: {
+    turnQuotes: [
+      'Giliran saya ya...',
+      'Keluarkan kartu andalan warkop dulu nih 🁫',
+      'Sambil ngopi santai, pasang balak ☕',
+      'Hitung batu dulu biar gak kena kunci...',
+    ],
+    winQuotes: [
+      'GAPLEH! Habis kalian semua di tanganku! 🔥🎉',
+      'Alhamdulillah bungkus! Traktiran kopi buat semua! ☕😎',
+    ],
+    passQuotes: [
+      'Lewat dulu lur, kartunya lagi ngeteh ☕',
+      'Pas ya, buntu nih...',
+    ],
+    emotes: ['🁫', '☕', '🔥', '👏'],
+  },
+  remi: {
+    turnQuotes: [
+      'Giliran saya ya...',
+      'Buang satu kartu dulu ☕',
+      'Susun seri dan tris dulu...',
+      'Sambil ngopi santai ☕',
+    ],
+    winQuotes: [
+      'Remi turun kartu semua! Menang telak! 🏆🃏',
+      'Bungkus! Kartu rapi tanpa sisa! 🎉',
+    ],
+    passQuotes: [
+      'Lewat dulu ya...',
+      'Ambil kartu cangkulan dulu...',
+    ],
+    emotes: ['🃏', '☕', '👏'],
+  },
+  truf: {
+    turnQuotes: [
+      'Giliran saya ya...',
+      'Keluarkan kembang pembuka ♠️',
+      'Truf siap mengunci trik ini! 🎯',
+      'Hitung trik dulu biar capai target bid...',
+    ],
+    winQuotes: [
+      'Target trik tercapai! Kontrak Truf sukses! 🏆🎉',
+      'Menang telak ronde ini! Mantap tim! 👑',
+    ],
+    passQuotes: [
+      'Gak punya kembang yang sama, buang kartu kecil...',
+    ],
+    emotes: ['♠️', '♥️', '🎯', '☕'],
+  },
+  bridge: {
+    turnQuotes: [
+      'Giliran saya ya...',
+      'Analisis kartu dan tawaran partner...',
+      'Mainkan kartu sesuai taktik kontrak...',
+      'Sambil ngopi santai ☕',
+    ],
+    winQuotes: [
+      'Kontrak Bridge tercapai sempurna! 🏆🃏',
+    ],
+    passQuotes: [
+      'Pass! Giliran partner.',
+    ],
+    emotes: ['🃏', '☕', '👏'],
+  },
+  poker: {
+    turnQuotes: [
+      'Check atau Raise nih ya... 🤔',
+      'Pasang chip dulu sambil ngopi ☕',
+      'Kartu bagus jangan sampai kebaca lawan 😎',
+      'All in gak nih bos? 🔥',
+    ],
+    winQuotes: [
+      'Pot kemenangan disapu bersih! Royal flush! 🏆💰',
+      'Menang gertak atau menang kartu, yang penting untung! 😎🔥',
+    ],
+    passQuotes: [
+      'Fold dulu, kartu ampas...',
+      'Check aja santai...',
+    ],
+    emotes: ['💰', '😎', '🔥', '☕'],
+  },
 };
 
 export const BOT_BANTERS: Record<string, BotBanterData> = {

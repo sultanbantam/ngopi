@@ -112,7 +112,7 @@ export const setupGameSocket = (io: Server) => {
     // Random choice: 30% emote (if not win), 70% chat quote
     const isEmote = Math.random() < 0.3 && type !== 'win';
     if (isEmote) {
-      const emote = BotProfileService.getRandomEmote(botId);
+      const emote = BotProfileService.getRandomEmote(botId, table.game_type);
       if (emote) {
         gamesNamespace.to(`table:${tableId}`).emit('game:emote_received', {
           senderId: bot.user_id,
@@ -121,7 +121,7 @@ export const setupGameSocket = (io: Server) => {
         });
       }
     } else {
-      const quote = BotProfileService.getRandomBanter(botId, type);
+      const quote = BotProfileService.getRandomBanter(botId, type, table.game_type);
       if (quote) {
         const msg = TableManager.addChatMessage(
           tableId,
