@@ -92,12 +92,29 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const [sMeterValue, setSMeterValue] = useState(7); // 1-9 S-meter
   const [incomingNotice, setIncomingNotice] = useState<{ callsign: string; audioUrl?: string } | null>(null);
   const [isListeningAcoustic, setIsListeningAcoustic] = useState(false);
+  const [pttMode, setPttMode] = useState<'toggle' | 'hold'>('toggle');
+  const [txDuration, setTxDuration] = useState(0);
 
   const mediaRecorderRef = useRef<any>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const pttStartTimeRef = useRef<number>(0);
   const activeAudioRef = useRef<HTMLAudioElement | null>(null);
   const stopListeningRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    let interval: any = null;
+    if (isTransmitting) {
+      setTxDuration(0);
+      interval = setInterval(() => {
+        setTxDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setTxDuration(0);
+    }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTransmitting]);
 
   const curChannel = PRESET_CHANNELS[selectedChannelIdx] || PRESET_CHANNELS[2]!;
 
@@ -267,7 +284,9 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
     setIsTransmitting(true);
     pttStartTimeRef.current = Date.now();
     AcousticModemFrontend.playPttChirp();
-    if (Platform.OS !== 'web') {
+    if (typeof navigator !== 'undefined' && (navigator as any).vibrate) {
+      try { (navigator as any).vibrate(40); } catch (_) {}
+    } else if (Platform.OS !== 'web') {
       try { Vibration.vibrate(40); } catch (_) {}
     }
     if (modemMode === 'serial' && serialConnected) {
@@ -303,6 +322,11 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const handlePttUp = async () => {
     setIsTransmitting(false);
     AcousticModemFrontend.playRogerBeep();
+    if (typeof navigator !== 'undefined' && (navigator as any).vibrate) {
+      try { (navigator as any).vibrate([30, 50, 30]); } catch (_) {}
+    } else if (Platform.OS !== 'web') {
+      try { Vibration.vibrate([30, 50, 30]); } catch (_) {}
+    }
     if (modemMode === 'serial' && serialConnected) {
       SerialHTClient.setPtt(false);
     }
@@ -370,6 +394,17 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
         }
       } catch (recStopErr) {
         console.warn('[HT] Recorder stop error:', recStopErr);
+      }
+    }
+  };
+
+  // Toggle PTT helper for mobile
+  const handlePttPress = () => {
+    if (pttMode === 'toggle') {
+      if (isTransmitting) {
+        handlePttUp();
+      } else {
+        handlePttDown();
       }
     }
   };
@@ -686,24 +721,69 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
 
                 {/* Big Tactical PTT (Push-To-Talk) Control */}
                 <View style={styles.pttSection}>
-                  <Text style={styles.pttInstruction}>
-                    {isTransmitting ? '🔴 MEMANCARKAN AUDIO KE HT...' : 'Tahan tombol untuk bicara (PTT), lepas untuk standby (RX)'}
+                  {/* Mode PTT Selector (Toggle vs Hold) */}
+                  <View style={styles.pttModeSelector}>
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={[styles.pttModePill, pttMode === 'toggle' && styles.pttModePillActive]}
+                      onPress={() => setPttMode('toggle')}
+                    >
+                      <Ionicons name="finger-print" size={13} color={pttMode === 'toggle' ? '#FFF' : '#A8A29E'} />
+                      <Text style={[styles.pttModePillText, pttMode === 'toggle' && styles.pttModePillTextActive]}>
+                        👆 Sekali Ketuk (Mudah di HP)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      activeOpacity={0.8}
+                      style={[styles.pttModePill, pttMode === 'hold' && styles.pttModePillActive]}
+                      onPress={() => setPttMode('hold')}
+                    >
+                      <Ionicons name="hand-left" size={13} color={pttMode === 'hold' ? '#FFF' : '#A8A29E'} />
+                      <Text style={[styles.pttModePillText, pttMode === 'hold' && styles.pttModePillTextActive]}>
+                        🖐️ Tahan Bicara (Klasik HT)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <Text style={[styles.pttInstruction, isTransmitting && { color: '#EF4444', fontWeight: 'bold' }]}>
+                    {isTransmitting
+                      ? `🔴 SEDANG MENGUDARA (${String(Math.floor(txDuration / 60)).padStart(2, '0')}:${String(txDuration % 60).padStart(2, '0')}) • ${pttMode === 'toggle' ? 'Ketuk untuk selesai' : 'Lepas untuk selesai'}`
+                      : pttMode === 'toggle'
+                      ? 'Ketuk 1x untuk bicara, ketuk lagi saat selesai'
+                      : 'Tahan tombol untuk bicara, lepas untuk standby (RX)'}
                   </Text>
 
                   <TouchableOpacity
-                    activeOpacity={0.8}
+                    activeOpacity={0.85}
+                    delayPressIn={0}
                     style={[styles.largePttButton, isTransmitting && styles.largePttButtonActive]}
-                    onPressIn={handlePttDown}
-                    onPressOut={handlePttUp}
+                    onPress={pttMode === 'toggle' ? handlePttPress : undefined}
+                    onPressIn={pttMode === 'hold' ? handlePttDown : undefined}
+                    onPressOut={pttMode === 'hold' ? handlePttUp : undefined}
                   >
                     <MaterialCommunityIcons
                       name={isTransmitting ? 'microphone' : 'microphone-outline'}
-                      size={44}
+                      size={46}
                       color="#FFF"
                     />
-                    <Text style={styles.largePttButtonText}>{isTransmitting ? 'TRANSMITTING...' : 'PUSH TO TALK (PTT)'}</Text>
+                    <Text style={styles.largePttButtonText}>
+                      {isTransmitting
+                        ? pttMode === 'toggle'
+                          ? 'SELESAI BICARA (KETUK)'
+                          : 'TRANSMITTING...'
+                        : pttMode === 'toggle'
+                        ? 'KETUK UNTUK BICARA'
+                        : 'PUSH TO TALK (PTT)'}
+                    </Text>
                     <Text style={styles.largePttSubtext}>
-                      {modemMode === 'acoustic' ? 'Modulasi Audio Speaker -> Mic HT' : 'USB Serial TX'}
+                      {isTransmitting
+                        ? '🎙️ Suara sedang direkam & mengudara'
+                        : pttMode === 'toggle'
+                        ? 'Mode Hands-Free (Mudah di HP)'
+                        : modemMode === 'acoustic'
+                        ? 'Modulasi Audio Speaker -> Mic HT'
+                        : 'USB Serial TX'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1229,6 +1309,36 @@ const styles = StyleSheet.create({
   pttSection: {
     alignItems: 'center',
     marginVertical: 10,
+  },
+  pttModeSelector: {
+    flexDirection: 'row',
+    backgroundColor: '#1C1917',
+    borderRadius: 20,
+    padding: 3,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#44403C',
+    gap: 4,
+  },
+  pttModePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  pttModePillActive: {
+    backgroundColor: '#D97706',
+  },
+  pttModePillText: {
+    fontSize: 11,
+    color: '#A8A29E',
+    fontWeight: '600',
+  },
+  pttModePillTextActive: {
+    color: '#FFF',
+    fontWeight: 'bold',
   },
   pttInstruction: {
     fontSize: 11,
