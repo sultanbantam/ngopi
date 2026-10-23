@@ -195,6 +195,7 @@ export const setupGameSocket = (io: Server) => {
             if (state) {
               socket.emit('game:state_update', { tableId, state });
             }
+            triggerBotTurnIfNeeded(tableId);
           }
         }
       }

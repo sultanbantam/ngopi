@@ -68,6 +68,21 @@ export class MonopolyGame extends BaseGame {
       return { success: false, error: 'Permainan Monopoli sudah selesai.' };
     }
 
+    // Auto-advance if currentTurn is on a bankrupt player
+    if (this.state.players[this.state.currentTurn]?.isBankrupt && !this.state.isFinished) {
+      const nextUser = this.getNextActivePlayer(this.state.currentTurn);
+      if (nextUser) {
+        this.state.currentTurn = nextUser;
+        this.state.hasRolled = false;
+        this.state.isDouble = false;
+        this.state.doubleCount = 0;
+        this.state.pendingAction = null;
+      } else {
+        this.state.isFinished = true;
+        return { success: false, error: 'Permainan Monopoli sudah selesai.' };
+      }
+    }
+
     if (this.state.currentTurn !== userId) {
       return { success: false, error: 'Bukan giliran Anda!' };
     }
@@ -493,6 +508,8 @@ export class MonopolyGame extends BaseGame {
     player.properties = [];
 
     this.state.pendingAction = null;
+    this.state.isDouble = false;
+    this.state.doubleCount = 0;
     this.state.lastAction = {
       userId,
       action: 'bankrupt',
@@ -516,8 +533,8 @@ export class MonopolyGame extends BaseGame {
       return { success: false, error: 'Selesaikan keputusan properti terlebih dahulu.' };
     }
 
-    // Double dice allows another turn unless sent to jail
-    if (this.state.isDouble && !this.state.players[userId]?.inJail) {
+    // Double dice allows another turn unless sent to jail OR bankrupt
+    if (this.state.isDouble && !this.state.players[userId]?.inJail && !this.state.players[userId]?.isBankrupt) {
       this.state.hasRolled = false;
       this.state.isDouble = false;
       return { success: true };
@@ -558,7 +575,10 @@ export class MonopolyGame extends BaseGame {
   // BOT AI (Monopoly Smart Player)
   public getBotAction(userId: string): { action: string; payload: any } | null {
     const player = this.state.players[userId];
-    if (!player || player.isBankrupt) return null;
+    if (!player || player.isBankrupt) {
+      // If called for a bankrupt player or bot, auto-advance turn immediately
+      return { action: 'end_turn', payload: {} };
+    }
 
     // 1. In Jail decision
     if (player.inJail) {
@@ -658,6 +678,23 @@ export class MonopolyGame extends BaseGame {
     }
 
     return moves;
+  }
+
+  public override getRawState(): MonopolyGameState {
+    // Self-healing: if current turn is on a bankrupt player, advance to next active player immediately
+    if (this.state.players[this.state.currentTurn]?.isBankrupt && !this.state.isFinished) {
+      const nextUser = this.getNextActivePlayer(this.state.currentTurn);
+      if (nextUser) {
+        this.state.currentTurn = nextUser;
+        this.state.hasRolled = false;
+        this.state.isDouble = false;
+        this.state.doubleCount = 0;
+        this.state.pendingAction = null;
+      } else {
+        this.state.isFinished = true;
+      }
+    }
+    return this.state;
   }
 
   public getStateForPlayer(_userId: string): any {

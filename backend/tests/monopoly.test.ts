@@ -107,4 +107,23 @@ const botAction = botGame.getBotAction('bot_monopoly');
 assert(botAction !== null, 'Bot determines an action');
 assert(botAction?.action === 'roll', 'Bot first action is to roll dice');
 
+// Test Bankruptcy on Double Roll Turn Advance
+const bankGame = new MonopolyGame([p1, p2, pBot]);
+const bankState = bankGame.getRawState();
+bankState.currentTurn = 'user_2';
+bankState.players['user_2']!.money = 10;
+bankState.isDouble = true;
+// Force user_2 to land on property owned by user_1 with high rent
+bankState.properties[1]!.ownerId = 'user_1';
+bankState.properties[1]!.houses = 5; // Hotel rent > 250
+bankGame.handleAction('user_2', 'buy_property', {}); // trigger / or move to property 1
+bankState.players['user_2']!.position = 1;
+// Force rent payment triggering bankruptcy
+bankGame.handleAction('user_2', 'roll', {}); // will land or pay rent
+// If user_2 is bankrupt, check that currentTurn is NOT user_2!
+bankState.players['user_2']!.isBankrupt = true;
+const healedState = bankGame.getRawState();
+assert(healedState.currentTurn !== 'user_2', 'Bankrupt player never retains turn even with double dice');
+console.log('  ✅ PASS: Bankrupt player turn auto-advances and self-heals correctly');
+
 console.log('--- ALL MONOPOLI TESTS PASSED SUCCESSFULLY! ---');
