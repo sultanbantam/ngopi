@@ -11,7 +11,7 @@ import {
 import { router } from 'expo-router';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { coffee } from '../../../src/theme/coffee';
-import BluetoothHTModal from '../../../src/components/BluetoothHTModal';
+import HTWalkieTalkieModal from '../../../src/components/HTWalkieTalkieModal';
 
 interface GuideSection {
   id: string;
@@ -29,164 +29,193 @@ interface GuideSection {
 
 const HT_GUIDE_DATA: GuideSection[] = [
   {
-    id: 'pengenalan',
+    id: 'p2p-hotspot',
     number: 1,
-    icon: 'radio-outline',
-    title: 'Pengenalan HT (Handy Talky)',
-    badge: 'Dasar',
-    summary: 'Memahami prinsip radio dua arah, perbedaan frekuensi VHF vs UHF, daya pancar, dan karakteristik rambatan gelombang radio.',
+    icon: 'wifi-outline',
+    title: 'Mode P2P Hotspot (Offline Total di Hutan / Terpencil)',
+    badge: 'Fitur Baru 🔥',
+    summary: 'Komunikasi suara PTT dan teks langsung antar HP/Laptop tanpa internet, tanpa pulsa, dan tanpa menara seluler BTS menggunakan Hotspot Portabel.',
     subsections: [
       {
-        title: '1.1 Apa Itu Handy Talky (HT)?',
-        content: 'Handy Talky (HT) adalah perangkat transceiver radio portabel dua arah (half-duplex) yang dapat memancarkan dan menerima sinyal radio secara mandiri tanpa memerlukan pulsa, paket data, maupun menara BTS seluler.',
+        title: '1.1 Mengapa Bisa Berfungsi Tanpa Internet & BTS?',
+        content: 'Meskipun smartphone biasa tidak memiliki chip radio pemancar VHF/UHF (144/430 MHz), setiap HP dan laptop memiliki pemancar gelombang radio Wi-Fi 2.4 GHz bawaan.\n\nKetika 1 HP mengaktifkan fitur "Hotspot Portabel / Tethering" (meskipun paket data seluler dimatikan atau tidak ada sinyal sama sekali), HP tersebut bertindak sebagai Menara Base Station Lokal yang memancarkan sinyal radio LAN nirkabel mandiri.\n\nAplikasi Ngopi secara cerdas memanfaatkan WebRTC Local Direct Host Candidates (UDP LAN) sehingga suara PTT dan pesan darurat dialirkan langsung dari antena HP ke HP lainnya secara instan, suara jernih, dan 100% GRATIS!',
         tips: [
-          'Half-Duplex: Pengguna harus bergantian bicara (satu memancar, yang lain mendengarkan).',
-          'Sinyal radio merambat lurus (Line of Sight) dan dapat menembus area tanpa sinyal seluler.',
+          'Tidak membutuhkan pulsa atau kuota internet sedikitpun.',
+          'Dapat digunakan di tengah hutan belantara, lereng gunung, ruang bawah tanah (basement), atau saat bencana mati listrik total.',
         ],
       },
       {
-        title: '1.2 VHF vs UHF: Mana yang Harus Dipilih?',
-        content: 'VHF (Very High Frequency: 136 - 174 MHz) sangat ideal untuk daerah terbuka, hutan, pegunungan, perkebunan, dan perairan. UHF (Ultra High Frequency: 400 - 470 MHz) memiliki panjang gelombang lebih pendek sehingga lebih mampu memantul dan menembus gedung beton, basement, serta perkotaan padat.',
+        title: '1.2 Langkah 1: Pengaturan HP 1 (Sebagai Posko / Host)',
+        content: '1. Buka Pengaturan HP Anda → Nyalakan "Hotspot Portabel / Tethering Wi-Fi" (Data seluler boleh dimatikan).\n2. Buka aplikasi Ngopi → Buka menu HT Radio.\n3. Di deretan tombol mode, pilih [ 📶 P2P Hotspot (Offline HP) ].\n4. Klik tombol [ 👑 Host Posko ]. Layar akan menampilkan status aktif dan mendeteksi rekan yang bergabung.',
+      },
+      {
+        title: '1.3 Langkah 2: Pengaturan HP 2 / Laptop (Sebagai Klien / Anggota)',
+        content: '1. Nyalakan Wi-Fi di HP 2 atau Laptop Anda, lalu sambungkan ke Hotspot HP 1 tadi.\n(Abaikan peringatan HP seperti "Wi-Fi tidak ada internet", tetap pilih "Tetap Terhubung").\n2. Buka aplikasi Ngopi → Buka menu HT Radio.\n3. Pilih [ 📶 P2P Hotspot (Offline HP) ].\n4. Klik tombol [ 📱 Klien / Anggota ], lalu klik [ 🔄 Pindai Rekan ]. Status langsung berubah menjadi TERKONEKSI!',
         tips: [
-          'VHF (145.500 MHz): Frekuensi default Ngopi untuk komunikasi jarak jauh pedesaan & warkop.',
-          'UHF (433.000 MHz): Direkomendasikan untuk komunikasi antar gedung bertingkat.',
+          'Setelah terhubung, jika HP 1 bicara via tombol PTT, suara akan langsung terdengar jernih di HP 2 lengkap dengan nada Roger Beep saat tombol selesai dilepas!',
         ],
       },
       {
-        title: '1.3 Daya Pancar (Watt) dan Jangkauan',
-        content: 'HT portabel umumnya memiliki daya 1 Watt sampai 5 Watt. Dengan antena standar, jangkauan rata-rata adalah 1 - 5 km di perkotaan dan hingga 10 - 20 km jika berada di posisi ketinggian (puncak bukit/atap gedung) tanpa halangan.',
+        title: '1.4 Jangkauan Sinyal & Cara Memperluas Radius',
+        content: '• Jangkauan Standar: Sekitar 50 – 150 meter di alam terbuka tanpa halangan.\n• Tips Memperluas Jangkauan:\n  1. Tempatkan HP Host di posisi lebih tinggi (gantung di dahan pohon, taruh di atap mobil tenda posko, atau di puncak bukit).\n  2. Gunakan Mini Wi-Fi Extender / Repeater USB murah bertenaga Powerbank untuk memperluas jangkauan hingga 300+ meter di area camping / SAR.',
       },
     ],
   },
   {
-    id: 'legalitas',
+    id: 'cara-tekan-ptt',
     number: 2,
-    icon: 'shield-checkmark-outline',
-    title: 'Legalitas Radio di Indonesia',
-    badge: 'Wajib Tahu',
-    summary: 'Aturan hukum penggunaan gelombang radio di Indonesia, organisasi resmi ORARI dan RAPI, serta perizinan IAR / KRAP.',
+    icon: 'finger-print-outline',
+    title: 'Cara Menekan Tombol PTT: HP vs Laptop',
+    badge: 'Tips Praktis',
+    summary: 'Fitur sekali ketuk yang ramah layar sentuh HP agar jari tidak pegal, serta penggunaan tombol spasi pada laptop.',
     subsections: [
       {
-        title: '2.1 Payung Hukum & Regulasi',
-        content: 'Spektrum frekuensi radio adalah sumber daya alam terbatas yang dikuasai negara berdasarkan UU No. 36 Tahun 1999 tentang Telekomunikasi dan Peraturan Menteri Kominfo. Penggunaan frekuensi tanpa hak dapat dikenakan sanksi pidana dan denda.',
+        title: '2.1 Mode Sekali Ketuk (Sangat Direkomendasikan di HP)',
+        content: 'Menekan dan menahan tombol bulat terus-menerus di layar sentuh HP sering membuat jari lelah, kram, atau tidak sengaja tergelincir.\n\nKini Ngopi menyediakan fitur tombol pintar:\n• Aktifkan toggle [ 👆 Sekali Ketuk (Mudah di HP) ] di atas tombol PTT.\n• Cukup KETUK SEKALI untuk mulai berbicara (Lampu TX menyala merah & muncul tulisan "SEDANG BICARA...").\n• Bicaralah dengan santai tanpa perlu menahan jari di layar.\n• KETUK SEKALI LAGI jika sudah selesai bicara. Transmisi langsung berakhir dan nada "Roger Beep" khas radio akan terkirim otomatis ke lawan bicara!',
+        tips: [
+          'Sangat praktis saat tangan sedang kotor waktu masak di perkemahan atau saat memegang perlengkapan outdoor.',
+        ],
       },
       {
-        title: '2.2 Organisasi Resmi: ORARI & RAPI',
-        content: 'Di Indonesia terdapat dua organisasi radio resmi yang diakui pemerintah:\n1. ORARI (Organisasi Amatir Radio Indonesia): Menggunakan Izin Amatir Radio (IAR) dengan alokasi frekuensi amatir (misal: 144 - 148 MHz).\n2. RAPI (Radio Antar Penduduk Indonesia): Menggunakan Komunikasi Radio Antar Penduduk (KRAP) untuk komunikasi kekeluargaan dan penanggulangan bencana.',
-        tips: [
-          'Tingkat IAR ORARI: Siaga (YD/YG), Penggalang (YC/YF), Penegak (YB/YA).',
-          'Selalu cantumkan Callsign resmi Anda saat mengudara di frekuensi publik.',
-        ],
+        title: '2.2 Mode Tahan Terus (Klasik untuk Laptop & Desktop)',
+        content: '• Jika Anda menggunakan Laptop / PC, atau menyukai gaya HT konvensional, gunakan mode [ ⏳ Tahan Terus ].\n• Tekan dan tahan tombol bulat PTT dengan mouse/trackpad selama berbicara, lalu lepaskan untuk mengakhiri transmisi.\n• Shortcut Keyboard Laptop: Anda juga dapat menekan dan menahan tombol [ SPASI ] di keyboard laptop untuk mengudara!',
       },
     ],
   },
   {
-    id: 'cara-pakai',
+    id: 'hutan-vs-jakarta',
     number: 3,
-    icon: 'phone-portrait-outline',
-    title: 'Cara Menggunakan HT di Ngopi (Mode Offline)',
-    badge: 'Panduan Aplikasi',
-    summary: 'Langkah praktis menggunakan ngopi.top sebagai terminal komunikasi HT saat jaringan internet mati total.',
+    icon: 'earth-outline',
+    title: 'Hutan vs Jakarta: Cara Kerja Offline vs Online',
+    badge: 'Wajib Tahu',
+    summary: 'Penjelasan lengkap apakah HP offline di hutan (misal Lebak) bisa menghubungi laptop online di Jakarta.',
     subsections: [
       {
-        title: '3.1 Install Ngopi sebagai PWA',
-        content: '1. Buka https://ngopi.top di browser Chrome (Android/Desktop) atau Safari (iOS).\n2. Ketuk ikon Menu browser → Pilih "Install App" atau "Add to Home Screen" (Tambahkan ke Layar Utama).\n3. Aplikasi Ngopi akan terpasang di perangkat Anda dan bisa dibuka secara mandiri tanpa internet.',
+        title: '3.1 Bisakah HP Offline di Hutan Bicara ke Jakarta Tanpa Internet?',
+        content: 'Jawabannya: TIDAK BISA secara langsung murni antar HP tanpa bantuan perantara apapun.\n\nAlasan Hukum Fisika Radio:\n• Gelombang Wi-Fi HP hanya berdaya ~0.1 Watt dengan jangkauan 100-200 meter.\n• Untuk menembus ratusan kilometer (dari pedalaman hutan Banten/Lebak ke Jakarta) tanpa internet sama sekali, dibutuhkan pemancar radio HF (High Frequency) berdaya 100 Watt dengan antena bentang kawat puluhan meter yang memantulkan sinyal ke lapisan ionosfer bumi, atau menggunakan jaringan satelit.',
       },
       {
-        title: '3.2 Aktifkan Mode Offline & Pilih Jalur HT',
-        content: 'Buka menu HT Radio dari header atau banner offline. Pilih salah satu dari 3 mode transmisi:\n- 📡 Bluetooth: Untuk HT yang memiliki Bluetooth bawaan (Baofeng UV-5R BLE, SenHaiX, BTECH).\n- 🔌 USB Serial: Untuk laptop/PC menggunakan kabel data flash USB (PL2303, CH340) atau kv4p HT dongle.\n- 🔊 Akustik (Semua HP): Tanpa dongle tambahan! Cukup dekatkan speaker HP ke mic HT.',
+        title: '3.2 Skenario 1: Jika Salah Satu Punya Sinyal (Cloud RoIP)',
+        content: 'Jika salah satu atau kedua perangkat memiliki koneksi internet (4G, Wi-Fi warkop, atau Starlink):\n• Masuk ke frekuensi warkop (misal 145.500 MHz) di Ngopi.\n• Fitur Cloud RoIP (Radio over IP) Ngopi akan menyambungkan suara Anda ke server cloud, sehingga rekan di Jakarta, Surabaya, maupun luar negeri dapat mendengar suara Anda secara jernih di frekuensi yang sama!',
       },
       {
-        title: '3.3 Mengatur Frekuensi & CTCSS',
-        content: 'Frekuensi standar komunitas warkop adalah 145.500 MHz Simplex VHF. Gunakan preset 145.000 MHz khusus keadaan darurat / SAR. Aktifkan CTCSS tone jika frekuensi mengalami interferensi suara bising.',
-      },
-      {
-        title: '3.4 Mengirim Pesan Teks & Voice PTT',
-        content: '- Teks: Ketik pesan atau pilih sandi cepat warkop lalu tekan Kirim.\n- Voice PTT: Tekan dan tahan tombol bulat PTT untuk berbicara, lalu lepaskan untuk memicu nada Roger Beep.\n- Emergency: Ketuk tombol SOS Darurat untuk menyiarkan koordinat GPS posko.',
-      },
-      {
-        title: '3.5 Sinkronisasi Otomatis Saat Online',
-        content: 'Setiap pesan yang Anda kirim via radio saat offline akan dicatat ke penyimpanan IndexedDB lokal browser. Ketika koneksi internet pulih, aplikasi secara otomatis menyinkronkan seluruh log ke server Ngopi.',
-      },
-    ],
-  },
-  {
-    id: 'etika',
-    number: 4,
-    icon: 'chatbubbles-outline',
-    title: 'Etika Berkomunikasi Radio',
-    badge: 'Etika',
-    summary: 'Tata krama di frekuensi publik, sandi 10 Indonesia, panggilan umum CQ, dan sopan santun komunikasi warkop.',
-    subsections: [
-      {
-        title: '4.1 Panggilan Umum (CQ Call)',
-        content: 'Gunakan frasa "CQ CQ CQ" untuk memanggil stasiun mana saja yang sedang memonitor frekuensi. Contoh: "CQ CQ CQ, di sini YD0NGOPI memonitor frekuensi 145.500 MHz, adakah rekan yang mendengar? Ganti."',
-      },
-      {
-        title: '4.2 Aturan Emas: Dengar Dulu Sebelum Bicara',
-        content: 'Sebelum menekan PTT, dengarkan frekuensi selama beberapa detik untuk memastikan tidak ada rekan lain atau panggilan darurat yang sedang berlangsung. Jangan menimpa (jamming) stasiun lain.',
-      },
-      {
-        title: '4.3 Sandi 10 Populer di Indonesia',
-        content: 'Sandi 10 mempercepat penyampaian informasi penting:\n• 10-1: Penerimaan buruk / tidak jelas\n• 10-4: Dimengerti / pesan diterima baik\n• 10-7: Berhenti memancar / istirahat (off air)\n• 10-8: Siap bertugas / memonitor kembali\n• 10-20: Posisi / lokasi stasiun saat ini\n• 10-33: Keadaan darurat lalu lintas / butuh prioritas',
-      },
-    ],
-  },
-  {
-    id: 'frekuensi',
-    number: 5,
-    icon: 'cellular-outline',
-    title: 'Frekuensi Penting di Indonesia',
-    badge: 'Referensi',
-    summary: 'Daftar alokasi frekuensi radio nasional untuk komunikasi darurat, SAR, kebencanaan, dan komunitas.',
-    subsections: [
-      {
-        title: '5.1 Kanal Darurat Nasional & Penyelamatan',
-        content: '• 145.000 MHz: Frekuensi Darurat ORARI Nasional / Bantuan Komunikasi Bencana SAR.\n• 143.500 MHz: Saluran Kerja Bantuan Bencana RAPI Nasional.\n• 143.600 MHz: Saluran Siaga Bencana BNPB & PMI di beberapa daerah.\n• 433.000 MHz: Frekuensi Panggil Calling UHF Nasional.',
+        title: '3.3 Skenario 2: Keduanya Offline di Hutan (Jarak Jauh Berkilo-kilometer)',
+        content: 'Jika kedua-duanya berada di hutan tanpa sinyal internet, bagaimana caranya berkomunikasi jarak jauh?\n• Gunakan Radio HT Fisik Sungguhan (Baofeng UV-5R, Icom, Alinco, Kenwood).\n• Di aplikasi Ngopi, pilih [ Moda Akustik FSK ] atau [ Kabel K-Plug / USB Serial ].\n• Dekatkan speaker HP ke mic HT fisik. HP Anda akan mengeluarkan nada data digital radio (bunyi tut-tet-tot FSK) yang dipancarkan oleh HT fisik dengan daya 5 Watt VHF menembus gunung dan lembah hingga 5 – 20 km ke HT rekan!',
         tips: [
-          'DILARANG menggunakan frekuensi darurat (145.000 MHz) untuk obrolan santai!',
-          'Utamakan berita marabahaya dan evakuasi di frekuensi ini.',
+          'Teknik inilah yang digunakan oleh para pegiat radio amatir (APRS) dan tim SAR penyelamat saat terjadi gempa bumi atau tsunami ketika seluruh BTS seluler roboh.',
         ],
       },
       {
-        title: '5.2 Frekuensi Komunitas Warung Kopi Ngopi',
-        content: '• 145.500 MHz: Kanal Simplex Ngopi Warkop Digital (Default).\n• 145.520 MHz: Kanal Cadangan Obrolan Warkop.',
+        title: '3.4 Skenario Gateway (Jembatan Hutan ke Kota)',
+        content: 'Jika ada 1 rekan yang berada di puncak bukit yang masih mendapatkan sinyal 4G lemah, perangkatnya bisa difungsikan sebagai "Gateway".\nPerangkat tersebut menerima sinyal Hotspot/HT lokal dari dalam lembah hutan, lalu meneruskannya secara otomatis ke internet Ngopi menuju Jakarta.',
       },
     ],
   },
   {
-    id: 'aprs',
+    id: 'modamodem',
+    number: 4,
+    icon: 'options-outline',
+    title: '4 Moda Transmisi HT di Aplikasi Ngopi',
+    badge: 'Fitur Lengkap',
+    summary: 'Perbandingan 4 jalur transmisi di Ngopi untuk berbagai situasi: dari camping santai hingga ekspedisi darurat.',
+    subsections: [
+      {
+        title: '4.1 📶 Moda 1: P2P Local Hotspot (Offline Tanpa Alat Tambahan)',
+        content: '• Media: Gelombang Wi-Fi Lokal smartphone.\n• Jarak: 50 – 150 meter.\n• Keperluan: Komunikasi antar tenda camping, konvoi mobil dekat, keluarga saat mati lampu, atau tim SAR di sekitar posko darurat.',
+      },
+      {
+        title: '4.2 🔊 Moda 2: Modulasi Akustik FSK (Speaker HP ↔ Mic HT Fisik)',
+        content: '• Media: Nada suara audio frekuensi Bell-202 AFSK 1200 baud yang dipancarkan via HT analog fisik.\n• Jarak: 2 – 15 km (tergantung HT fisik dan antena yang digunakan).\n• Cara Kerja: HP memancarkan suara "chirp/tut-tet", mic HT menangkapnya dan memancarkannya ke udara. Di sisi penerima, suara kresek dari speaker HT didengarkan oleh mic HP dan diterjemahkan kembali menjadi teks/koordinat!',
+      },
+      {
+        title: '4.3 🔌 Moda 3: USB Serial / Kabel Audio K-Plug',
+        content: '• Media: Kabel data USB Serial (CH340/CP2102) atau kabel K-Plug audio dari jack headset HP ke HT.\n• Kelebihan: Tidak ada suara berisik dari speaker luar, PTT terpicu otomatis secara elektrik, transmisi lebih stabil dan bebas distorsi suara sekitar.',
+      },
+      {
+        title: '4.4 ☁️ Moda 4: Cloud RoIP (Digital Internet)',
+        content: '• Media: Jaringan internet (4G / 5G / Fiber Optik / Wi-Fi).\n• Jarak: Seluruh dunia tanpa batas.\n• Keperluan: Nongkrong bareng komunitas radio dan warkop dari berbagai kota secara interlokal.',
+      },
+    ],
+  },
+  {
+    id: 'istilah-brik',
+    number: 5,
+    icon: 'chatbubbles-outline',
+    title: 'Kamus "Brik-Brik" & Etika Komunikasi Komunitas',
+    badge: 'Komunitas Warkop',
+    summary: 'Kamus istilah radio amatir, tata krama memotong frekuensi, dan sandi radio legendaris Indonesia.',
+    subsections: [
+      {
+        title: '5.1 Mengapa Komunitas Suka Menyebut "Brik-Brik"?',
+        content: 'Istilah "Brik-Brik" berasal dari kata serapan bahasa Inggris "Break... Break...".\nDalam tradisi komunikasi radio dua arah (half-duplex):\n• Ketika ada stasiun yang sedang mengudara, kita tidak boleh langsung berbicara menimpa suaranya.\n• Bila ingin bergabung atau menyampaikan pesan singkat, tunggu ada jeda bicara 1-2 detik, lalu tekan PTT dan ucapkan: "Brik... brik... izin masuk, di sini [Nama Anda]... ganti."\n• Moderator atau rekan yang sedang pegang frekuensi akan menjawab: "Masuk silakan, ganti."',
+      },
+      {
+        title: '5.2 Istilah-Istilah Wajib Anak Radio',
+        content: '• Roger / 10-4: Pesan sudah didengar dan dimengerti dengan baik.\n• Ganti (Over): Tanda saya sudah selesai bicara, sekarang giliran Anda yang bicara.\n• Roger Beep: Nada tit-tet pendek otomatis setelah PTT dilepas sebagai tanda ganti bicara.\n• 10-20: Menanyakan posisi / lokasi ("10-20 Anda di sebelah mana rekan?").\n• 10-8: Siap memonitor / bertugas kembali.\n• Monitor / Standby: Mendengarkan frekuensi tanpa berbicara.\n• Copy That: Dipahami / diterima laporannya.',
+        tips: [
+          'Gunakan istilah-istilah ini di fitur HT Ngopi saat ngobrol santai agar suasana warkop terasa seperti komunitas radio brik-brik sungguhan!',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'darurat-sar',
     number: 6,
-    icon: 'location-outline',
-    title: 'APRS (Automatic Packet Reporting)',
-    badge: 'Data Paket',
-    summary: 'Pengiriman data posisi GPS, status posko pengungsian, dan telemetri cuaca tanpa koneksi seluler.',
+    icon: 'alert-circle-outline',
+    title: 'Mode Darurat SOS & Koordinat GPS (SAR & Bencana)',
+    badge: 'Penyelamatan',
+    summary: 'Pengiriman sinyal SOS darurat, koordinat garis lintang/bujur, serta prosedur evakuasi MAYDAY.',
     subsections: [
       {
-        title: '6.1 Apa Itu APRS?',
-        content: 'APRS adalah protokol komunikasi data digital berbasis paket radio Bell 202 AFSK 1200 baud pada frekuensi 144.390 MHz (atau 145.500 MHz di jaringan privat). APRS memungkinkan stasiun radio mentransmisikan lokasi koordinat lintang/bujur secara akurat.',
+        title: '6.1 Siaran Darurat SOS dengan Koordinat GPS',
+        content: 'Di aplikasi Ngopi, tombol [ 🚨 SOS Darurat ] dirancang untuk situasi kritis:\n• Sekali tekan, aplikasi membaca sensor GPS perangkat Anda secara offline.\n• Pesan darurat beserta koordinat akurat (misal: LAT -6.2088, LON 106.8456) langsung disiarkan ke seluruh rekan yang sedang memonitor frekuensi.\n• Di perangkat penerima, layar akan berkedip merah dan memutar sirene darurat.',
       },
       {
-        title: '6.2 APRS di Aplikasi Ngopi',
-        content: 'Aplikasi Ngopi secara otomatis mengemas pesan darurat SOS ke dalam format packet APRS standar (misal: !0612.50S/10650.73E>Posko Relawan Banjir). Data ini bisa diterima oleh radio HT lain yang terhubung ke modem Ngopi.',
+        title: '6.2 Panggilan Bahaya: MAYDAY vs PAN-PAN',
+        content: '1. MAYDAY (3x): HANYA untuk ancaman langsung terhadap keselamatan jiwa (banjir bandang, longsor menimbun jalan, pendaki patah tulang/koma).\n2. PAN-PAN (3x): Untuk keadaan darurat mendesak namun belum mengancam jiwa saat itu (tenda sobek diterjang badai, logistik habis, kendaraan mogok di pedalaman).',
       },
     ],
   },
   {
-    id: 'darurat',
+    id: 'legalitas-frekuensi',
     number: 7,
-    icon: 'alert-circle-outline',
-    title: 'Mode Darurat (Emergency / MAYDAY)',
-    badge: 'Prosedur SAR',
-    summary: 'Prosedur keselamatan jiwa, panggilan bahaya MAYDAY dan PAN-PAN, serta koordinasi evakuasi darurat.',
+    icon: 'shield-checkmark-outline',
+    title: 'Alokasi Frekuensi Resmi & Legalitas di Indonesia',
+    badge: 'Regulasi',
+    summary: 'Daftar frekuensi resmi ORARI, RAPI, BNPB, dan regulasi spektrum frekuensi radio Kominfo.',
     subsections: [
       {
-        title: '7.1 Prosedur Panggilan Bahaya (Distress)',
-        content: '1. MAYDAY, MAYDAY, MAYDAY: Gunakan HANYA saat ada ancaman langsung terhadap keselamatan jiwa (bencana gempa, tanah longsor, kapal tenggelam, serangan medis kritis).\n2. PAN-PAN, PAN-PAN, PAN-PAN: Digunakan untuk situasi mendesak namun belum mengancam jiwa seketika (kehabisan bahan bakar, mobil mogok di pedalaman terisolir).',
+        title: '7.1 Daftar Alokasi Frekuensi Penting',
+        content: '• 145.000 MHz: Kanal Darurat Nasional ORARI & SAR Penyelamatan Bencana.\n• 145.500 MHz: Saluran Simplex Komunitas Warkop Ngopi (Default).\n• 143.500 MHz: Saluran Bantuan Komunikasi RAPI Nasional.\n• 433.000 MHz: Frekuensi Panggil Calling UHF Nasional.',
+        tips: [
+          'Jangan gunakan frekuensi darurat (145.000 MHz) untuk bercanda atau mengobrol biasa!',
+        ],
       },
       {
-        title: '7.2 Format Laporan Darurat yang Benar',
-        content: 'Sampaikan dengan tenang dan jelas:\n1. Identitas / Callsign stasiun Anda.\n2. Posisi koordinat GPS atau patokan lokasi geografis yang jelas.\n3. Jenis keadaan darurat (jumlah korban, kondisi luka).\n4. Bantuan spesifik yang dibutuhkan (ambulans, perahu karet, logistik).',
+        title: '7.2 Legalitas Hukum di Indonesia',
+        content: '• Mode P2P Hotspot Ngopi menggunakan frekuensi Wi-Fi 2.4 GHz (ISM Band) yang bebas lisensi dan 100% legal digunakan oleh masyarakat umum tanpa izin khusus.\n• Jika Anda menghubungkan Ngopi ke radio transceiver fisik VHF/UHF berdaya pancar tinggi (1-50 Watt), pastikan Anda memiliki Izin Amatir Radio (IAR) dari ORARI atau KRAP dari RAPI sesuai UU Telekomunikasi No. 36 Tahun 1999.',
+      },
+    ],
+  },
+  {
+    id: 'faq-tanya-jawab',
+    number: 8,
+    icon: 'help-circle-outline',
+    title: 'Tanya Jawab Populer (FAQ HT Ngopi)',
+    badge: 'Tanya Jawab',
+    summary: 'Jawaban atas pertanyaan-pertanyaan yang paling sering diajukan seputar HT radio di Ngopi.',
+    subsections: [
+      {
+        title: 'Q1: Apakah suara FSK yang bunyi "tut-tet-tot" itu rusak?',
+        content: 'Bukan rusak! Itu adalah nada data digital Bell-202 AFSK (Audio Frequency Shift Keying). Mirip suara modem internet telepon zaman dulu atau nada fax, di mana teks dan koordinat GPS diubah menjadi suara nada biner untuk dipancarkan ke mic radio HT.',
+      },
+      {
+        title: 'Q2: Apakah aplikasi Ngopi bisa tetap dibuka saat tidak ada internet?',
+        content: 'Bisa! Ngopi dibuat dengan teknologi PWA (Progressive Web App). Jika Anda sudah pernah membuka https://ngopi.top di browser HP atau sudah menambahkannya ke Layar Utama (Add to Home Screen), seluruh tampilan HT, panduan, dan pengirim pesan offline tetap bisa dibuka dan dijalankan tanpa internet.',
+      },
+      {
+        title: 'Q3: Apakah teman saya yang mantan pemain HT brik-brik bisa gabung?',
+        content: 'Sangat bisa! Ajak teman-teman komunitas brik-brik Anda bernostalgia. Di Ngopi, sensasi klasik radio HT (S-Meter jarum, lampu TX/RX, Roger Beep, pilihan kanal frekuensi, dan sandi radio) dikemas secara modern di smartphone tanpa harus membeli perangkat radio mahal.',
       },
     ],
   },
@@ -194,7 +223,7 @@ const HT_GUIDE_DATA: GuideSection[] = [
 
 export default function HTGuideScreen() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedSection, setExpandedSection] = useState<string | null>('cara-pakai');
+  const [expandedSection, setExpandedSection] = useState<string | null>('p2p-hotspot');
   const [isHtModalOpen, setHtModalOpen] = useState(false);
 
   const filteredSections = HT_GUIDE_DATA.filter((sec) => {
@@ -243,7 +272,7 @@ export default function HTGuideScreen() {
         <Ionicons name="search" size={18} color={coffee.muted} style={{ marginLeft: 12 }} />
         <TextInput
           style={styles.searchInput}
-          placeholder="Cari topik panduan (misal: frekuensi, PTT, legalitas, APRS)..."
+          placeholder="Cari topik panduan (misal: hotspot, PTT, hutan, brik-brik, frekuensi)..."
           placeholderTextColor={coffee.muted}
           value={searchQuery}
           onChangeText={setSearchQuery}
@@ -263,9 +292,9 @@ export default function HTGuideScreen() {
               <Text style={{ fontSize: 26 }}>📻</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>Komunikasi Radio Tanpa Internet</Text>
+              <Text style={styles.heroTitle}>HT Offline Tanpa Pulsa & Kuota</Text>
               <Text style={styles.heroDesc}>
-                Ngopi mendukung Web Bluetooth, USB Serial Dongle, dan Modulasi Akustik FSK (Speaker HP ↔ Mic HT).
+                Bisa berkomunikasi langsung menggunakan P2P Wi-Fi Hotspot HP, Akustik FSK (Speaker HP ↔ Mic HT), atau USB Serial Cable.
               </Text>
             </View>
           </View>
@@ -341,7 +370,7 @@ export default function HTGuideScreen() {
       </ScrollView>
 
       {/* HT Radio Modal Connected Directly */}
-      <BluetoothHTModal visible={isHtModalOpen} onClose={() => setHtModalOpen(false)} />
+      <HTWalkieTalkieModal visible={isHtModalOpen} onClose={() => setHtModalOpen(false)} />
     </View>
   );
 }

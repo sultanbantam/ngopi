@@ -21,6 +21,7 @@ import { SerialHTClient } from '../ht/serialHT';
 import { APRSFrontend } from '../ht/aprs';
 import { P2PHotspotWalkie } from '../ht/p2pHotspotWalkie';
 import { socketService } from '../utils/socket';
+import { router } from 'expo-router';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -74,7 +75,7 @@ const PRESET_CHANNELS: HTChannel[] = [
 ];
 
 export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkieModalProps) {
-  const [activeTab, setActiveTab] = useState<'radio' | 'channels' | 'compliance' | 'logs'>('radio');
+  const [activeTab, setActiveTab] = useState<'radio' | 'channels' | 'compliance' | 'logs' | 'guide'>('radio');
   const [selectedChannelIdx, setSelectedChannelIdx] = useState(2); // Default to Warkop HT Net 144.500
   const [customFreq, setCustomFreq] = useState('144.500');
   const [ctcssTone, setCtcssTone] = useState('OFF');
@@ -617,10 +618,22 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
               <Text style={styles.knobLabel}>CH / DIAL</Text>
             </View>
 
-            {/* Close Button */}
-            <TouchableOpacity style={styles.closeHeaderBtn} onPress={onClose}>
-              <Ionicons name="close" size={20} color="#FFF" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {/* Quick Guide Button */}
+              <TouchableOpacity
+                style={styles.guideHeaderBtn}
+                onPress={() => setActiveTab('guide')}
+                accessibilityLabel="Panduan HT"
+              >
+                <Ionicons name="book-outline" size={14} color="#F59E0B" />
+                <Text style={styles.guideHeaderBtnText}>Panduan</Text>
+              </TouchableOpacity>
+
+              {/* Close Button */}
+              <TouchableOpacity style={styles.closeHeaderBtn} onPress={onClose}>
+                <Ionicons name="close" size={20} color="#FFF" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* HT Header Brand & LED Indicators */}
@@ -702,6 +715,13 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
               onPress={() => setActiveTab('logs')}
             >
               <Text style={[styles.tabText, activeTab === 'logs' && styles.tabTextActive]}>📜 Log TX</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabButton, activeTab === 'guide' && styles.tabButtonActive]}
+              onPress={() => setActiveTab('guide')}
+            >
+              <Text style={[styles.tabText, activeTab === 'guide' && styles.tabTextActive]}>📖 Panduan</Text>
             </TouchableOpacity>
           </View>
 
@@ -1242,6 +1262,80 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                     </View>
                   ))}
                 </View>
+              </View>
+            )}
+
+            {activeTab === 'guide' && (
+              <View style={styles.guideTabContainer}>
+                <View style={styles.guideQuickHeader}>
+                  <Text style={styles.guideQuickTitle}>📻 Panduan Ringkas HT Ngopi</Text>
+                  <Text style={styles.guideQuickSub}>
+                    Bisa digunakan 100% offline tanpa pulsa & kuota di hutan/gunung, maupun online ke seluruh dunia!
+                  </Text>
+                </View>
+
+                {/* Card 1: P2P Local Hotspot */}
+                <View style={styles.guideQuickCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Ionicons name="wifi" size={18} color="#10B981" />
+                    <Text style={styles.guideCardTitle}>1. Mode P2P Hotspot (Offline HP di Hutan)</Text>
+                  </View>
+                  <Text style={styles.guideCardText}>
+                    • <Text style={{ color: '#F59E0B', fontWeight: 'bold' }}>HP 1 (Posko):</Text> Nyalakan "Hotspot Portabel / Tethering" di Pengaturan HP (tanpa kuota/pulsa). Buka HT → pilih [ 📶 P2P Hotspot ] → klik [ 👑 Host Posko ].{'\n'}
+                    • <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>HP 2 / Laptop (Rekan):</Text> Sambungkan Wi-Fi ke Hotspot HP 1. Buka HT → pilih [ 📶 P2P Hotspot ] → klik [ 📱 Klien ] lalu [ 🔄 Pindai Rekan ].{'\n'}
+                    • <Text style={{ color: '#10B981', fontWeight: 'bold' }}>Bicara PTT:</Text> Suara & teks langsung mengudara antar HP tanpa BTS seluler dalam radius 50-150 meter!
+                  </Text>
+                </View>
+
+                {/* Card 2: PTT HP vs Laptop */}
+                <View style={styles.guideQuickCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Ionicons name="finger-print" size={18} color="#F59E0B" />
+                    <Text style={styles.guideCardTitle}>2. Cara Bicara: Sekali Ketuk vs Tahan</Text>
+                  </View>
+                  <Text style={styles.guideCardText}>
+                    • <Text style={{ color: '#F59E0B', fontWeight: 'bold' }}>HP Layar Sentuh:</Text> Aktifkan mode [ 👆 Sekali Ketuk (Mudah di HP) ]. Ketuk 1x untuk bicara, ketuk 1x lagi untuk selesai. Jari tidak pegal!{'\n'}
+                    • <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>Laptop / PC:</Text> Gunakan mode [ ⏳ Tahan Terus ] atau tekan dan tahan tombol [ SPASI ] di keyboard.
+                  </Text>
+                </View>
+
+                {/* Card 3: Hutan vs Jakarta */}
+                <View style={styles.guideQuickCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Ionicons name="earth" size={18} color="#38BDF8" />
+                    <Text style={styles.guideCardTitle}>3. Hutan vs Jakarta (Offline vs Online)</Text>
+                  </View>
+                  <Text style={styles.guideCardText}>
+                    • <Text style={{ color: '#10B981', fontWeight: 'bold' }}>Jika Ada Internet:</Text> Masuk ke frekuensi warkop yang sama (145.500 MHz), suara terhubung interlokal via Cloud RoIP Ngopi.{'\n'}
+                    • <Text style={{ color: '#F59E0B', fontWeight: 'bold' }}>Jika 100% Offline di Hutan:</Text> Untuk jangkauan puluhan km, dekatkan speaker HP ke mic HT fisik (Baofeng, Alinco, Icom) dengan moda [ Akustik FSK ] untuk memancarkan gelombang radio VHF asli hingga 5-20 km!
+                  </Text>
+                </View>
+
+                {/* Card 4: Istilah Brik-Brik */}
+                <View style={styles.guideQuickCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Ionicons name="chatbubbles" size={18} color="#A78BFA" />
+                    <Text style={styles.guideCardTitle}>4. Kamus "Brik-Brik" & Etika Warkop</Text>
+                  </View>
+                  <Text style={styles.guideCardText}>
+                    • <Text style={{ color: '#F59E0B', fontWeight: 'bold' }}>"Brik... brik...":</Text> Izin menyela/masuk frekuensi dengan sopan.{'\n'}
+                    • <Text style={{ color: '#10B981', fontWeight: 'bold' }}>"Roger / 10-4":</Text> Pesan dimengerti dengan baik.{'\n'}
+                    • <Text style={{ color: '#38BDF8', fontWeight: 'bold' }}>"Ganti (Over)":</Text> Selesai bicara, giliran rekan membalas.{'\n'}
+                    • <Text style={{ color: '#A78BFA', fontWeight: 'bold' }}>"10-20":</Text> Posisi / lokasi stasiun saat ini.
+                  </Text>
+                </View>
+
+                {/* Full Guide Link Button */}
+                <TouchableOpacity
+                  style={styles.fullGuideBtn}
+                  onPress={() => {
+                    onClose();
+                    router.push('/(main)/guides/ht' as any);
+                  }}
+                >
+                  <Ionicons name="book-outline" size={18} color="#1b120c" />
+                  <Text style={styles.fullGuideBtnText}>Buka Buku Panduan HT Lengkap (8 Bab) →</Text>
+                </TouchableOpacity>
               </View>
             )}
           </ScrollView>
@@ -1862,5 +1956,78 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: '#78716C',
     fontFamily: Platform.OS === 'web' ? 'monospace' : undefined,
+  },
+  guideHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#292524',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#78716C',
+    marginRight: 8,
+  },
+  guideHeaderBtnText: {
+    color: '#F59E0B',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  guideTabContainer: {
+    paddingVertical: 4,
+  },
+  guideQuickHeader: {
+    backgroundColor: '#292524',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#44403C',
+  },
+  guideQuickTitle: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#F59E0B',
+    marginBottom: 4,
+  },
+  guideQuickSub: {
+    fontSize: 11,
+    color: '#D6D3D1',
+    lineHeight: 16,
+  },
+  guideQuickCard: {
+    backgroundColor: '#1E1B18',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#382215',
+  },
+  guideCardTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#F5F5F4',
+  },
+  guideCardText: {
+    fontSize: 11,
+    color: '#A8A29E',
+    lineHeight: 17,
+  },
+  fullGuideBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#F59E0B',
+    paddingVertical: 12,
+    borderRadius: 10,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  fullGuideBtnText: {
+    color: '#1b120c',
+    fontSize: 12,
+    fontWeight: '800',
   },
 });
