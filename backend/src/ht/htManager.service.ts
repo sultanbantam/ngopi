@@ -174,6 +174,7 @@ export class HTManagerService {
     latitude?: number;
     longitude?: number;
     isEmergency?: boolean;
+    audioUrl?: string | null;
   }): {
     message: HTMessage;
     audioDataUrl: string;
@@ -215,8 +216,8 @@ export class HTManagerService {
       }
     }
 
-    // Generate AFSK 1200/2200 Hz WAV audio
-    const audioDataUrl = AcousticModem.encodeToWavDataUrl(rawPacket);
+    // Generate AFSK 1200/2200 Hz WAV audio or use supplied voice audio
+    const audioDataUrl = params.audioUrl || AcousticModem.encodeToWavDataUrl(rawPacket);
 
     // Save HT message
     const msgId = 'htm_' + crypto.randomBytes(8).toString('hex');

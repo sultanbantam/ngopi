@@ -4,6 +4,7 @@ import { htManagerService } from '../ht/htManager.service';
 import { serialHTService } from '../ht/serialHT.service';
 import { AcousticModem } from '../ht/acousticModem.service';
 import { APRSService } from '../ht/aprs.service';
+import { getSocketIO } from '../sockets';
 
 const router = Router();
 
@@ -45,7 +46,7 @@ router.post('/profile', (req: Request, res: Response) => {
 router.post('/transmit', (req: Request, res: Response) => {
   try {
     const userId = (req as any).user?.id;
-    const { content, freq, protocol, recipient_callsign, recipient_id, latitude, longitude, is_emergency } = req.body;
+    const { content, freq, protocol, recipient_callsign, recipient_id, latitude, longitude, is_emergency, audio_url } = req.body;
 
     if (!userId || !content) {
       res.status(400).json({ error: 'userId and content are required' });
@@ -62,7 +63,23 @@ router.post('/transmit', (req: Request, res: Response) => {
       latitude: latitude ? Number(latitude) : undefined,
       longitude: longitude ? Number(longitude) : undefined,
       isEmergency: Boolean(is_emergency),
+      audioUrl: audio_url || null,
     });
+
+    // Real-time broadcast to all devices on frequency
+    try {
+      const io = getSocketIO();
+      if (io) {
+        io.emit('ht:transmission', {
+          message: result.message,
+          audio_data_url: result.audioDataUrl,
+          raw_packet: result.rawPacket,
+          freq: result.message.freq,
+        });
+      }
+    } catch (sockErr) {
+      console.warn('[HT Routes] Socket broadcast error:', sockErr);
+    }
 
     res.json({
       success: true,

@@ -19,6 +19,7 @@ import { getAuthHeaders } from '../utils/api';
 import { AcousticModemFrontend } from '../ht/acousticModem';
 import { SerialHTClient } from '../ht/serialHT';
 import { APRSFrontend } from '../ht/aprs';
+import { socketService } from '../utils/socket';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -73,11 +74,12 @@ const PRESET_CHANNELS: HTChannel[] = [
 
 export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkieModalProps) {
   const [activeTab, setActiveTab] = useState<'radio' | 'channels' | 'compliance' | 'logs'>('radio');
-  const [selectedChannelIdx, setSelectedChannelIdx] = useState(0);
-  const [customFreq, setCustomFreq] = useState('144.390');
-  const [ctcssTone, setCtcssTone] = useState('88.5');
+  const [selectedChannelIdx, setSelectedChannelIdx] = useState(2); // Default to Warkop HT Net 144.500
+  const [customFreq, setCustomFreq] = useState('144.500');
+  const [ctcssTone, setCtcssTone] = useState('OFF');
   const [modemMode, setModemMode] = useState<'acoustic' | 'serial'>('acoustic');
   const [isTransmitting, setIsTransmitting] = useState(false);
+  const [isReceiving, setIsReceiving] = useState(false);
   const [messageInput, setMessageInput] = useState('');
   const [callsign, setCallsign] = useState('YD0NGO');
   const [licenseType, setLicenseType] = useState('ORARI');
@@ -88,14 +90,84 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
   const [loading, setLoading] = useState(false);
   const [serialConnected, setSerialConnected] = useState(false);
   const [sMeterValue, setSMeterValue] = useState(7); // 1-9 S-meter
+  const [incomingNotice, setIncomingNotice] = useState<{ callsign: string; audioUrl?: string } | null>(null);
 
-  const curChannel = PRESET_CHANNELS[selectedChannelIdx] || PRESET_CHANNELS[0]!;
+  const mediaRecorderRef = useRef<any>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const pttStartTimeRef = useRef<number>(0);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
+  const curChannel = PRESET_CHANNELS[selectedChannelIdx] || PRESET_CHANNELS[2]!;
+
+  // Handle incoming socket transmission across all open HT modals
   useEffect(() => {
-    if (visible) {
-      loadProfileAndMessages();
-    }
-  }, [visible]);
+    if (!visible) return;
+
+    loadProfileAndMessages();
+
+    // Ensure audio context is ready on user modal interaction
+    AcousticModemFrontend.getAudioContext();
+
+    const socket = socketService.socket;
+    if (!socket) return;
+
+    const onIncomingTransmission = (data: any) => {
+      if (!data?.message) return;
+      const msg = data.message;
+      const activeF = parseFloat(customFreq) || curChannel.freq;
+
+      // Check if transmission is on our tuned frequency (tolerance 0.05 MHz)
+      if (Math.abs(Number(msg.freq) - activeF) < 0.05) {
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === msg.id)) return prev;
+          return [msg, ...prev];
+        });
+
+        // Trigger RX S-meter and LED
+        setIsReceiving(true);
+        setSMeterValue(9);
+        setTimeout(() => {
+          setIsReceiving(false);
+          setSMeterValue(7);
+        }, 4000);
+
+        // Play incoming audio automatically
+        const audioSrc = data.audio_url || msg.audio_url || data.audio_data_url;
+        if (audioSrc && typeof window !== 'undefined') {
+          try {
+            AcousticModemFrontend.playPttChirp();
+            if (activeAudioRef.current) {
+              activeAudioRef.current.pause();
+            }
+            const audioObj = new Audio(audioSrc);
+            activeAudioRef.current = audioObj;
+            audioObj.play().then(() => {
+              audioObj.onended = () => {
+                AcousticModemFrontend.playRogerBeep();
+              };
+            }).catch((blockedErr) => {
+              console.warn('[HT] Autoplay audio blocked by browser policy:', blockedErr);
+              setIncomingNotice({
+                callsign: msg.sender_callsign || 'RADIO',
+                audioUrl: audioSrc,
+              });
+            });
+          } catch (audioErr) {
+            console.warn('[HT] Audio play exception:', audioErr);
+          }
+        }
+      }
+    };
+
+    socket.on('ht:transmission', onIncomingTransmission);
+
+    return () => {
+      socket.off('ht:transmission', onIncomingTransmission);
+      if (activeAudioRef.current) {
+        try { activeAudioRef.current.pause(); } catch (_) {}
+      }
+    };
+  }, [visible, customFreq, curChannel.freq]);
 
   const loadProfileAndMessages = async () => {
     try {
@@ -134,9 +206,10 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
     }
   };
 
-  // PTT Press Down
-  const handlePttDown = () => {
+  // PTT Press Down: Starts recording voice audio from microphone
+  const handlePttDown = async () => {
     setIsTransmitting(true);
+    pttStartTimeRef.current = Date.now();
     AcousticModemFrontend.playPttChirp();
     if (Platform.OS !== 'web') {
       try { Vibration.vibrate(40); } catch (_) {}
@@ -144,14 +217,92 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
     if (modemMode === 'serial' && serialConnected) {
       SerialHTClient.setPtt(true);
     }
+
+    // Start live microphone recording for walkie-talkie audio
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+        audioChunksRef.current = [];
+        const recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data);
+          }
+        };
+        recorder.start(100);
+        mediaRecorderRef.current = recorder;
+      } catch (micErr) {
+        console.warn('[HT] Mikrofon tidak dapat diakses:', micErr);
+      }
+    }
   };
 
-  // PTT Release Up
-  const handlePttUp = () => {
+  // PTT Release Up: Stops recording and immediately broadcasts voice audio
+  const handlePttUp = async () => {
     setIsTransmitting(false);
     AcousticModemFrontend.playRogerBeep();
     if (modemMode === 'serial' && serialConnected) {
       SerialHTClient.setPtt(false);
+    }
+
+    const durationSec = Math.max(1, Math.round((Date.now() - pttStartTimeRef.current) / 1000));
+
+    if (mediaRecorderRef.current) {
+      const recorder = mediaRecorderRef.current;
+      recorder.onstop = async () => {
+        try {
+          const mimeType = recorder.mimeType || 'audio/webm';
+          const audioBlob = new Blob(audioChunksRef.current, { type: mimeType });
+
+          // Release microphone tracks
+          if (recorder.stream) {
+            recorder.stream.getTracks().forEach((track: any) => track.stop());
+          }
+          mediaRecorderRef.current = null;
+
+          if (audioBlob.size > 200) {
+            const reader = new FileReader();
+            reader.onloadend = async () => {
+              const base64Audio = reader.result as string;
+              try {
+                const headers = await getAuthHeaders();
+                const payload = {
+                  content: `🎙️ Pesan Suara PTT (${durationSec}s)`,
+                  freq: parseFloat(customFreq) || curChannel.freq,
+                  protocol: curChannel.protocol,
+                  audio_url: base64Audio,
+                  latitude: -6.2088,
+                  longitude: 106.8456,
+                  is_emergency: false,
+                };
+                const res = await axios.post(`${API_URL}/ht/transmit`, payload, { headers });
+                if (res.data?.message) {
+                  setMessages((prev) => [res.data.message, ...prev]);
+                }
+              } catch (txErr: any) {
+                console.warn('[HT] Gagal memancarkan transmisi suara:', txErr?.message);
+              }
+            };
+            reader.readAsDataURL(audioBlob);
+          }
+        } catch (stopErr) {
+          console.warn('[HT] MediaRecorder stop error:', stopErr);
+        }
+      };
+
+      try {
+        if (recorder.state !== 'inactive') {
+          recorder.stop();
+        }
+      } catch (recStopErr) {
+        console.warn('[HT] Recorder stop error:', recStopErr);
+      }
     }
   };
 
@@ -175,7 +326,7 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
         });
       }
 
-      // Save transmission to backend/local store
+      // Save transmission to backend/local store & broadcast to WebSocket
       const headers = await getAuthHeaders();
       const payload = {
         content: textToSend,
@@ -263,7 +414,7 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                 <Text style={styles.ledLabel}>TX</Text>
               </View>
               <View style={styles.ledWrap}>
-                <View style={[styles.ledCircle, !isTransmitting ? styles.ledRxActive : styles.ledInactive]} />
+                <View style={[styles.ledCircle, (isReceiving || (!isTransmitting && sMeterValue >= 9)) ? styles.ledRxActive : styles.ledInactive]} />
                 <Text style={styles.ledLabel}>RX</Text>
               </View>
             </View>
@@ -369,6 +520,48 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                   </View>
                 )}
 
+                {/* Incoming Transmission Notice Banner if autoplay was blocked */}
+                {incomingNotice && (
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#064e3b',
+                      borderColor: '#10b981',
+                      borderWidth: 1.5,
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 12,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}
+                    onPress={() => {
+                      if (incomingNotice.audioUrl) {
+                        try {
+                          AcousticModemFrontend.playPttChirp();
+                          const a = new Audio(incomingNotice.audioUrl);
+                          a.play().then(() => {
+                            a.onended = () => AcousticModemFrontend.playRogerBeep();
+                          }).catch((e) => console.warn(e));
+                        } catch (_) {}
+                      }
+                      setIncomingNotice(null);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                      <Ionicons name="volume-high" size={24} color="#10b981" />
+                      <View>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>
+                          🎙️ Transmisi Suara Masuk (@{incomingNotice.callsign})
+                        </Text>
+                        <Text style={{ color: '#a7f3d0', fontSize: 10, marginTop: 2 }}>
+                          Ketuk di sini untuk memutar audio transmisi
+                        </Text>
+                      </View>
+                    </View>
+                    <Ionicons name="play-circle" size={30} color="#10b981" />
+                  </TouchableOpacity>
+                )}
+
                 {/* Big Tactical PTT (Push-To-Talk) Control */}
                 <View style={styles.pttSection}>
                   <Text style={styles.pttInstruction}>
@@ -448,11 +641,25 @@ export default function HTWalkieTalkieModal({ visible, onClose }: HTWalkieTalkie
                             <TouchableOpacity
                               style={styles.playAudioBubbleBtn}
                               onPress={() => {
-                                AcousticModemFrontend.playAfsktone(m.content);
+                                if (m.audio_url?.startsWith('data:audio') || m.audio_url?.startsWith('http')) {
+                                  try {
+                                    AcousticModemFrontend.playPttChirp();
+                                    const audio = new Audio(m.audio_url);
+                                    audio.play().then(() => {
+                                      audio.onended = () => AcousticModemFrontend.playRogerBeep();
+                                    }).catch((err) => console.warn('[HT] Audio play error:', err));
+                                  } catch (e) {
+                                    console.warn('[HT] Audio exception:', e);
+                                  }
+                                } else {
+                                  AcousticModemFrontend.playAfsktone(m.content);
+                                }
                               }}
                             >
-                              <Ionicons name="volume-medium" size={14} color="#D97706" />
-                              <Text style={styles.playAudioBubbleBtnText}>Putar AFSK</Text>
+                              <Ionicons name="volume-high" size={14} color="#D97706" />
+                              <Text style={styles.playAudioBubbleBtnText}>
+                                {m.content?.includes('Pesan Suara') || m.content?.includes('Suara') ? 'Putar Suara 🎙️' : 'Putar Audio 📻'}
+                              </Text>
                             </TouchableOpacity>
                           )}
                         </View>

@@ -43,6 +43,14 @@ async function main() {
     path.join(__dirname, 'src/services/points.service.ts'),
     `${remoteBase}/src/services/points.service.ts`
   );
+  await ssh.putFile(
+    path.join(__dirname, 'src/ht/htManager.service.ts'),
+    `${remoteBase}/src/ht/htManager.service.ts`
+  );
+  await ssh.putFile(
+    path.join(__dirname, 'src/routes/ht.routes.ts'),
+    `${remoteBase}/src/routes/ht.routes.ts`
+  );
 
   console.log('Installing stockfish & chess.js on VPS...');
   const npmRes = await ssh.execCommand('npm install stockfish chess.js --save', { cwd: remoteBase });
