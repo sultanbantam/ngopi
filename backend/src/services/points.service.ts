@@ -92,52 +92,31 @@ export class PointsEconomyService {
   private transactions: PointsTransaction[] = [];
   private subscriptions: Map<string, PremiumSubscription> = new Map();
   private watchParties: Map<string, WatchParty> = new Map();
-  private storageFile: string;
+  private isSyncing = false;
+  private saveTimeout: NodeJS.Timeout | null = null;
 
-  constructor(storageDir?: string) {
-    const dir = storageDir || path.join(process.cwd(), 'uploads');
-    if (!fs.existsSync(dir)) {
-      try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ignore */ }
-    }
-    this.storageFile = path.join(dir, 'points_economy.json');
-    this.loadFromDisk();
-  }
-
-  private loadFromDisk(): void {
-    try {
-      if (fs.existsSync(this.storageFile)) {
-        const raw = fs.readFileSync(this.storageFile, 'utf-8');
-        const data = JSON.parse(raw);
-        if (data.userPoints && Array.isArray(data.userPoints)) {
-          data.userPoints.forEach((up: UserPoints) => this.userPoints.set(up.user_id, up));
-        }
-        if (data.transactions && Array.isArray(data.transactions)) {
-          this.transactions = data.transactions;
-        }
-        if (data.subscriptions && Array.isArray(data.subscriptions)) {
-          data.subscriptions.forEach((s: PremiumSubscription) => this.subscriptions.set(s.user_id, s));
-        }
-        if (data.watchParties && Array.isArray(data.watchParties)) {
-          data.watchParties.forEach((wp: WatchParty) => this.watchParties.set(wp.id, wp));
-        }
+  private saveToDisk(immediate = false): void {
+    const doSave = () => {
+      try {
+        const data = {
+          userPoints: Array.from(this.userPoints.values()),
+          transactions: this.transactions,
+          subscriptions: Array.from(this.subscriptions.values()),
+          watchParties: Array.from(this.watchParties.values()),
+          updatedAt: Date.now(),
+        };
+        fs.writeFile(this.storageFile, JSON.stringify(data, null, 2), 'utf-8', () => {});
+      } catch {
+        // Non-critical persistence
       }
-    } catch {
-      // Fallback
-    }
-  }
+    };
 
-  private saveToDisk(): void {
-    try {
-      const data = {
-        userPoints: Array.from(this.userPoints.values()),
-        transactions: this.transactions,
-        subscriptions: Array.from(this.subscriptions.values()),
-        watchParties: Array.from(this.watchParties.values()),
-        updatedAt: Date.now(),
-      };
-      fs.writeFileSync(this.storageFile, JSON.stringify(data, null, 2), 'utf-8');
-    } catch {
-      // Non-critical persistence
+    if (immediate) {
+      if (this.saveTimeout) clearTimeout(this.saveTimeout);
+      doSave();
+    } else {
+      if (this.saveTimeout) clearTimeout(this.saveTimeout);
+      this.saveTimeout = setTimeout(doSave, 300);
     }
   }
 
@@ -177,6 +156,8 @@ export class PointsEconomyService {
   }
 
   public syncWithPointsManager(userId: string, username?: string): void {
+    if (this.isSyncing) return;
+    this.isSyncing = true;
     try {
       const { PointsManager } = require('../utils/pointsManager');
       if (!PointsManager) return;
@@ -219,14 +200,18 @@ export class PointsEconomyService {
       }
 
       // Always synchronize PointsManager so both userId and username have the exact canonical balance
-      PointsManager.setPoints(userId, up.balance);
+      // Pass skipSync = true to prevent recursive callback loop!
+      PointsManager.setPoints(userId, up.balance, true, true);
       if (username && username !== userId) {
-        PointsManager.setPoints(username, up.balance);
+        PointsManager.setPoints(username, up.balance, true, true);
       }
 
       up.updated_at = Date.now();
       this.saveToDisk();
     } catch (_) {}
+    finally {
+      this.isSyncing = false;
+    }
   }
 
   public addDirectPoints(
@@ -416,7 +401,7 @@ export class PointsEconomyService {
     try {
       const { PointsManager } = require('../utils/pointsManager');
       if (PointsManager) {
-        PointsManager.setPoints(userId, up.balance);
+        PointsManager.setPoints(userId, up.balance, true, true);
       }
     } catch (_) {}
     this.saveToDisk();
@@ -440,7 +425,7 @@ export class PointsEconomyService {
     try {
       const { PointsManager } = require('../utils/pointsManager');
       if (PointsManager) {
-        PointsManager.setPoints(userId, up.balance);
+        PointsManager.setPoints(userId, up.balance, true, true);
       }
     } catch (_) {}
     this.saveToDisk();

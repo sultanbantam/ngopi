@@ -11,7 +11,18 @@ try {
   const { Pool } = require('pg');
   const { PrismaPg } = require('@prisma/adapter-pg');
   const connectionString = process.env.DATABASE_URL || '';
-  const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } });
+  const isLocalOrNoSsl = !connectionString ||
+    connectionString.includes('127.0.0.1') ||
+    connectionString.includes('localhost') ||
+    connectionString.includes('sslmode=disable');
+
+  const pool = new Pool({
+    connectionString,
+    ssl: isLocalOrNoSsl ? false : { rejectUnauthorized: false },
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
   const adapter = new PrismaPg(pool);
 
   prismaClient = new PrismaClient({

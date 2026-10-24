@@ -63,9 +63,9 @@ export const setupGameSocket = (io: Server) => {
         if (player && !player.is_bot) {
           const targetId = player.user_id;
           const targetUsername = player.username;
-          const newPts = PointsManager.addPoints(targetId, pts);
+          const newPts = PointsManager.addPoints(targetId, pts, true, true);
           if (targetUsername && targetUsername !== targetId) {
-            PointsManager.setPoints(targetUsername, newPts);
+            PointsManager.setPoints(targetUsername, newPts, true, true);
           }
 
           // Ensure pointsEconomyService is synchronized
