@@ -13,22 +13,27 @@ export default function IndexScreen() {
 
   useEffect(() => {
     const checkSession = async () => {
-      if (ref) {
-        if (Platform.OS === 'web') {
-          localStorage.setItem('referral_code', String(ref));
-        } else {
-          await SecureStore.setItemAsync('referral_code', String(ref));
+      try {
+        if (ref) {
+          if (Platform.OS === 'web') {
+            localStorage.setItem('referral_code', String(ref));
+          } else {
+            await SecureStore.setItemAsync('referral_code', String(ref));
+          }
         }
-      }
 
-      const hasSession = await hasStoredSession();
-      if (hasSession) {
-        router.replace('/(main)/warkop');
-      } else {
-        router.replace({
-          pathname: '/(auth)/register',
-          params: ref ? { ref: String(ref) } : {},
-        });
+        const hasSession = await hasStoredSession();
+        if (hasSession) {
+          router.replace('/(main)/warkop');
+        } else {
+          router.replace({
+            pathname: '/(auth)/register',
+            params: ref ? { ref: String(ref) } : {},
+          });
+        }
+      } catch (err) {
+        console.error('Session check failed on startup:', err);
+        router.replace('/(auth)/register');
       }
     };
     checkSession();

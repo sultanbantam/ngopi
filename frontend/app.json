@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ngopi",
     "slug": "ngopi",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "ngopi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,10 +11,23 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "top.ngopi.app",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#171411",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
       },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
       "predictiveBackGestureEnabled": false
     },
     "web": {
@@ -31,7 +44,27 @@
           "imageWidth": 180,
           "resizeMode": "contain"
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Izinkan Ngopi mengakses galeri foto untuk mengirim gambar dalam percakapan dan memperbarui profil warkop Anda.",
+          "cameraPermission": "Izinkan Ngopi mengakses kamera untuk mengambil dan membagikan foto secara langsung."
+        }
+      ],
+      [
+        "expo-av",
+        {
+          "microphonePermission": "Izinkan Ngopi mengakses mikrofon untuk merekam pesan suara dan berkomunikasi di warkop."
+        }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1f9f4ce1-d27a-4f60-960f-ef98e4b841dd"
+      }
+    },
+    "owner": "bamboochain"
   }
 }

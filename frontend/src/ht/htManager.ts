@@ -5,6 +5,7 @@
  * penyimpanan pesan offline ke IndexedDB, dan sinkronisasi otomatis ke server.
  */
 
+import { Platform } from 'react-native';
 import { BluetoothHT, bluetoothHT } from './bluetoothHT';
 import { SerialHT, serialHT } from './serialHT';
 import { AcousticModem, AcousticModemFrontend } from './acousticModem';
@@ -180,7 +181,7 @@ export class HTManager {
 
   constructor() {
     // Setup listener auto-sync saat browser kembali online (Task 5.7 line 698)
-    if (typeof window !== 'undefined') {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
       window.addEventListener('online', () => {
         this.syncToServer();
       });

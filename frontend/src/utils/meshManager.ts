@@ -106,31 +106,33 @@ class MeshManager {
   }
 
   private initP2PChannel() {
-    if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
-      try {
-        this.broadcastChannel = new (window as any).BroadcastChannel('ngopi_bluetooth_mesh_bus');
-        this.broadcastChannel.onmessage = (event: MessageEvent) => {
-          if (event.data && event.data.packet_id) {
-            this.handleIncomingMeshPacket(event.data);
-          }
-        };
-      } catch {
-        // BroadcastChannel unavailable
-      }
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('online', () => {
-        if (!this.isForcedOffline()) {
-          this.isOfflineMode = false;
-          this.syncPendingMessages();
-          this.notify();
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if ('BroadcastChannel' in window) {
+        try {
+          this.broadcastChannel = new (window as any).BroadcastChannel('ngopi_bluetooth_mesh_bus');
+          this.broadcastChannel.onmessage = (event: MessageEvent) => {
+            if (event.data && event.data.packet_id) {
+              this.handleIncomingMeshPacket(event.data);
+            }
+          };
+        } catch {
+          // BroadcastChannel unavailable
         }
-      });
-      window.addEventListener('offline', () => {
-        this.isOfflineMode = true;
-        this.notify();
-      });
+      }
+
+      if (typeof window.addEventListener === 'function') {
+        window.addEventListener('online', () => {
+          if (!this.isForcedOffline()) {
+            this.isOfflineMode = false;
+            this.syncPendingMessages();
+            this.notify();
+          }
+        });
+        window.addEventListener('offline', () => {
+          this.isOfflineMode = true;
+          this.notify();
+        });
+      }
     }
   }
 
