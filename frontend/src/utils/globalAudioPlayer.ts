@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { musicSynthesizer } from './musicSynthesizer';
 
 export interface GlobalTrack {
@@ -42,6 +43,7 @@ class GlobalAudioPlayer {
 
   private listeners = new Set<AudioListener>();
   private audioEl: HTMLAudioElement | null = null;
+  private nativeSound: Audio.Sound | null = null;
   private onEndCallback: (() => void) | null = null;
   private intervalTimer: any = null;
   private resolvedUrlCache: Map<string, string> = new Map();
@@ -69,16 +71,33 @@ class GlobalAudioPlayer {
     'trk_boomerang_pelangi': 'https://api.ngopi.top/uploads/mixtape_songs/trk_boomerang_pelangi.mp3',
     'trk_puresaturday_kosong': 'https://api.ngopi.top/uploads/mixtape_songs/trk_puresaturday_kosong.mp3',
     'trk_kantata_kesaksian': 'https://api.ngopi.top/uploads/mixtape_songs/trk_kantata_kesaksian.mp3',
+    // Album 3 (3. Bandung, dan Para Mantanku)
+    'trk_queen_love_of_my_life': 'https://api.ngopi.top/uploads/mixtape_songs/trk_queen_love_of_my_life.mp3',
+    'trk_gnr_sweet_child': 'https://api.ngopi.top/uploads/mixtape_songs/trk_gnr_sweet_child.mp3',
+    'trk_gnr_dont_cry': 'https://api.ngopi.top/uploads/mixtape_songs/trk_gnr_dont_cry.mp3',
+    'trk_met_nothing_else': 'https://api.ngopi.top/uploads/mixtape_songs/trk_met_nothing_else.mp3',
+    'trk_met_enter_sandman': 'https://api.ngopi.top/uploads/mixtape_songs/trk_met_enter_sandman.mp3',
+    'trk_bonjovi_always': 'https://api.ngopi.top/uploads/mixtape_songs/trk_bonjovi_always.mp3',
+    'trk_scorpions_wind': 'https://api.ngopi.top/uploads/mixtape_songs/trk_scorpions_wind.mp3',
+    'trk_scorpions_still_loving': 'https://api.ngopi.top/uploads/mixtape_songs/trk_scorpions_still_loving.mp3',
+    'trk_cranberries_zombie': 'https://api.ngopi.top/uploads/mixtape_songs/trk_cranberries_zombie.mp3',
   };
 
   public resolvePlayableUri(track: GlobalTrack): string {
     if (!track) return '';
-    // Check ID mapping first
-    for (const [idKey, hostedUrl] of Object.entries(this.fullTrackMap)) {
-      if (track.id && track.id.includes(idKey)) {
-        return hostedUrl;
+    // 1. If track.track_uri is already on api.ngopi.top, return it directly!
+    if (track.track_uri && track.track_uri.includes('api.ngopi.top/uploads/mixtape_songs/')) {
+      return track.track_uri;
+    }
+    // 2. Check direct ID mapping in fullTrackMap
+    if (track.id) {
+      for (const [idKey, hostedUrl] of Object.entries(this.fullTrackMap)) {
+        if (track.id.includes(idKey)) {
+          return hostedUrl;
+        }
       }
     }
+    // 3. Fallback matching by cleaned title or artist
     const cleanTitle = (track.title || '').replace(/\[.*?\]|\(.*?\)/g, '').trim().toLowerCase();
     for (const [idKey, hostedUrl] of Object.entries(this.fullTrackMap)) {
       const namePart = idKey.replace(/^trk_/, '').replace(/_/g, ' ');
@@ -103,9 +122,19 @@ class GlobalAudioPlayer {
         if (cleanTitle.includes('pelangi') && idKey === 'trk_boomerang_pelangi') return hostedUrl;
         if (cleanTitle.includes('kosong') && idKey === 'trk_puresaturday_kosong') return hostedUrl;
         if (cleanTitle.includes('kesaksian') && idKey === 'trk_kantata_kesaksian') return hostedUrl;
+        // Album 3 title matches
+        if (cleanTitle.includes('love of my life') && idKey === 'trk_queen_love_of_my_life') return hostedUrl;
+        if (cleanTitle.includes('sweet child') && idKey === 'trk_gnr_sweet_child') return hostedUrl;
+        if ((cleanTitle.includes('dont cry') || cleanTitle.includes("don't cry")) && idKey === 'trk_gnr_dont_cry') return hostedUrl;
+        if (cleanTitle.includes('nothing else') && idKey === 'trk_met_nothing_else') return hostedUrl;
+        if (cleanTitle.includes('sandman') && idKey === 'trk_met_enter_sandman') return hostedUrl;
+        if (cleanTitle.includes('always') && idKey === 'trk_bonjovi_always') return hostedUrl;
+        if (cleanTitle.includes('wind') && idKey === 'trk_scorpions_wind') return hostedUrl;
+        if (cleanTitle.includes('still loving') && idKey === 'trk_scorpions_still_loving') return hostedUrl;
+        if (cleanTitle.includes('zombie') && idKey === 'trk_cranberries_zombie') return hostedUrl;
       }
     }
-    // If external archive.org link, proxy it through server to avoid 503/403/CORS issues
+    // 4. If external archive.org link, proxy it through server to avoid 503/403/CORS issues
     if (track.track_uri && track.track_uri.includes('archive.org') && !track.track_uri.includes('api.ngopi.top')) {
       return `https://api.ngopi.top/api/albums/stream?url=${encodeURIComponent(track.track_uri)}&trackId=${track.id || ''}`;
     }
@@ -130,8 +159,61 @@ class GlobalAudioPlayer {
       if (this.audioEl) {
         this.bindAudioEvents(this.audioEl);
       }
+    } else if (Platform.OS !== 'web') {
+      try {
+        Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          staysActiveInBackground: true,
+          playsInSilentModeIOS: true,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        }).catch((err) => {
+          console.warn('[GlobalAudioPlayer] setAudioModeAsync error:', err);
+        });
+      } catch {}
     }
   }
+
+  private onNativePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
+    if (!status.isLoaded) {
+      if (status.error) {
+        console.warn('[GlobalAudioPlayer] Native playback error:', status.error);
+        this.state.error = 'Gagal memutar audio';
+        this.state.isPlaying = false;
+        this.state.isLoading = false;
+        this.notify();
+      }
+      return;
+    }
+
+    this.state.isPlaying = status.isPlaying;
+    this.state.isLoading = status.isBuffering;
+
+    const cur = status.positionMillis ? status.positionMillis / 1000 : 0;
+    const dur = status.durationMillis && status.durationMillis > 0
+      ? status.durationMillis / 1000
+      : (this.state.track?.duration || 0);
+
+    this.state.currentTime = cur;
+    this.state.duration = dur;
+    if (dur > 0) {
+      this.state.progress = Math.min(100, Math.max(0, Math.round((cur / dur) * 100)));
+    }
+    this.notify();
+
+    if (status.didJustFinish) {
+      this.state.isPlaying = false;
+      this.state.progress = 100;
+      this.notify();
+      if (this.onEndCallback) {
+        try {
+          this.onEndCallback();
+        } catch (e) {
+          console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
+        }
+      }
+    }
+  };
 
   private bindAudioEvents(audio: HTMLAudioElement) {
     audio.onplay = () => {
@@ -374,11 +456,65 @@ class GlobalAudioPlayer {
         this.state.error = e?.message || 'Error audio';
         this.notify();
       }
-    } else {
-      // Non-web or synth fallback
-      this.state.isPlaying = true;
-      this.state.isLoading = false;
-      this.notify();
+    } else if (Platform.OS !== 'web') {
+      // Native audio engine via expo-av
+      try {
+        if (this.nativeSound) {
+          try {
+            await this.nativeSound.stopAsync();
+            await this.nativeSound.unloadAsync();
+          } catch {}
+          this.nativeSound = null;
+        }
+
+        const initialUri = this.resolvePlayableUri(track);
+        console.log('[GlobalAudioPlayer] Native playing URI:', initialUri);
+
+        const { sound } = await Audio.Sound.createAsync(
+          { uri: initialUri },
+          {
+            shouldPlay: true,
+            volume: this.state.volume,
+            progressUpdateIntervalMillis: 500,
+          },
+          this.onNativePlaybackStatusUpdate
+        );
+
+        this.nativeSound = sound;
+        this.state.isPlaying = true;
+        this.state.isLoading = false;
+        this.state.error = null;
+        this.notify();
+      } catch (err: any) {
+        console.warn('[GlobalAudioPlayer] Native play error on source:', err);
+        // If direct link failed, attempt stream proxy
+        try {
+          const proxyUri = `https://api.ngopi.top/api/albums/stream?url=${encodeURIComponent(track.track_uri)}&trackId=${track.id || ''}`;
+          console.log('[GlobalAudioPlayer] Native attempting proxy fallback:', proxyUri);
+          const { sound } = await Audio.Sound.createAsync(
+            { uri: proxyUri },
+            {
+              shouldPlay: true,
+              volume: this.state.volume,
+              progressUpdateIntervalMillis: 500,
+            },
+            this.onNativePlaybackStatusUpdate
+          );
+          this.nativeSound = sound;
+          this.state.isPlaying = true;
+          this.state.isLoading = false;
+          this.state.error = null;
+          this.notify();
+          return;
+        } catch (fallbackErr) {
+          console.warn('[GlobalAudioPlayer] Native fallback play error:', fallbackErr);
+        }
+
+        this.state.isPlaying = false;
+        this.state.isLoading = false;
+        this.state.error = 'Gagal memutar audio di perangkat';
+        this.notify();
+      }
     }
   }
 
@@ -386,6 +522,9 @@ class GlobalAudioPlayer {
     this.state.isPlaying = false;
     if (this.audioEl) {
       try { this.audioEl.pause(); } catch {}
+    }
+    if (this.nativeSound) {
+      this.nativeSound.pauseAsync().catch(() => {});
     }
     musicSynthesizer.pause();
     this.clearSynthInterval();
@@ -405,6 +544,11 @@ class GlobalAudioPlayer {
     if (this.audioEl) {
       this.audioEl.play().catch(e => {
         console.warn('[GlobalAudioPlayer] Resume failed:', e);
+      });
+    }
+    if (this.nativeSound) {
+      this.nativeSound.playAsync().catch(e => {
+        console.warn('[GlobalAudioPlayer] Native resume failed:', e);
       });
     }
     this.state.isPlaying = true;
@@ -427,6 +571,16 @@ class GlobalAudioPlayer {
       this.state.progress = pct;
       this.notify();
     }
+    if (this.nativeSound) {
+      const dur = this.state.duration || (this.state.track?.duration || 0);
+      if (dur > 0) {
+        const targetMillis = (pct / 100) * dur * 1000;
+        this.nativeSound.setPositionAsync(targetMillis).catch(() => {});
+        this.state.currentTime = (pct / 100) * dur;
+        this.state.progress = pct;
+        this.notify();
+      }
+    }
   }
 
   public setVolume(vol: number) {
@@ -435,11 +589,21 @@ class GlobalAudioPlayer {
     if (this.audioEl) {
       this.audioEl.volume = v;
     }
+    if (this.nativeSound) {
+      this.nativeSound.setVolumeAsync(v).catch(() => {});
+    }
     this.notify();
   }
 
   public stop() {
     this.pause();
+    if (this.nativeSound) {
+      try {
+        this.nativeSound.stopAsync().catch(() => {});
+        this.nativeSound.unloadAsync().catch(() => {});
+      } catch {}
+      this.nativeSound = null;
+    }
     this.state.track = null;
     this.state.progress = 0;
     this.state.currentTime = 0;

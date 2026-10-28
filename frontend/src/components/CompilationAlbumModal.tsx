@@ -346,8 +346,9 @@ export default function CompilationAlbumModal({
       if (idx < 0 || idx >= album.tracks.length) return;
       currentIndex = idx;
       const t = album.tracks[idx];
+      const trackId = t.id || `comp_${album.id}_${idx}`;
       const gTrack: GlobalTrack = {
-        id: `comp_${album.id}_${idx}`,
+        id: trackId,
         title: `${t.title} [${album.cover_emoji} ${album.title} #${idx + 1}]`,
         artist: t.artist,
         track_uri: t.uri,
@@ -368,7 +369,6 @@ export default function CompilationAlbumModal({
     };
 
     playTrackAtIndex(startIndex);
-    Alert.alert('Memutar Album 💿', `Memutar "${album.title}" oleh ${album.creator_display_name} (Lagu ${startIndex + 1} dari ${album.tracks.length})`);
   };
 
   // Share Album Actions with catchy hook

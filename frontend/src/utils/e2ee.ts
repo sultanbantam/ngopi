@@ -4,6 +4,17 @@ import CryptoJS from 'crypto-js';
 import { Platform } from 'react-native';
 import * as SecureStore from './storage';
 
+// Ensure TweetNaCl has a secure PRNG across mobile & web runtimes
+try {
+  nacl.setPRNG((x, n) => {
+    const randomWords = CryptoJS.lib.WordArray.random(n);
+    for (let i = 0; i < n; i++) {
+      const byte = (randomWords.words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+      x[i] = byte;
+    }
+  });
+} catch (_) {}
+
 export type DeviceKeyPair = {
   publicKey: string;
   privateKey: string;

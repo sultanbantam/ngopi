@@ -551,7 +551,7 @@ export default function GaplehShareModal({ visible, onClose, data }: GaplehShare
                 style={[styles.socialShareBtn, { backgroundColor: '#0088cc' }]}
                 onPress={() => handleShareSocial('telegram')}
               >
-                <MaterialCommunityIcons name="telegram" size={18} color="#FFF" />
+                <MaterialCommunityIcons name={'telegram' as any} size={18} color="#FFF" />
                 <Text style={styles.socialBtnText}>Telegram</Text>
               </TouchableOpacity>
 
