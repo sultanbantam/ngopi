@@ -9,7 +9,11 @@ export const setItemAsync = async (key: string, value: string): Promise<void> =>
       console.error('Local storage is unavailable:', e);
     }
   } else {
-    await SecureStore.setItemAsync(key, value);
+    try {
+      await SecureStore.setItemAsync(key, value);
+    } catch (e) {
+      console.error('SecureStore.setItemAsync failed:', e);
+    }
   }
 };
 
@@ -22,7 +26,12 @@ export const getItemAsync = async (key: string): Promise<string | null> => {
       return null;
     }
   } else {
-    return await SecureStore.getItemAsync(key);
+    try {
+      return await SecureStore.getItemAsync(key);
+    } catch (e) {
+      console.error('SecureStore.getItemAsync failed:', e);
+      return null;
+    }
   }
 };
 
@@ -34,6 +43,10 @@ export const deleteItemAsync = async (key: string): Promise<void> => {
       console.error('Local storage is unavailable:', e);
     }
   } else {
-    await SecureStore.deleteItemAsync(key);
+    try {
+      await SecureStore.deleteItemAsync(key);
+    } catch (e) {
+      console.error('SecureStore.deleteItemAsync failed:', e);
+    }
   }
 };

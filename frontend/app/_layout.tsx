@@ -5,6 +5,8 @@ import { Stack } from 'expo-router';
 import '../src/interceptors/axios.interceptor';
 import * as serviceWorkerRegistration from '../src/serviceWorkerRegistration';
 
+export { ErrorBoundary } from 'expo-router';
+
 export default function RootLayout() {
   useEffect(() => {
     if (Platform.OS === 'web') {
