@@ -1,0 +1,12 @@
+# Dependencies and builds
+node_modules
+.expo
+dist
+web-build
+.git
+.vercel
+*.tar.gz
+*.aab
+*.apk
+.env*.local
+*.tsbuildinfo
