@@ -58,7 +58,8 @@
           "microphonePermission": "Izinkan Ngopi mengakses mikrofon untuk merekam pesan suara dan berkomunikasi di warkop."
         }
       ],
-      "expo-font"
+      "expo-font",
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},
