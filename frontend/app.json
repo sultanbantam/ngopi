@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ngopi",
     "slug": "ngopi",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "scheme": "ngopi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "top.ngopi.app",
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "backgroundColor": "#171411",
         "foregroundImage": "./assets/android-icon-foreground.png",
