@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+**/node_modules/
+**/node_modules/**
+
+# Build artifacts and caches
+.expo/
+**/.expo/
+dist/
+**/dist/
+web-build/
+**/web-build/
+android/
+backend/
+docs/
+
+# Images and archives
+*.aab
+*.apk
+*.tar.gz
+*.png
+*.jpg
+*.jpeg
+
+# Env
+.env*
+**/.env*
