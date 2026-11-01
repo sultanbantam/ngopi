@@ -14,13 +14,14 @@ android/
 backend/
 docs/
 
-# Images and archives
+# Archives
 *.aab
 *.apk
 *.tar.gz
-*.png
-*.jpg
-*.jpeg
+
+# Root screenshots only (DO NOT ignore frontend/assets!)
+/[0-9]*.png
+/WhatsApp*.jpeg
 
 # Env
 .env*
