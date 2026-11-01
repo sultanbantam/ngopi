@@ -1,12 +1,31 @@
-# Dependencies and builds
-node_modules
-.expo
-dist
-web-build
-.git
-.vercel
+# Dependencies
+node_modules/
+node_modules/**
+**/node_modules/**
+
+# Expo output / cache folders
+.expo/
+.expo/**
+dist/
+dist/**
+web-build/
+web-build/**
+
+# Git
+.git/
+.git/**
+
+# Vercel
+.vercel/
+.vercel/**
+
+# Archives & builds
 *.tar.gz
 *.aab
 *.apk
+
+# Environment
 .env*.local
+
+# Typescript
 *.tsbuildinfo
