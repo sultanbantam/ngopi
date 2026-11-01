@@ -8,10 +8,17 @@ import { deriveSharedSecret, getOrEnsureDeviceKeyPair, isValidPublicKey, NACL_SE
 import * as SecureStore from '../../../src/utils/storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Audio } from 'expo-av';
 import axios from 'axios';
 import BambupediaRoom from '../warkop';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  createAudioPlayer,
+  AudioPlayer,
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import HTWalkieTalkieModal from '../../../src/components/HTWalkieTalkieModal';
 import { getMimeType } from '../../../src/utils/fileHelpers';
 import { API_URL } from '../../../src/utils/session';
@@ -72,30 +79,35 @@ const AudioMessage = ({ url }: { url: string }) => {
     );
   }
 
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [player, setPlayer] = useState<AudioPlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+
+  useEffect(() => {
+    return player ? () => { player.release(); } : undefined;
+  }, [player]);
 
   const playSound = async () => {
     try {
-      if (sound) {
+      if (player) {
         if (isPlaying) {
-          await sound.pauseAsync();
+          player.pause();
           setIsPlaying(false);
         } else {
-          await sound.playAsync();
+          if (player.currentTime >= player.duration && player.duration > 0) {
+            player.seekTo(0);
+          }
+          player.play();
           setIsPlaying(true);
         }
       } else {
-        const { sound: newSound } = await Audio.Sound.createAsync(
-          { uri: url },
-          { shouldPlay: true }
-        );
-        setSound(newSound);
+        const nextPlayer = createAudioPlayer({ uri: url });
+        setPlayer(nextPlayer);
+        nextPlayer.play();
         setIsPlaying(true);
-        newSound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded && status.didJustFinish) {
+        nextPlayer.addListener('playbackStatusUpdate', (status) => {
+          if (status.didJustFinish) {
             setIsPlaying(false);
-            newSound.setPositionAsync(0);
+            nextPlayer.seekTo(0);
           }
         });
       }
@@ -103,10 +115,6 @@ const AudioMessage = ({ url }: { url: string }) => {
       console.error('Error playing audio', err);
     }
   };
-
-  useEffect(() => {
-    return sound ? () => { sound.unloadAsync(); } : undefined;
-  }, [sound]);
 
   return (
     <TouchableOpacity style={styles.audioPlayer} onPress={playSound}>
@@ -160,7 +168,7 @@ function PrivateChatRoomScreen() {
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Attachments
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const webMediaRecorderRef = useRef<any>(null);
   const webAudioChunksRef = useRef<Blob[]>([]);
@@ -849,13 +857,17 @@ function PrivateChatRoomScreen() {
         webMediaRecorderRef.current = mediaRecorder;
         setIsRecording(true);
       } else {
-        await Audio.requestPermissionsAsync();
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
+        const perm = await requestRecordingPermissionsAsync();
+        if (!perm.granted) {
+          alert('Izin mikrofon diperlukan untuk merekam pesan suara.');
+          return;
+        }
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
         });
-        const { recording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-        setRecording(recording);
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
         setIsRecording(true);
       }
     } catch (err: any) {
@@ -903,35 +915,38 @@ function PrivateChatRoomScreen() {
       mediaRecorder.stream.getTracks().forEach((t: any) => t.stop());
       webMediaRecorderRef.current = null;
     } else {
-      if (!recording) return;
+      if (!isRecording) return;
       setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecording(null);
+      try {
+        await audioRecorder.stop();
+        const uri = audioRecorder.uri;
 
-      if (uri) {
-        const url = await uploadFile(uri, 'audio');
-        if (url) {
-          // Send audio message
-          const messageData = {
-            room_id: actualRoomId,
-            receiver_id: isGroupChat ? undefined : roomId,
-            type: 'audio',
-            attachment_url: url
-          };
-          if (socketService.socket) {
-            socketService.socket.emit('send_message', messageData);
+        if (uri) {
+          const url = await uploadFile(uri, 'audio');
+          if (url) {
+            // Send audio message
+            const messageData = {
+              room_id: actualRoomId,
+              receiver_id: isGroupChat ? undefined : roomId,
+              type: 'audio',
+              attachment_url: url
+            };
+            if (socketService.socket) {
+              socketService.socket.emit('send_message', messageData);
+            }
+            setMessages(prev => [...prev, {
+              id: Math.random().toString(),
+              sender_id: 'me',
+              isMine: true,
+              timestamp: new Date().toISOString(),
+              type: 'audio',
+              attachment_url: url
+            }]);
+            setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
           }
-          setMessages(prev => [...prev, {
-            id: Math.random().toString(),
-            sender_id: 'me',
-            isMine: true,
-            timestamp: new Date().toISOString(),
-            type: 'audio',
-            attachment_url: url
-          }]);
-          setTimeout(() => flatListRef.current?.scrollToEnd(), 100);
         }
+      } catch (e) {
+        console.error('Stop recording failed', e);
       }
     }
   };

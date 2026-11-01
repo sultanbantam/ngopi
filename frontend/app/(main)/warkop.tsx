@@ -15,11 +15,19 @@ import {
   Pressable,
   ScrollView,
   Linking,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
-import { Audio } from 'expo-av';
+import {
+  createAudioPlayer,
+  AudioPlayer,
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import axios from 'axios';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
@@ -192,33 +200,37 @@ function createLocalRiddleMessage(index?: number): ChatMessage {
 }
 
 function AudioMessage({ url }: { url: string }) {
-  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [player, setPlayer] = useState<AudioPlayer | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    return sound ? () => { sound.unloadAsync(); } : undefined;
-  }, [sound]);
+    return player ? () => { player.release(); } : undefined;
+  }, [player]);
 
   const playSound = async () => {
     try {
-      if (sound) {
+      if (player) {
         if (isPlaying) {
-          await sound.pauseAsync();
+          player.pause();
           setIsPlaying(false);
         } else {
-          await sound.playAsync();
+          if (player.currentTime >= player.duration && player.duration > 0) {
+            player.seekTo(0);
+          }
+          player.play();
           setIsPlaying(true);
         }
         return;
       }
 
-      const { sound: nextSound } = await Audio.Sound.createAsync({ uri: url }, { shouldPlay: true });
-      setSound(nextSound);
+      const nextPlayer = createAudioPlayer({ uri: url });
+      setPlayer(nextPlayer);
+      nextPlayer.play();
       setIsPlaying(true);
-      nextSound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) {
+      nextPlayer.addListener('playbackStatusUpdate', (status) => {
+        if (status.didJustFinish) {
           setIsPlaying(false);
-          nextSound.setPositionAsync(0);
+          nextPlayer.seekTo(0);
         }
       });
     } catch (error) {
@@ -273,7 +285,7 @@ export default function BambupediaRoom() {
   const [suasanaExpanded, setSuasanaExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchMemberQuery, setSearchMemberQuery] = useState('');
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [isRecording, setIsRecording] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [memberSummary, setMemberSummary] = useState({ online: 0, total: 0, label: 'Memuat anggota' });
@@ -708,10 +720,14 @@ export default function BambupediaRoom() {
         return;
       }
 
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording: nextRecording } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      setRecording(nextRecording);
+      const perm = await requestRecordingPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert('Izin Ditolak', 'Izin mikrofon diperlukan untuk merekam pesan suara.');
+        return;
+      }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
       setIsRecording(true);
     } catch (error) {
       console.error('Failed to start Bambupedia recording:', error);
@@ -745,14 +761,17 @@ export default function BambupediaRoom() {
       return;
     }
 
-    if (!recording) return;
+    if (!isRecording) return;
     setIsRecording(false);
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    setRecording(null);
-    if (uri) {
-      const url = await uploadFile(uri, 'audio');
-      if (url) sendSocketMessage({ content: 'Voice message', message_type: 'audio', attachment_url: url });
+    try {
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
+      if (uri) {
+        const url = await uploadFile(uri, 'audio');
+        if (url) sendSocketMessage({ content: 'Voice message', message_type: 'audio', attachment_url: url });
+      }
+    } catch (error) {
+      console.error('Failed to stop recording:', error);
     }
   };
 

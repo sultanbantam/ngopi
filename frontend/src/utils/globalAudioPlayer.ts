@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import axios from 'axios';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { createAudioPlayer, AudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { musicSynthesizer } from './musicSynthesizer';
 
 export interface GlobalTrack {
@@ -43,7 +43,8 @@ class GlobalAudioPlayer {
 
   private listeners = new Set<AudioListener>();
   private audioEl: HTMLAudioElement | null = null;
-  private nativeSound: Audio.Sound | null = null;
+  private nativePlayer: AudioPlayer | null = null;
+  private statusSubscription: { remove: () => void } | null = null;
   private onEndCallback: (() => void) | null = null;
   private intervalTimer: any = null;
   private resolvedUrlCache: Map<string, string> = new Map();
@@ -161,59 +162,15 @@ class GlobalAudioPlayer {
       }
     } else if (Platform.OS !== 'web') {
       try {
-        Audio.setAudioModeAsync({
-          allowsRecordingIOS: false,
-          staysActiveInBackground: true,
-          playsInSilentModeIOS: true,
-          shouldDuckAndroid: true,
-          playThroughEarpieceAndroid: false,
+        setAudioModeAsync({
+          playsInSilentMode: true,
+          shouldPlayInBackground: true,
         }).catch((err) => {
           console.warn('[GlobalAudioPlayer] setAudioModeAsync error:', err);
         });
       } catch {}
     }
   }
-
-  private onNativePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      if (status.error) {
-        console.warn('[GlobalAudioPlayer] Native playback error:', status.error);
-        this.state.error = 'Gagal memutar audio';
-        this.state.isPlaying = false;
-        this.state.isLoading = false;
-        this.notify();
-      }
-      return;
-    }
-
-    this.state.isPlaying = status.isPlaying;
-    this.state.isLoading = status.isBuffering;
-
-    const cur = status.positionMillis ? status.positionMillis / 1000 : 0;
-    const dur = status.durationMillis && status.durationMillis > 0
-      ? status.durationMillis / 1000
-      : (this.state.track?.duration || 0);
-
-    this.state.currentTime = cur;
-    this.state.duration = dur;
-    if (dur > 0) {
-      this.state.progress = Math.min(100, Math.max(0, Math.round((cur / dur) * 100)));
-    }
-    this.notify();
-
-    if (status.didJustFinish) {
-      this.state.isPlaying = false;
-      this.state.progress = 100;
-      this.notify();
-      if (this.onEndCallback) {
-        try {
-          this.onEndCallback();
-        } catch (e) {
-          console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
-        }
-      }
-    }
-  };
 
   private bindAudioEvents(audio: HTMLAudioElement) {
     audio.onplay = () => {
@@ -457,59 +414,62 @@ class GlobalAudioPlayer {
         this.notify();
       }
     } else if (Platform.OS !== 'web') {
-      // Native audio engine via expo-av
+      // Native audio engine via expo-audio
       try {
-        if (this.nativeSound) {
+        if (this.nativePlayer) {
           try {
-            await this.nativeSound.stopAsync();
-            await this.nativeSound.unloadAsync();
+            this.statusSubscription?.remove();
+            this.nativePlayer.pause();
+            this.nativePlayer.remove();
           } catch {}
-          this.nativeSound = null;
+          this.nativePlayer = null;
+          this.statusSubscription = null;
         }
 
         const initialUri = this.resolvePlayableUri(track);
         console.log('[GlobalAudioPlayer] Native playing URI:', initialUri);
 
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: initialUri },
-          {
-            shouldPlay: true,
-            volume: this.state.volume,
-            progressUpdateIntervalMillis: 500,
-          },
-          this.onNativePlaybackStatusUpdate
-        );
+        const player = createAudioPlayer({ uri: initialUri });
+        player.volume = this.state.volume;
 
-        this.nativeSound = sound;
+        this.statusSubscription = player.addListener('playbackStatusUpdate', (status) => {
+          this.state.isPlaying = status.playing;
+          this.state.isLoading = status.isBuffering;
+
+          const cur = status.currentTime || 0;
+          const dur = status.duration && status.duration > 0
+            ? status.duration
+            : (this.state.track?.duration || 0);
+
+          this.state.currentTime = cur;
+          this.state.duration = dur;
+          if (dur > 0) {
+            this.state.progress = Math.min(100, Math.max(0, Math.round((cur / dur) * 100)));
+          }
+          this.notify();
+
+          if (dur > 0 && cur >= dur - 0.5) {
+            this.state.isPlaying = false;
+            this.state.progress = 100;
+            this.notify();
+            if (this.onEndCallback) {
+              try {
+                this.onEndCallback();
+              } catch (e) {
+                console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
+              }
+            }
+          }
+        });
+
+        player.play();
+        this.nativePlayer = player;
         this.state.isPlaying = true;
         this.state.isLoading = false;
         this.state.error = null;
         this.notify();
       } catch (err: any) {
         console.warn('[GlobalAudioPlayer] Native play error on source:', err);
-        // If direct link failed, attempt stream proxy
-        try {
-          const proxyUri = `https://api.ngopi.top/api/albums/stream?url=${encodeURIComponent(track.track_uri)}&trackId=${track.id || ''}`;
-          console.log('[GlobalAudioPlayer] Native attempting proxy fallback:', proxyUri);
-          const { sound } = await Audio.Sound.createAsync(
-            { uri: proxyUri },
-            {
-              shouldPlay: true,
-              volume: this.state.volume,
-              progressUpdateIntervalMillis: 500,
-            },
-            this.onNativePlaybackStatusUpdate
-          );
-          this.nativeSound = sound;
-          this.state.isPlaying = true;
-          this.state.isLoading = false;
-          this.state.error = null;
-          this.notify();
-          return;
-        } catch (fallbackErr) {
-          console.warn('[GlobalAudioPlayer] Native fallback play error:', fallbackErr);
-        }
-
         this.state.isPlaying = false;
         this.state.isLoading = false;
         this.state.error = 'Gagal memutar audio di perangkat';
@@ -523,8 +483,8 @@ class GlobalAudioPlayer {
     if (this.audioEl) {
       try { this.audioEl.pause(); } catch {}
     }
-    if (this.nativeSound) {
-      this.nativeSound.pauseAsync().catch(() => {});
+    if (this.nativePlayer) {
+      try { this.nativePlayer.pause(); } catch {}
     }
     musicSynthesizer.pause();
     this.clearSynthInterval();
@@ -546,10 +506,12 @@ class GlobalAudioPlayer {
         console.warn('[GlobalAudioPlayer] Resume failed:', e);
       });
     }
-    if (this.nativeSound) {
-      this.nativeSound.playAsync().catch(e => {
+    if (this.nativePlayer) {
+      try {
+        this.nativePlayer.play();
+      } catch (e) {
         console.warn('[GlobalAudioPlayer] Native resume failed:', e);
-      });
+      }
     }
     this.state.isPlaying = true;
     this.notify();
@@ -571,12 +533,12 @@ class GlobalAudioPlayer {
       this.state.progress = pct;
       this.notify();
     }
-    if (this.nativeSound) {
+    if (this.nativePlayer) {
       const dur = this.state.duration || (this.state.track?.duration || 0);
       if (dur > 0) {
-        const targetMillis = (pct / 100) * dur * 1000;
-        this.nativeSound.setPositionAsync(targetMillis).catch(() => {});
-        this.state.currentTime = (pct / 100) * dur;
+        const targetSeconds = (pct / 100) * dur;
+        this.nativePlayer.seekTo(targetSeconds).catch(() => {});
+        this.state.currentTime = targetSeconds;
         this.state.progress = pct;
         this.notify();
       }
@@ -589,20 +551,22 @@ class GlobalAudioPlayer {
     if (this.audioEl) {
       this.audioEl.volume = v;
     }
-    if (this.nativeSound) {
-      this.nativeSound.setVolumeAsync(v).catch(() => {});
+    if (this.nativePlayer) {
+      try { this.nativePlayer.volume = v; } catch {}
     }
     this.notify();
   }
 
   public stop() {
     this.pause();
-    if (this.nativeSound) {
+    if (this.nativePlayer) {
       try {
-        this.nativeSound.stopAsync().catch(() => {});
-        this.nativeSound.unloadAsync().catch(() => {});
+        this.statusSubscription?.remove();
+        this.nativePlayer.pause();
+        this.nativePlayer.remove();
       } catch {}
-      this.nativeSound = null;
+      this.nativePlayer = null;
+      this.statusSubscription = null;
     }
     this.state.track = null;
     this.state.progress = 0;

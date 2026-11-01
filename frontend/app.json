@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ngopi",
     "slug": "ngopi",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "ngopi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "top.ngopi.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#171411",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -53,7 +53,7 @@
         }
       ],
       [
-        "expo-av",
+        "expo-audio",
         {
           "microphonePermission": "Izinkan Ngopi mengakses mikrofon untuk merekam pesan suara dan berkomunikasi di warkop."
         }
