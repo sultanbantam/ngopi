@@ -10,7 +10,7 @@ const router = Router();
 
 router.post('/register', authLimiter, validateRequest({ body: registerSchema }), register);
 router.post('/login', authLimiter, validateRequest({ body: loginSchema }), login);
-router.post('/refresh', authLimiter, validateRequest({ body: refreshTokenSchema }), refreshSession);
+router.post('/refresh', validateRequest({ body: refreshTokenSchema }), refreshSession);
 router.post('/logout', validateRequest({ body: refreshTokenSchema }), logout);
 router.post('/mfa/login/verify', authLimiter, validateRequest({ body: mfaLoginSchema }), verifyMfaLogin);
 router.post('/mfa/setup', verifyJWT, setupMfa);

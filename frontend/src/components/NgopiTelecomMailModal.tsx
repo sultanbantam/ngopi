@@ -406,6 +406,44 @@ export default function NgopiTelecomMailModal({
       }
       const serverInbox: MailItem[] = Array.isArray(inboxRes?.data?.mails) ? inboxRes.data.mails : [];
       const serverSent: MailItem[] = Array.isArray(sentRes?.data?.mails) ? sentRes.data.mails : [];
+
+      // Auto-sync any locally stored sent mails (e.g. mail-17944...) that haven't been pushed to server yet
+      const unsyncedLocalSent = storedMails.filter(
+        (m) =>
+          /^mail-\d+$/.test(m.id) &&
+          (m.from_user_id === currentUserId ||
+            m.from_username?.toLowerCase() === uname ||
+            m.from_email?.toLowerCase() === defaultEmail.toLowerCase())
+      );
+      if (unsyncedLocalSent.length > 0) {
+        for (const pending of unsyncedLocalSent) {
+          try {
+            const syncRes = await axios.post(
+              `${API_URL}/telecom/mail/send`,
+              {
+                to: pending.to_email || pending.to_number || pending.to_username,
+                subject: pending.subject,
+                body: pending.body,
+                attachments: pending.attachments,
+              },
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (syncRes.data?.mail) {
+              serverSent.unshift(syncRes.data.mail);
+              storedMails = storedMails.filter((sm) => sm.id !== pending.id);
+            }
+          } catch {}
+        }
+        try {
+          const serialized = JSON.stringify(storedMails.slice(0, 200));
+          if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+            localStorage.setItem(LOCAL_MAILS_KEY, serialized);
+          } else {
+            await SecureStore.setItemAsync(LOCAL_MAILS_KEY, serialized);
+          }
+        } catch {}
+      }
+
       if (serverInbox.length > 0 || serverSent.length > 0) {
         const combinedMap = new Map<string, MailItem>();
         [...serverInbox, ...serverSent, ...storedMails].forEach((m) => {
@@ -951,7 +989,10 @@ export default function NgopiTelecomMailModal({
       }
 
       const token = await getToken();
-      const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+      const headers: Record<string, string> = {};
+      if (Platform.OS !== 'web') {
+        headers['Content-Type'] = 'multipart/form-data';
+      }
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       const res = await axios.post(`${API_URL}/upload`, formData, { headers });
