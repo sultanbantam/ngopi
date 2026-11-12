@@ -6,6 +6,7 @@ import { socketService } from '../../src/utils/socket';
 import * as SecureStore from '../../src/utils/storage';
 import { clearStoredSession, getStoredRefreshToken } from '../../src/utils/session';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import { Ionicons } from '@expo/vector-icons';
 
 import axios from 'axios';
@@ -15,13 +16,15 @@ import { profileSlug } from '../../src/utils/profileLink';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useNightMode } from '../../src/theme/nightMode';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
+import NgopiTelecomMailModal, { formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
 export default function ContactsScreen() {
-  const { openMenu, createWarkop, editWarkop } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string }>();
+  const { openMenu, createWarkop, editWarkop, join } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string; join?: string }>();
   const [loading, setLoading] = useState(true);
   const [isHtModalVisible, setHtModalVisible] = useState(false);
+  const [isTelecomModalVisible, setTelecomModalVisible] = useState(false);
   const [currentUser, setCurrentUser] = useState('');
   const [currentUsername, setCurrentUsername] = useState('');
   const [currentBmcId, setCurrentBmcId] = useState('');
@@ -82,10 +85,13 @@ export default function ContactsScreen() {
       let user = '';
       let userId = '';
       let token = '';
-      let inviteCode = '';
-      if (Platform.OS === 'web') {
+      let inviteCode = (join || '').trim();
+      if (!inviteCode && Platform.OS === 'web' && typeof window !== 'undefined') {
         const urlParams = new URLSearchParams(window.location.search);
         inviteCode = urlParams.get('join') || '';
+      }
+      if (Platform.OS === 'web') {
+        const urlParams = new URLSearchParams(window.location.search);
         const ssoToken = urlParams.get('sso_token');
         const ssoUsername = urlParams.get('sso_username');
         const ssoUserId = urlParams.get('sso_userid');
@@ -595,7 +601,7 @@ export default function ContactsScreen() {
             <TouchableOpacity onPress={() => setDropdownVisible(!dropdownVisible)}>
               <Text style={styles.greeting}>Halo, {settings?.hide_name ? 'Anonymous' : currentUser} v</Text>
               <Text style={styles.usernameTag}>
-                @{currentUsername}{currentBmcId === '0' ? '_bmc' : currentBmcId ? `_bmc${currentBmcId}` : ''}
+                #{currentUsername?.toLowerCase() === 'warung' || currentBmcId === '1' ? '0' : currentBmcId ? String(100 + Number(currentBmcId)) : '101'} • {formatNgopiEmail(currentUsername)}
               </Text>
             </TouchableOpacity>
           </View>
@@ -632,6 +638,13 @@ export default function ContactsScreen() {
         <TouchableOpacity style={styles.gameLobbyButton} onPress={() => router.push('/(main)/games' as any)}>
           <Ionicons name="game-controller-outline" size={18} color={coffee.accent} />
           <Text style={styles.gameLobbyButtonText}>Meja Warkop 🎮</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.gameLobbyButton, { borderColor: '#3b82f6', backgroundColor: '#1e293b' }]}
+          onPress={() => setTelecomModalVisible(true)}
+        >
+          <Ionicons name="call-outline" size={18} color="#60a5fa" />
+          <Text style={[styles.gameLobbyButtonText, { color: '#60a5fa' }]}>Nomor & Email 📞</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.gameLobbyButton, { borderColor: '#D97706', backgroundColor: '#292524' }]}
@@ -751,6 +764,34 @@ export default function ContactsScreen() {
             <Text style={styles.inputLabel}>Status</Text>
             <TextInput style={styles.inputField} placeholder="e.g. Online, Busy, At Work" placeholderTextColor={coffee.muted} maxLength={120} value={editStatus} onChangeText={setEditStatus} />
 
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'rgba(59, 130, 246, 0.14)',
+                borderWidth: 1,
+                borderColor: '#3b82f6',
+                borderRadius: 12,
+                padding: 12,
+                marginBottom: 16,
+              }}
+              onPress={() => {
+                setProfileModalVisible(false);
+                setTelecomModalVisible(true);
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: '#60a5fa', fontWeight: '800', fontSize: 13 }}>
+                  📞 Nomor HP Ngopi & Email @ngopi.top
+                </Text>
+                <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: 2 }}>
+                  Nomor: #{currentUsername?.toLowerCase() === 'warung' || currentBmcId === '1' ? '0 (Founder)' : currentBmcId ? String(100 + Number(currentBmcId)) : '101'} • {formatNgopiEmail(currentUsername)}
+                </Text>
+              </View>
+              <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 12 }}>Ganti Nomor →</Text>
+            </TouchableOpacity>
+
             <Text style={styles.inputLabel}>Profile Link</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
               <TextInput
@@ -760,12 +801,19 @@ export default function ContactsScreen() {
               />
               <TouchableOpacity
                 style={{ marginLeft: 10, padding: 12, backgroundColor: coffee.border, borderRadius: 8, height: 48, justifyContent: 'center', alignItems: 'center' }}
-                onPress={() => {
-                  if (Platform.OS === 'web') {
-                    navigator.clipboard.writeText(profileLink);
-                    alert('Link profil disalin!');
-                  } else {
-                    Alert.alert('Info', 'Fitur copy tersedia di web.');
+                onPress={async () => {
+                  try {
+                    if (Platform.OS === 'web') {
+                      if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+                        await navigator.clipboard.writeText(profileLink);
+                      }
+                      alert('Link profil disalin!');
+                    } else {
+                      await Clipboard.setStringAsync(profileLink);
+                      Alert.alert('Berhasil Disalin', 'Link profil berhasil disalin ke papan klip.');
+                    }
+                  } catch (e) {
+                    Alert.alert('Link Profil', profileLink);
                   }
                 }}
               >
@@ -1061,6 +1109,14 @@ export default function ContactsScreen() {
       <HTWalkieTalkieModal
         visible={isHtModalVisible}
         onClose={() => setHtModalVisible(false)}
+      />
+      <NgopiTelecomMailModal
+        visible={isTelecomModalVisible}
+        onClose={() => setTelecomModalVisible(false)}
+        currentUserId={currentUserId}
+        currentUsername={currentUsername}
+        currentDisplayName={currentUser}
+        members={contacts}
       />
     </View>
   );

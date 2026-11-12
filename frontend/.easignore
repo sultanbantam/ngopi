@@ -1,3 +1,9 @@
+# Native build directories (force clean managed prebuild on EAS)
+android/
+android/**
+ios/
+ios/**
+
 # Dependencies
 node_modules/
 node_modules/**

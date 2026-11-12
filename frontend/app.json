@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ngopi",
     "slug": "ngopi",
-    "version": "1.0.4",
+    "version": "1.0.6",
     "scheme": "ngopi",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     },
     "android": {
       "package": "top.ngopi.app",
-      "versionCode": 5,
+      "versionCode": 7,
       "adaptiveIcon": {
         "backgroundColor": "#171411",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,7 +26,10 @@
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.VIBRATE"
       ],
       "predictiveBackGestureEnabled": false
     },

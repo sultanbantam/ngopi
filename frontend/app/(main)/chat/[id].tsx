@@ -1,6 +1,8 @@
 import { coffee } from '../../../src/theme/coffee';
 import React, { useEffect, useState, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Linking, Modal, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, KeyboardAvoidingView, Platform, Image, Linking, Modal, ScrollView, Alert, Share } from 'react-native';
+import * as Clipboard from 'expo-clipboard';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { socketService } from '../../../src/utils/socket';
 import { encryptMessage, decryptMessage } from '../../../src/utils/crypto';
@@ -124,6 +126,7 @@ const AudioMessage = ({ url }: { url: string }) => {
 };
 
 export default function ChatRoomScreen() {
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const router = useRouter();
   const rawName = Array.isArray(params.name) ? params.name[0] : params.name;
@@ -141,6 +144,7 @@ export default function ChatRoomScreen() {
 }
 
 function PrivateChatRoomScreen() {
+  const insets = useSafeAreaInsets();
   const { id: roomId, name, type } = useLocalSearchParams();
   const chatType = Array.isArray(type) ? type[0] : type;
   const isGroupChat = chatType === 'group';
@@ -231,12 +235,53 @@ function PrivateChatRoomScreen() {
   const copyInviteLink = async () => {
     const link = groupDetails?.invite_url;
     if (!link) return;
-    if (Platform.OS === 'web' && navigator?.clipboard) {
-      await navigator.clipboard.writeText(link);
-      alert('Link undangan disalin.');
-      return;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(link);
+        } else {
+          const textarea = document.createElement('textarea');
+          textarea.value = link;
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+        }
+        alert('Link undangan berhasil disalin!');
+      } else {
+        await Clipboard.setStringAsync(link);
+        Alert.alert('Berhasil Disalin', 'Link undangan warkop berhasil disalin ke papan klip. Sekarang Anda bisa langsung tempel (paste) di WhatsApp atau media sosial lainnya.');
+      }
+    } catch (error) {
+      console.warn('Gagal salin link', error);
+      Alert.alert('Link Undangan', link);
     }
-    alert(link);
+  };
+
+  const shareInviteLink = async () => {
+    const link = groupDetails?.invite_url;
+    if (!link) return;
+    const groupName = groupDetails?.group_name || 'Warkop';
+    const message = `Yuk ngopi bareng di warkop "${groupName}"!\nGabung sekarang: ${link}`;
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof navigator !== 'undefined' && navigator.share) {
+          await navigator.share({ title: groupName, text: message, url: link });
+          return;
+        }
+        if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+          await navigator.clipboard.writeText(message);
+          alert('Link dan pesan warkop berhasil disalin!');
+          return;
+        }
+      }
+      await Share.share({
+        message,
+        title: `Undangan Warkop ${groupName}`,
+      });
+    } catch (error) {
+      console.warn('Gagal membagikan link', error);
+    }
   };
 
   const regenerateInviteLink = async () => {
@@ -338,7 +383,7 @@ function PrivateChatRoomScreen() {
 
       // Fetch history
       try {
-        const token = await SecureStore.getItemAsync('token') || localStorage.getItem('token');
+        const token = await getAuthToken();
         const usersResponse = await axios.get(`https://api.ngopi.top/api/auth/users`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -999,10 +1044,19 @@ function PrivateChatRoomScreen() {
     setIsMenuVisible(false);
   };
 
-  const handleCopy = () => {
+  const handleCopy = async () => {
     if (selectedMessage && selectedMessage.type === 'text') {
-      if (Platform.OS === 'web') {
-        navigator.clipboard.writeText(selectedMessage.content || '');
+      const textToCopy = selectedMessage.content || '';
+      try {
+        if (Platform.OS === 'web') {
+          if (typeof navigator !== 'undefined' && navigator?.clipboard?.writeText) {
+            await navigator.clipboard.writeText(textToCopy);
+          }
+        } else {
+          await Clipboard.setStringAsync(textToCopy);
+        }
+      } catch (err) {
+        console.warn('Copy failed:', err);
       }
     }
     setIsMenuVisible(false);
@@ -1039,16 +1093,20 @@ function PrivateChatRoomScreen() {
     }
   };
 
-  const confirmForward = async (targetId: string) => {
+  const confirmForward = async (targetId: string, isGroupTarget?: boolean) => {
     let myId = Platform.OS === 'web' ? localStorage.getItem('userId') : await SecureStore.getItemAsync('userId');
-    const target_room_id = [myId, targetId].sort().join('-');
+    const target_room_id = isGroupTarget ? targetId : [myId, targetId].sort().join('-');
     if (selectedMessage && socketService.socket) {
       socketService.socket.emit('forward_message', {
         message_id: selectedMessage.id,
         target_room_id: target_room_id
       });
       setIsForwardModalVisible(false);
-      if (Platform.OS === 'web') alert('Pesan diteruskan');
+      if (Platform.OS === 'web') {
+        alert('Pesan diteruskan');
+      } else {
+        Alert.alert('Berhasil', 'Pesan berhasil diteruskan.');
+      }
     }
   };
 
@@ -1090,6 +1148,10 @@ function PrivateChatRoomScreen() {
     const safeFilename = filename || 'download';
 
     if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && (window as any).ReactNativeWebView) {
+        window.open(safeUrl, '_blank');
+        return;
+      }
       try {
         const response = await fetch(safeUrl);
         if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
@@ -1158,7 +1220,7 @@ function PrivateChatRoomScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* WhatsApp Custom Header */}
-      <View style={styles.customHeader}>
+      <View style={[styles.customHeader, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 12 : 12) }]}>
         {isSearchMode ? (
           <>
             <TouchableOpacity style={styles.backButton} onPress={() => { setIsSearchMode(false); setSearchQuery(''); }}>
@@ -1413,6 +1475,9 @@ function PrivateChatRoomScreen() {
                 <TouchableOpacity style={styles.groupPrimaryButton} onPress={copyInviteLink}>
                   <Text style={styles.groupButtonText}>Salin Link</Text>
                 </TouchableOpacity>
+                <TouchableOpacity style={[styles.groupPrimaryButton, { backgroundColor: coffee.buttonHover }]} onPress={shareInviteLink}>
+                  <Text style={styles.groupButtonText}>Bagikan</Text>
+                </TouchableOpacity>
                 {groupDetails?.is_admin && (
                   <TouchableOpacity style={styles.groupSecondaryButton} onPress={regenerateInviteLink}>
                     <Text style={styles.groupSecondaryButtonText}>Buat Ulang</Text>
@@ -1557,7 +1622,7 @@ function PrivateChatRoomScreen() {
               keyExtractor={item => item.id}
               contentContainerStyle={{ padding: 16 }}
               renderItem={({ item }) => (
-                <TouchableOpacity style={styles.contactItem} onPress={() => confirmForward(item.id)}>
+                <TouchableOpacity style={styles.contactItem} onPress={() => confirmForward(item.id, Boolean(item.name && !item.username))}>
                   <View style={styles.avatar}>
                     <Text style={styles.avatarText}>{(item.display_name || item.name || 'U').charAt(0)}</Text>
                   </View>

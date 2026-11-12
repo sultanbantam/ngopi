@@ -57,7 +57,7 @@ export const userIdParamsSchema = Joi.object({
 });
 
 export const inviteCodeParamsSchema = Joi.object({
-  code: Joi.string().trim().min(6).max(32).pattern(/^[A-Za-z0-9_-]+$/).required(),
+  code: Joi.string().trim().min(2).max(64).required(),
 });
 
 export const createGroupSchema = Joi.object({

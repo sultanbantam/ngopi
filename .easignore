@@ -11,6 +11,11 @@ dist/
 web-build/
 **/web-build/
 android/
+**/android/
+**/android/**
+ios/
+**/ios/
+**/ios/**
 backend/
 docs/
 

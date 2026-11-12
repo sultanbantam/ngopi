@@ -12,6 +12,7 @@
     "expo": "~57.0.31",
     "expo-asset": "~57.0.20",
     "expo-audio": "~57.0.5",
+    "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.3",
     "expo-document-picker": "~57.0.3",
     "expo-font": "~57.0.4",
@@ -27,6 +28,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
     "react-native-web": "^0.21.2",
+    "react-native-webview": "13.16.1",
     "socket.io-client": "^4.8.3",
     "tweetnacl": "^1.0.3",
     "tweetnacl-util": "^0.15.1"

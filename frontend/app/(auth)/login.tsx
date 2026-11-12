@@ -129,7 +129,7 @@ export default function LoginScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Username atau Nama Pengguna"
+          placeholder="Username, Nomor Ngopi (0 / 101+), atau Email @ngopi.top"
           placeholderTextColor={coffee.muted}
           value={username}
           onChangeText={setUsername}

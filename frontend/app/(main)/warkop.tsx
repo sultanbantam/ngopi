@@ -18,6 +18,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import {
@@ -41,6 +42,7 @@ import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan'
 import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 import LeaderboardModal from '../../src/components/LeaderboardModal';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
+import NgopiTelecomMailModal, { formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
 import CompilationAlbumModal from '../../src/components/CompilationAlbumModal';
 import CafeCheckinModal from '../../src/components/CafeCheckinModal';
 import CafePartnerModal from '../../src/components/CafePartnerModal';
@@ -98,6 +100,9 @@ interface Member {
   is_online?: boolean;
   user_status?: 'online' | 'offline';
   last_seen?: string | null;
+  bmc_id?: number;
+  ngopi_number?: string;
+  ngopi_email?: string;
 }
 
 interface ChatMessage {
@@ -256,6 +261,7 @@ function AudioMessage({ url }: { url: string }) {
 
 export default function BambupediaRoom() {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const isCompact = width < 720;
   const [members, setMembers] = useState<Member[]>([]);
@@ -266,6 +272,7 @@ export default function BambupediaRoom() {
   const [userPoints, setUserPoints] = useState<number>(0);
   const [leaderboardVisible, setLeaderboardVisible] = useState(false);
   const [htModalVisible, setHtModalVisible] = useState(false);
+  const [telecomModalVisible, setTelecomModalVisible] = useState(false);
   const [socketConnected, setSocketConnected] = useState(false);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const { album } = useLocalSearchParams<{ album?: string }>();
@@ -529,7 +536,31 @@ export default function BambupediaRoom() {
     };
   }, [appendMessage]);
 
-  const sortedMembers = members;
+  const sortedMembers = useMemo(() => {
+    const usedNums = new Set<string>();
+    return members.map((m, idx) => {
+      const uname = normalizeUsername(m.username).toLowerCase();
+      let num = m.ngopi_number || '';
+      if (!num) {
+        if (uname === 'warung' || m.bmc_id === 1) {
+          num = '0';
+        } else {
+          let candidate = m.bmc_id && m.bmc_id > 0 ? 100 + m.bmc_id : 101 + idx;
+          if (candidate < 101) candidate = 101;
+          while (usedNums.has(String(candidate))) {
+            candidate += 1;
+          }
+          num = String(candidate);
+        }
+      }
+      usedNums.add(num);
+      return {
+        ...m,
+        ngopi_number: num,
+        ngopi_email: m.ngopi_email || formatNgopiEmail(uname),
+      };
+    });
+  }, [members]);
   const onlineCount = memberSummary.online;
   const roomSummaryLabel = memberSummary.label;
   const hasDraft = inputText.trim().length > 0;
@@ -587,10 +618,10 @@ export default function BambupediaRoom() {
   }, [messages, searchQuery]);
 
   const visibleMembers = useMemo(() => {
-    const query = searchMemberQuery.trim().toLowerCase();
+    const query = searchMemberQuery.trim().toLowerCase().replace(/^#/, '');
     if (!query) return sortedMembers;
     return sortedMembers.filter((member) =>
-      `${member.display_name || ''} ${member.username || ''}`.toLowerCase().includes(query)
+      `${member.display_name || ''} ${member.username || ''} ${member.ngopi_number || ''} ${member.ngopi_email || ''}`.toLowerCase().includes(query)
     );
   }, [sortedMembers, searchMemberQuery]);
 
@@ -888,7 +919,7 @@ export default function BambupediaRoom() {
             <Text style={styles.memberName} numberOfLines={1}>{displayName}</Text>
             {isMe ? <Text style={styles.meBadge}>kamu</Text> : null}
           </View>
-          <Text style={styles.memberHandle} numberOfLines={1}>@{normalizeUsername(item.username)}</Text>
+          <Text style={styles.memberHandle} numberOfLines={1}>#{item.ngopi_number || "101"} • {item.ngopi_email || `${normalizeUsername(item.username)}@ngopi.top`}</Text>
           <Text style={[styles.presenceText, isOnline ? styles.presenceTextOnline : styles.presenceTextOffline]} numberOfLines={1}>
             {isOnline ? 'Online' : formatLastSeen(item.last_seen)}
           </Text>
@@ -976,26 +1007,51 @@ export default function BambupediaRoom() {
             </View>
           </View>
 
-          <View style={[styles.drawerSection, styles.membersSection]}>
+          <View style={styles.drawerSection}>
             <View style={styles.sectionHeaderRow}>
-              <Text style={styles.drawerSectionTitle}>DAFTAR USER/WARKOP</Text>
+              <Text style={styles.drawerSectionTitle}>CARI USER / ANGGOTA</Text>
               <Text style={styles.memberCounter}>{visibleMembers.length}</Text>
             </View>
             <View style={styles.searchBox}>
               <Ionicons name="search" size={18} color={coffee.secondary} />
-              <TextInput style={styles.searchInput} value={searchMemberQuery} onChangeText={setSearchMemberQuery} placeholder="Cari nama user..." placeholderTextColor={coffee.muted} />
+              <TextInput style={styles.searchInput} value={searchMemberQuery} onChangeText={setSearchMemberQuery} placeholder="Cari nama, nomor (0, 101...), atau @ngopi.top..." placeholderTextColor={coffee.muted} />
             </View>
-            <View style={styles.drawerMemberList}>
-              {visibleMembers.length === 0 ? (
-                <Text style={styles.emptyMembers}>{sortedMembers.length === 0 ? "Menghubungkan daftar anggota..." : "User tidak ditemukan"}</Text>
-              ) : (
-                visibleMembers.map((member) => <React.Fragment key={member.id}>{renderMember({ item: member })}</React.Fragment>)
-              )}
-            </View>
+            {searchMemberQuery.trim().length > 0 && (
+              <View style={[styles.drawerMemberList, { marginTop: 10 }]}>
+                {visibleMembers.length === 0 ? (
+                  <Text style={styles.emptyMembers}>User tidak ditemukan</Text>
+                ) : (
+                  visibleMembers.map((member) => <React.Fragment key={`search-${member.id}`}>{renderMember({ item: member })}</React.Fragment>)
+                )}
+              </View>
+            )}
           </View>
 
           <View style={styles.drawerSection}>
             <Text style={styles.drawerSectionTitle}>Menu Tambahan</Text>
+            {/* Featured Nomor HP & Email (@ngopi.top) Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: 'rgba(59, 130, 246, 0.45)', backgroundColor: 'rgba(59, 130, 246, 0.1)', marginBottom: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                setTelecomModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.22)' }]}>
+                <Ionicons name="call" size={22} color="#3b82f6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>Nomor HP & Email Ngopi</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#3b82f6' }]}>
+                    <Text style={styles.offlineBadgeText}>#0 & @NGOPI.TOP</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Dialpad telepon, klaim nomor unik (0 Founder, 1-100 VIP, 101+ bebas) & Email @ngopi.top</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
+            </TouchableOpacity>
             {/* Featured HT Radio Card */}
             <TouchableOpacity
               style={styles.featuredHtCard}
@@ -1188,6 +1244,20 @@ export default function BambupediaRoom() {
             <Text style={styles.drawerSectionTitle}>Informasi Room</Text>
             <Text style={styles.roomInfoText}>Ruang komunitas publik ekosistem WARKOP untuk santai, tebak-tebakan lucu, mendengarkan musik, dan obrolan bebas tekanan.</Text>
           </View>
+
+          <View style={[styles.drawerSection, styles.membersSection]}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.drawerSectionTitle}>DAFTAR USER/WARKOP</Text>
+              <Text style={styles.memberCounter}>{visibleMembers.length}</Text>
+            </View>
+            <View style={styles.drawerMemberList}>
+              {visibleMembers.length === 0 ? (
+                <Text style={styles.emptyMembers}>{sortedMembers.length === 0 ? "Menghubungkan daftar anggota..." : "User tidak ditemukan"}</Text>
+              ) : (
+                visibleMembers.map((member) => <React.Fragment key={member.id}>{renderMember({ item: member })}</React.Fragment>)
+              )}
+            </View>
+          </View>
           </ScrollView>
         </View>
       </View>
@@ -1196,7 +1266,7 @@ export default function BambupediaRoom() {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, width < 600 && styles.headerCompact]}>
+      <View style={[styles.header, width < 600 && styles.headerCompact, { paddingTop: Math.max(insets.top, Platform.OS === 'web' ? 8 : 12) }]}>
         <View style={styles.headerIdentity}>
           <TouchableOpacity style={styles.headerIconButton} onPress={() => (router.canGoBack() ? router.back() : setDrawerVisible(true))} accessibilityLabel="Kembali">
             <Ionicons name="arrow-back" size={22} color={coffee.text} />
@@ -1383,6 +1453,14 @@ export default function BambupediaRoom() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(59, 130, 246, 0.18)', borderColor: '#3b82f6' }]}
+              onPress={() => setTelecomModalVisible(true)}
+              accessibilityLabel="Buka Nomor HP & Email Ngopi"
+            >
+              <Text style={[styles.quickChipText, { color: '#60a5fa', fontWeight: '800' }]}>📞 Nomor & Email</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: '#d97706' }]}
               onPress={() => setAlbumModalVisible(true)}
               accessibilityLabel="Buka Album Kompilasi Mixtape"
@@ -1496,6 +1574,17 @@ export default function BambupediaRoom() {
       <HTWalkieTalkieModal
         visible={htModalVisible}
         onClose={() => setHtModalVisible(false)}
+      />
+
+      {/* Nomor HP Virtual & Email @ngopi.top Modal */}
+      <NgopiTelecomMailModal
+        visible={telecomModalVisible}
+        onClose={() => setTelecomModalVisible(false)}
+        currentUserId={currentUserId || ''}
+        currentUsername={activeUsername || ''}
+        currentDisplayName={currentMember?.display_name || activeUsername || ''}
+        userPoints={userPoints}
+        members={sortedMembers}
       />
 
       {/* Mixtape Compilation Album Modal */}

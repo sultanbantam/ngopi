@@ -6,6 +6,7 @@ import { registerSchema, loginSchema } from '../utils/validation';
 import { isPrivilegedRole, normalizeRole } from '../middleware/rbac.middleware';
 import { verifyMfaCode } from '../services/mfa.service';
 import { PointsService } from '../services/points.service';
+import { telecomService } from '../services/telecom.service';
 import {
   clearAuthCookies,
   issueTokenPair,
@@ -47,15 +48,21 @@ const buildFrontendRedirect = (pathname: string, params: Record<string, string>)
   return url.toString();
 };
 
-const serializeUser = (user: { id: string; username: string; display_name: string | null; bmc_id: number; role: string; mfa_enabled?: boolean | null }) => ({
-  id: user.id,
-  username: user.username,
-  display_name: user.display_name,
-  bmc_id: user.bmc_id,
-  role: normalizeRole(user.role),
-  mfa_enabled: Boolean(user.mfa_enabled),
-  mfa_required: isPrivilegedRole(user.role),
-});
+const serializeUser = (user: { id: string; username: string; display_name: string | null; bmc_id: number; role: string; mfa_enabled?: boolean | null }) => {
+  const ngopi_number = telecomService.getNumberForUser(user);
+  const ngopi_email = telecomService.formatEmail(user.username, user.id);
+  return {
+    id: user.id,
+    username: user.username,
+    display_name: user.display_name,
+    bmc_id: user.bmc_id,
+    ngopi_number,
+    ngopi_email,
+    role: normalizeRole(user.role),
+    mfa_enabled: Boolean(user.mfa_enabled),
+    mfa_required: isPrivilegedRole(user.role),
+  };
+};
 
 const authMetadata = (req: Request) => ({ ip: req.ip || null, userAgent: req.get('user-agent') || null });
 
@@ -81,6 +88,12 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 
     const { username, password, display_name, wallet_address, public_key, referral_code } = value;
+    if (telecomService.isEmailPrefixLocked(username)) {
+      res.status(403).json({
+        error: `Username / alamat "${String(username).toLowerCase()}@ngopi.top" dikunci khusus oleh Founder Ngopi. Silakan pilih username lain.`,
+      });
+      return;
+    }
     const existingUser = await prisma.user.findUnique({ where: { username } });
     if (existingUser) {
       res.status(409).json({ error: 'Username already taken' });
@@ -143,7 +156,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
     }
 
     const { username: rawUsername, password, mfa_code } = value;
-    const cleanUsername = String(rawUsername).trim().replace(/^@/, '');
+    const cleanUsername = String(rawUsername).trim().replace(/^@/, '').replace(/@ngopi\.top$/i, '');
 
     // Search case-insensitively by username first, then fallback to display_name
     let user = await prisma.user.findFirst({
@@ -178,6 +191,25 @@ export const login = async (req: Request, res: Response): Promise<void> => {
           mfa_secret_encrypted: true,
         },
       });
+    }
+
+    if (!user) {
+      const resolvedByTelecom = await telecomService.resolveUserByIdentifier(String(rawUsername).trim());
+      if (resolvedByTelecom) {
+        user = await prisma.user.findUnique({
+          where: { id: resolvedByTelecom.id },
+          select: {
+            id: true,
+            username: true,
+            password_hash: true,
+            display_name: true,
+            bmc_id: true,
+            role: true,
+            mfa_enabled: true,
+            mfa_secret_encrypted: true,
+          },
+        });
+      }
     }
 
     if (!user) {
@@ -270,7 +302,19 @@ export const getUsers = async (_req: Request, res: Response): Promise<void> => {
         mfa_enabled: true,
       }
     });
-    res.status(200).json(users.map((user: any) => ({ ...user, role: normalizeRole(user.role) })));
+    const dirMap = telecomService.buildDirectoryMap(users);
+    res.status(200).json(users.map((user: any) => {
+      const meta = dirMap.get(user.id) || {
+        number: telecomService.getNumberForUser(user),
+        email: telecomService.formatEmail(user.username),
+      };
+      return {
+        ...user,
+        ngopi_number: meta.number,
+        ngopi_email: meta.email,
+        role: normalizeRole(user.role),
+      };
+    }));
   } catch (err) {
     console.error('Get users error:', err);
     res.status(500).json({ error: 'Internal server error' });

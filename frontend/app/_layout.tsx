@@ -4,6 +4,7 @@ import { coffee } from '../src/theme/coffee';
 import { Stack } from 'expo-router';
 import '../src/interceptors/axios.interceptor';
 import * as serviceWorkerRegistration from '../src/serviceWorkerRegistration';
+import NgopiWebViewContainer from '../src/components/NgopiWebViewContainer';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -13,6 +14,10 @@ export default function RootLayout() {
       serviceWorkerRegistration.register();
     }
   }, []);
+
+  if (Platform.OS !== 'web') {
+    return <NgopiWebViewContainer />;
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: coffee.background } }}>

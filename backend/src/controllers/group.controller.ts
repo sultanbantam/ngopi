@@ -9,20 +9,59 @@ const normalizeMinBmcBalance = (value: unknown) => {
 
 const normalizeJoinPolicy = (value: unknown) => value === 'approval' ? 'approval' : 'open';
 const normalizeBoolean = (value: unknown, fallback: boolean) => typeof value === 'boolean' ? value : fallback;
-const createInviteCode = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
+const createRandomInviteCode = () => Math.random().toString(36).slice(2, 8) + Date.now().toString(36).slice(-4);
 
-const ensureInviteCode = async (group: { id: string; invite_code?: string | null }) => {
-  if (group.invite_code) return group.invite_code;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    const invite_code = createInviteCode();
-    try {
-      await prisma.group.update({ where: { id: group.id }, data: { invite_code } });
-      return invite_code;
-    } catch (error) {
-      if (attempt === 3) throw error;
+export const slugifyWarkopName = (name: string): string => {
+  const trimmed = (name || '').trim();
+  const slug = trimmed.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9_-]/g, '');
+  return slug || createRandomInviteCode();
+};
+
+export const createUniqueInviteCode = async (name: string, excludeGroupId?: string): Promise<string> => {
+  const baseSlug = slugifyWarkopName(name);
+  let candidate = baseSlug;
+  let counter = 1;
+
+  while (counter <= 20) {
+    const existing = await prisma.group.findFirst({
+      where: {
+        invite_code: { equals: candidate, mode: 'insensitive' },
+        ...(excludeGroupId ? { id: { not: excludeGroupId } } : {})
+      }
+    });
+    if (!existing) return candidate;
+    counter += 1;
+    candidate = `${baseSlug}-${counter}`;
+  }
+  return `${baseSlug}-${Date.now().toString(36).slice(-4)}`;
+};
+
+const ensureInviteCode = async (group: { id: string; name?: string; invite_code?: string | null }) => {
+  if (group.name) {
+    const desiredSlug = slugifyWarkopName(group.name);
+    if (!group.invite_code || !group.invite_code.toLowerCase().startsWith(desiredSlug.toLowerCase())) {
+      const isTaken = await prisma.group.findFirst({
+        where: {
+          invite_code: { equals: desiredSlug, mode: 'insensitive' },
+          id: { not: group.id }
+        }
+      });
+      if (!isTaken) {
+        try {
+          await prisma.group.update({ where: { id: group.id }, data: { invite_code: desiredSlug } });
+          return desiredSlug;
+        } catch (_) {}
+      }
     }
   }
-  return createInviteCode();
+  if (group.invite_code) return group.invite_code;
+  const invite_code = await createUniqueInviteCode(group.name || 'warkop', group.id);
+  try {
+    await prisma.group.update({ where: { id: group.id }, data: { invite_code } });
+    return invite_code;
+  } catch (error) {
+    return createRandomInviteCode();
+  }
 };
 
 const getMembership = (groupId: string, userId: string) => prisma.groupMember.findUnique({
@@ -69,7 +108,7 @@ export const createGroup = async (req: Request, res: Response): Promise<void> =>
         description: typeof description === 'string' && description.trim() ? description.trim() : null,
         avatar_url: typeof avatarUrl === 'string' && avatarUrl.trim() ? avatarUrl.trim() : null,
         min_bmc_balance: normalizeMinBmcBalance(minBmcBalance),
-        invite_code: createInviteCode(),
+        invite_code: await createUniqueInviteCode(trimmedName),
         join_policy: normalizeJoinPolicy(joinPolicy),
         only_admins_can_send: normalizeBoolean(onlyAdminsCanSend, false),
         allow_member_invites: normalizeBoolean(allowMemberInvites, true),
@@ -223,8 +262,18 @@ export const joinGroup = async (req: Request, res: Response): Promise<void> => {
 
 export const joinGroupByInvite = async (req: Request, res: Response): Promise<void> => {
   try {
-    const code = req.params.code as string;
-    const group = await prisma.group.findFirst({ where: { invite_code: code } });
+    const rawCode = (req.params.code as string || '').trim();
+    const code = decodeURIComponent(rawCode);
+    const codeWithSpaces = code.replace(/[-_]+/g, ' ');
+    const group = await prisma.group.findFirst({
+      where: {
+        OR: [
+          { invite_code: { equals: code, mode: 'insensitive' } },
+          { name: { equals: code, mode: 'insensitive' } },
+          { name: { equals: codeWithSpaces, mode: 'insensitive' } }
+        ]
+      }
+    });
     if (!group) {
       res.status(404).json({ error: 'Invite link is invalid or expired' });
       return;
@@ -391,9 +440,21 @@ export const regenerateInviteCode = async (req: Request, res: Response): Promise
       res.status(403).json({ error: 'Only group admins can regenerate invite links' });
       return;
     }
-    const invite_code = createInviteCode();
-    const group = await prisma.group.update({ where: { id: groupId }, data: { invite_code } });
-    res.status(200).json({ invite_code, invite_url: `https://ngopi.top/contacts?join=${group.invite_code}` });
+    const group = await prisma.group.findUnique({ where: { id: groupId } });
+    if (!group) {
+      res.status(404).json({ error: 'Group not found' });
+      return;
+    }
+    const baseSlug = slugifyWarkopName(group.name);
+    let invite_code = baseSlug;
+    if (group.invite_code?.toLowerCase() === baseSlug.toLowerCase()) {
+      // If it already used the clean name, create a suffixed one
+      invite_code = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    } else {
+      invite_code = await createUniqueInviteCode(group.name, group.id);
+    }
+    const updated = await prisma.group.update({ where: { id: groupId }, data: { invite_code } });
+    res.status(200).json({ invite_code: updated.invite_code, invite_url: `https://ngopi.top/contacts?join=${updated.invite_code}` });
   } catch (error) {
     console.error('Regenerate invite code error:', error);
     res.status(500).json({ error: 'Internal server error' });
