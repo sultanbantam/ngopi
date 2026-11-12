@@ -43,6 +43,74 @@ export interface PremiumTelecomConfig {
   paymentInfo?: string;
 }
 
+export interface IdentityPackageDTO {
+  code: string;
+  name: string;
+  description: string;
+  price_idr: number;
+  max_price_idr?: number;
+  category: 'number_regular' | 'email_personal' | 'bundle' | 'number_special' | 'vip_inquiry';
+  badge?: string;
+  active: boolean;
+}
+
+export type IdentityOrderStatus =
+  | 'pending_payment'
+  | 'verifying'
+  | 'paid'
+  | 'activated'
+  | 'expired'
+  | 'rejected'
+  | 'cancelled';
+
+export interface IdentityOrderDTO {
+  id: string;
+  order_code: string;
+  user_id: string;
+  username?: string;
+  package_code: string;
+  requested_number?: string | null;
+  requested_email?: string | null;
+  amount_idr: number;
+  unique_code: number;
+  total_transfer_idr: number;
+  payment_method: string;
+  payment_reference?: string | null;
+  proof_url?: string | null;
+  bank_sender_name?: string | null;
+  status: IdentityOrderStatus;
+  reserved_until: string;
+  paid_at?: string | null;
+  activated_at?: string | null;
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface VipIdentityRequestDTO {
+  id: string;
+  user_id: string;
+  username?: string;
+  requested_number?: string | null;
+  requested_email?: string | null;
+  notes: string;
+  status: 'pending' | 'reviewed' | 'approved' | 'rejected';
+  admin_note?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IdentityAuditLogDTO {
+  id: string;
+  actor_user_id: string;
+  target_user_id?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id?: string | null;
+  detail?: Record<string, unknown>;
+  created_at: string;
+}
+
 interface TelecomStoreData {
   customNumbers: Record<string, string>; // userId -> ngopi_number
   vipNumbersUnlockedByFounder: Record<string, string>; // number (1..100) -> userId
@@ -51,6 +119,10 @@ interface TelecomStoreData {
   extraLockedEmails: string[]; // additional email local-parts locked by Founder
   premiumConfig?: PremiumTelecomConfig;
   mails: NgopiMailMessage[];
+  packages?: IdentityPackageDTO[];
+  orders?: IdentityOrderDTO[];
+  vipRequests?: VipIdentityRequestDTO[];
+  auditLogs?: IdentityAuditLogDTO[];
 }
 
 const CONSONANTS = 'bcdfghjklmnpqrstvwxz';
@@ -180,6 +252,58 @@ export class TelecomService {
       '• Bank Tujuan: Bank BRI\n• Nomor Rekening: 141101000456562\n• Atas Nama: Yayasan Sabumi Nusantara Jaya\n• Konfirmasi Pembayaran: Ke Akun Founder (#0 • warung@ngopi.top) atau WhatsApp: 08174139994',
   };
   private mails: NgopiMailMessage[] = [];
+  private packages: IdentityPackageDTO[] = [
+    {
+      code: 'number_regular',
+      name: 'Nomor Pilihan Reguler (4–6 Angka)',
+      description: 'Nomor Ngopi pilihan yang mudah diingat (minimal 4–6 angka, mulai dari 101).',
+      price_idr: 35000,
+      category: 'number_regular',
+      badge: 'Populer',
+      active: true,
+    },
+    {
+      code: 'email_personal',
+      name: 'Email Pilihan Personal (@ngopi.top)',
+      description: 'Alamat email sesuai nama atau brand Anda di @ngopi.top.',
+      price_idr: 25000,
+      category: 'email_personal',
+      badge: 'Hemat',
+      active: true,
+    },
+    {
+      code: 'bundle_identity',
+      name: 'Paket Bundling Identitas (Nomor + Email)',
+      description: 'Dapatkan Nomor Pilihan Reguler + Email Pilihan @ngopi.top dalam satu paket.',
+      price_idr: 49000,
+      category: 'bundle',
+      badge: 'Terlaris',
+      active: true,
+    },
+    {
+      code: 'number_special',
+      name: 'Nomor Pilihan Spesial (3 Angka / Kembar)',
+      description: 'Nomor pilihan 3 digit (101–999) atau pola kembar eksklusif (misal 777, 8888, 9999).',
+      price_idr: 250000,
+      max_price_idr: 1000000,
+      category: 'number_special',
+      badge: 'Eksklusif',
+      active: true,
+    },
+    {
+      code: 'vip_inquiry',
+      name: 'Identitas Khusus / Brand & VIP',
+      description: 'Untuk permintaan identitas khusus atau nomor singkat 1–100, ajukan ke Tim Ngopi.',
+      price_idr: 1000000,
+      category: 'vip_inquiry',
+      badge: 'Tim Ngopi',
+      active: true,
+    },
+  ];
+  private orders: IdentityOrderDTO[] = [];
+  private vipRequests: VipIdentityRequestDTO[] = [];
+  private auditLogs: IdentityAuditLogDTO[] = [];
+  private checkoutLocks: Set<string> = new Set();
 
   private constructor() {
     const dataDir = path.join(__dirname, '../../data');
@@ -241,6 +365,18 @@ export class TelecomService {
         if (Array.isArray(parsed.mails)) {
           this.mails = parsed.mails;
         }
+        if (Array.isArray(parsed.packages) && parsed.packages.length > 0) {
+          this.packages = parsed.packages;
+        }
+        if (Array.isArray(parsed.orders)) {
+          this.orders = parsed.orders;
+        }
+        if (Array.isArray(parsed.vipRequests)) {
+          this.vipRequests = parsed.vipRequests;
+        }
+        if (Array.isArray(parsed.auditLogs)) {
+          this.auditLogs = parsed.auditLogs;
+        }
       }
     } catch (err) {
       console.warn('[TelecomService] Failed to load store from disk:', err);
@@ -257,6 +393,10 @@ export class TelecomService {
         extraLockedEmails: Array.from(this.extraLockedEmails.values()),
         premiumConfig: this.premiumConfig,
         mails: this.mails.slice(0, 5000),
+        packages: this.packages,
+        orders: this.orders.slice(0, 5000),
+        vipRequests: this.vipRequests.slice(0, 2000),
+        auditLogs: this.auditLogs.slice(0, 5000),
       };
       fs.writeFileSync(this.dataFilePath, JSON.stringify(payload, null, 2), 'utf8');
     } catch (err) {
@@ -341,9 +481,9 @@ export class TelecomService {
 
   /**
    * Compute a user's active Ngopi Number:
-   * - Founder gets "0"
+   * - Founder (@ngopi / bmc_id === 1) gets "0" exclusively
    * - Paid/VIP custom number if claimed/assigned
-   * - Otherwise deterministic 10-digit random-looking hard-to-memorize number (e.g. 7492638517)
+   * - Otherwise deterministic 10-digit automatic number
    */
   public getNumberForUser(
     user: { id: string; username?: string | null; role?: string | null; bmc_id?: number | null }
@@ -354,11 +494,19 @@ export class TelecomService {
     }
 
     const uname = String(user.username || '').trim().toLowerCase();
-    if (uname === 'warung' || uname === 'founder' || uname === 'ngopi' || user.bmc_id === 1) {
+    if (uname === 'ngopi' || uname === 'founder' || user.bmc_id === 1) {
       return '0';
+    }
+    if (uname === 'warung') {
+      return '100';
     }
 
     return generateUglyDefaultNumber(uname || user.id);
+  }
+
+  private isPrimaryFounderAccount(u: { username?: string | null; bmc_id?: number | null }): boolean {
+    const uname = String(u.username || '').trim().toLowerCase();
+    return uname === 'ngopi' || uname === 'founder' || u.bmc_id === 1;
   }
 
   public buildDirectoryMap(
@@ -367,32 +515,45 @@ export class TelecomService {
     const result = new Map<string, { number: string; email: string }>();
     const usedNumbers = new Set<string>();
 
-    // First pass: custom numbers & Founder "0"
+    // Determine primary Founder (#0) first so @ngopi / bmc_id === 1 exclusively owns #0
+    const primaryFounder = users.find((u) => this.isPrimaryFounderAccount(u));
+    if (primaryFounder) {
+      const custom = this.customNumbers.get(primaryFounder.id);
+      const customEmail = this.customEmails.get(primaryFounder.id);
+      const num = custom || '0';
+      const email = customEmail ? `${customEmail}@ngopi.top` : 'warung@ngopi.top';
+      usedNumbers.add(num);
+      result.set(primaryFounder.id, { number: num, email });
+    }
+
+    // Next pass: custom numbers & legacy 'warung' account (gets '100' if #0 is already held by @ngopi)
     for (const u of users) {
+      if (result.has(u.id)) continue;
       const custom = this.customNumbers.get(u.id);
       const email = this.formatEmail(u.username, u.id);
       const unameLower = u.username.trim().toLowerCase();
       if (custom) {
         usedNumbers.add(custom);
         result.set(u.id, { number: custom, email });
-      } else if (unameLower === 'warung' || unameLower === 'founder' || unameLower === 'ngopi' || u.bmc_id === 1) {
-        usedNumbers.add('0');
-        result.set(u.id, { number: '0', email: 'warung@ngopi.top' });
+      } else if (unameLower === 'warung') {
+        const warungNum = usedNumbers.has('0') ? '100' : '0';
+        usedNumbers.add(warungNum);
+        result.set(u.id, { number: warungNum, email: this.customEmails.get(u.id) ? `${this.customEmails.get(u.id)}@ngopi.top` : 'warung-ops@ngopi.top' });
       }
     }
 
-    // Second pass: deterministic ugly 10-digit random number & consonant-only email for everyone else
+    // Final pass: deterministic automatic 10-digit number & automatic email for everyone else
     for (const u of users) {
       if (result.has(u.id)) continue;
-      let uglyNum = generateUglyDefaultNumber(u.username || u.id);
+      let autoNum = generateUglyDefaultNumber(u.username || u.id);
       let salt = 1;
-      while (usedNumbers.has(uglyNum)) {
-        uglyNum = generateUglyDefaultNumber(`${u.username}_${salt}`);
+      while (usedNumbers.has(autoNum)) {
+        autoNum = generateUglyDefaultNumber(`${u.username}_${salt}`);
         salt += 1;
       }
-      usedNumbers.add(uglyNum);
+      usedNumbers.add(autoNum);
       result.set(u.id, {
-        number: uglyNum,
+        number: autoNum,
         email: this.formatEmail(u.username, u.id),
       });
     }
@@ -433,7 +594,7 @@ export class TelecomService {
         available: false,
         normalized,
         lockedVip: true,
-        reason: 'Nomor 0 adalah nomor eksklusif Founder Ngopi.',
+        reason: 'Nomor 0 dialokasikan untuk operasional resmi Ngopi.',
       };
     }
 
@@ -445,9 +606,20 @@ export class TelecomService {
           normalized,
           lockedVip: true,
           suggestedPriceIdr: this.premiumConfig.vipNumberPriceIdr,
-          reason: `🔒 Nomor ${normalized} adalah Nomor Sultan VIP (1–100) yang dikunci oleh Founder (Harga: Nego Langsung dengan Founder #0 / warung@ngopi.top).`,
+          reason: `Nomor ${normalized} dialokasikan untuk kebutuhan resmi Ngopi. Untuk permintaan identitas khusus, hubungi Tim Ngopi.`,
         };
       }
+    }
+
+    // Check active non-expired reservations
+    const activeReservation = this.findActiveOrderReservation('number', normalized, requestingUser.id);
+    if (activeReservation) {
+      return {
+        available: false,
+        normalized,
+        lockedVip: false,
+        reason: `Nomor Pilihan ${normalized} sedang dalam proses reservasi oleh pengguna lain.`,
+      };
     }
 
     const allUsers = await prisma.user.findMany({
@@ -459,13 +631,13 @@ export class TelecomService {
       const entry = dir.get(u.id);
       if (entry && entry.number === normalized) {
         if (u.id === requestingUser.id) {
-          return { available: true, normalized, lockedVip: false, reason: 'Ini adalah nomor aktif Anda saat ini.' };
+          return { available: true, normalized, lockedVip: false, reason: 'Ini adalah Nomor Ngopi aktif Anda saat ini.' };
         }
         return {
           available: false,
           normalized,
           lockedVip: false,
-          reason: `Nomor ${normalized} sudah dipakai oleh @${u.username}.`,
+          reason: `Nomor ${normalized} sudah digunakan oleh @${u.username}.`,
           ownerUsername: u.username,
         };
       }
@@ -490,7 +662,7 @@ export class TelecomService {
     if (this.premiumConfig.requirePaymentForCustomNumber && !isFounder) {
       return {
         success: false,
-        error: `Fitur Ganti Nomor Cantik adalah FITUR PREMIUM BERBAYAR (Mulai Rp ${this.premiumConfig.customNumberRegularPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Nomor + Email Cantik Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}). Silakan hubungi Founder (#0 / warung@ngopi.top) untuk aktivasi!`,
+        error: `Nomor Pilihan tersedia melalui paket upgrade mulai Rp ${this.premiumConfig.customNumberRegularPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Identitas Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}. Silakan buat pesanan pada tab Identitas Ngopi.`,
       };
     }
 
@@ -533,7 +705,18 @@ export class TelecomService {
         normalizedEmail,
         prefix: cleanPrefix,
         lockedVip: true,
-        reason: `🔒 Alamat "${normalizedEmail}" dikunci secara eksklusif oleh Founder Ngopi.`,
+        reason: `Alamat "${normalizedEmail}" dialokasikan untuk operasional resmi Ngopi. Untuk permintaan identitas khusus, hubungi Tim Ngopi.`,
+      };
+    }
+
+    const activeReservation = this.findActiveOrderReservation('email', cleanPrefix, requestingUser.id);
+    if (activeReservation) {
+      return {
+        available: false,
+        normalizedEmail,
+        prefix: cleanPrefix,
+        lockedVip: false,
+        reason: `Alamat ${normalizedEmail} sedang dalam proses reservasi oleh pengguna lain.`,
       };
     }
 
@@ -551,7 +734,7 @@ export class TelecomService {
           normalizedEmail,
           prefix: cleanPrefix,
           lockedVip: false,
-          reason: `❌ Alamat ${normalizedEmail} sudah dimiliki oleh @${u.username}.`,
+          reason: `Alamat ${normalizedEmail} sudah digunakan oleh @${u.username}.`,
         };
       }
     }
@@ -562,7 +745,7 @@ export class TelecomService {
       prefix: cleanPrefix,
       lockedVip: false,
       suggestedPriceIdr: this.premiumConfig.customEmailPriceIdr,
-      reason: `✅ Alamat ${normalizedEmail} tersedia! (Biaya Aktivasi Email Cantik: Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')})`,
+      reason: `Alamat ${normalizedEmail} tersedia (Biaya Aktivasi Email Pilihan: Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')}).`,
     };
   }
 
@@ -574,7 +757,7 @@ export class TelecomService {
     if (this.premiumConfig.requirePaymentForCustomEmail && !isFounder) {
       return {
         success: false,
-        error: `Fitur Ganti Email Cantik @ngopi.top adalah FITUR PREMIUM BERBAYAR (Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Nomor + Email Cantik Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}). Silakan hubungi Founder (#0) untuk aktivasi!`,
+        error: `Email Pilihan @ngopi.top tersedia melalui paket upgrade Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Identitas Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}. Silakan buat pesanan pada tab Identitas Ngopi.`,
       };
     }
 
@@ -881,6 +1064,668 @@ export class TelecomService {
     this.mails.splice(idx, 1);
     this.saveToDisk();
     return true;
+  }
+
+  // =========================================================================
+  // IDENTITAS NGOPI: PACKAGES, RESERVATIONS, ORDERS, WEBHOOKS & AUDIT LOGS
+  // =========================================================================
+
+  private appendAuditLog(
+    actorUserId: string,
+    action: string,
+    entityType: string,
+    entityId?: string,
+    targetUserId?: string,
+    detail?: Record<string, unknown>
+  ): void {
+    const entry: IdentityAuditLogDTO = {
+      id: `audit-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      actor_user_id: actorUserId,
+      target_user_id: targetUserId || null,
+      action,
+      entity_type: entityType,
+      entity_id: entityId || null,
+      detail,
+      created_at: new Date().toISOString(),
+    };
+    this.auditLogs.unshift(entry);
+    // Best-effort persist to Prisma if table exists (non-blocking)
+    try {
+      const p: any = prisma as any;
+      if (p.identityAuditLog?.create) {
+        p.identityAuditLog
+          .create({
+            data: {
+              actor_id: actorUserId,
+              target_user_id: targetUserId || null,
+              action,
+              identity_type: entityType,
+              identity_value: entityId || null,
+              metadata: (detail || {}) as any,
+            },
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore if DB not migrated yet
+    }
+  }
+
+  public expireStaleReservations(): number {
+    const now = Date.now();
+    let expiredCount = 0;
+    for (const order of this.orders) {
+      if (order.status === 'pending_payment' && new Date(order.reserved_until).getTime() <= now) {
+        order.status = 'expired';
+        order.updated_at = new Date().toISOString();
+        expiredCount += 1;
+        this.appendAuditLog('system', 'RESERVATION_EXPIRED', 'IdentityOrder', order.id, order.user_id, {
+          order_code: order.order_code,
+          requested_number: order.requested_number,
+          requested_email: order.requested_email,
+        });
+      }
+    }
+    if (expiredCount > 0) {
+      this.saveToDisk();
+    }
+    return expiredCount;
+  }
+
+  private findActiveOrderReservation(
+    kind: 'number' | 'email',
+    value: string,
+    excludeUserId?: string
+  ): IdentityOrderDTO | undefined {
+    this.expireStaleReservations();
+    const clean = value.trim().toLowerCase();
+    return this.orders.find((o) => {
+      if (o.status !== 'pending_payment' && o.status !== 'verifying' && o.status !== 'paid') return false;
+      if (excludeUserId && o.user_id === excludeUserId) return false;
+      if (kind === 'number') return String(o.requested_number || '').trim() === clean;
+      return String(o.requested_email || '').replace(/@ngopi\.top$/i, '').trim().toLowerCase() === clean;
+    });
+  }
+
+  public getPackages(): IdentityPackageDTO[] {
+    return this.packages.map((p) => {
+      if (p.code === 'number_regular') return { ...p, price_idr: this.premiumConfig.customNumberRegularPriceIdr };
+      if (p.code === 'email_personal') return { ...p, price_idr: this.premiumConfig.customEmailPriceIdr };
+      if (p.code === 'bundle_identity') return { ...p, price_idr: this.premiumConfig.bundleNumberAndEmailPriceIdr };
+      if (p.code === 'number_special') {
+        return {
+          ...p,
+          price_idr: this.premiumConfig.customNumberSpecialPriceIdr,
+          max_price_idr: this.premiumConfig.vipNumberPriceIdr,
+        };
+      }
+      return { ...p };
+    });
+  }
+
+  public updatePackageByAdmin(
+    adminUser: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    code: string,
+    patch: Partial<Pick<IdentityPackageDTO, 'name' | 'description' | 'price_idr' | 'max_price_idr' | 'active'>>
+  ): { success: boolean; package?: IdentityPackageDTO; error?: string } {
+    if (!this.isFounderUser(adminUser)) {
+      return { success: false, error: 'Hanya tim admin/founder Ngopi yang dapat mengubah paket.' };
+    }
+    const pkg = this.packages.find((p) => p.code === code);
+    if (!pkg) {
+      return { success: false, error: `Paket "${code}" tidak ditemukan.` };
+    }
+    if (typeof patch.name === 'string' && patch.name.trim()) pkg.name = patch.name.trim();
+    if (typeof patch.description === 'string' && patch.description.trim()) pkg.description = patch.description.trim();
+    if (typeof patch.price_idr === 'number' && patch.price_idr >= 0) {
+      pkg.price_idr = Math.round(patch.price_idr);
+      if (code === 'number_regular') this.premiumConfig.customNumberRegularPriceIdr = pkg.price_idr;
+      if (code === 'email_personal') this.premiumConfig.customEmailPriceIdr = pkg.price_idr;
+      if (code === 'bundle_identity') this.premiumConfig.bundleNumberAndEmailPriceIdr = pkg.price_idr;
+      if (code === 'number_special') this.premiumConfig.customNumberSpecialPriceIdr = pkg.price_idr;
+    }
+    if (typeof patch.max_price_idr === 'number' && patch.max_price_idr >= pkg.price_idr) {
+      pkg.max_price_idr = Math.round(patch.max_price_idr);
+    }
+    if (typeof patch.active === 'boolean') pkg.active = patch.active;
+
+    this.appendAuditLog(adminUser.id, 'PACKAGE_UPDATED', 'IdentityPackage', code, undefined, { patch });
+    this.saveToDisk();
+    return { success: true, package: pkg };
+  }
+
+  public async getAvailableRecommendations(
+    requestingUser: { id: string; username: string; role?: string | null; bmc_id?: number | null }
+  ): Promise<{
+    regular_numbers: Array<{ value: string; price_idr: number }>;
+    special_numbers: Array<{ value: string; price_idr: number }>;
+    emails: Array<{ value: string; price_idr: number }>;
+  }> {
+    this.expireStaleReservations();
+    const regularCandidates = ['101', '108', '1111', '1234', '1945', '2025', '2026', '2407', '7007', '8080', '8899', '9090', '2000', '4545'];
+    const specialCandidates = ['111', '222', '333', '555', '777', '888', '999', '7777', '8888', '9999', '123', '321', '789'];
+    const cleanUname = String(requestingUser.username || 'kopi').toLowerCase().replace(/[^a-z0-9._-]/g, '');
+    const emailCandidates = [
+      cleanUname,
+      `${cleanUname}.id`,
+      `kopi.${cleanUname}`,
+      `${cleanUname}99`,
+      'barista.id',
+      'penikmatkopi',
+      'sahabatngopi',
+      'juragankopi',
+    ].filter((v, idx, arr) => v.length >= 2 && arr.indexOf(v) === idx);
+
+    const regular_numbers: Array<{ value: string; price_idr: number }> = [];
+    for (const num of regularCandidates) {
+      if (num.length < 4) continue;
+      const chk = await this.checkNumberAvailability(num, requestingUser);
+      if (chk.available) {
+        regular_numbers.push({ value: chk.normalized, price_idr: this.premiumConfig.customNumberRegularPriceIdr });
+      }
+      if (regular_numbers.length >= 6) break;
+    }
+
+    const special_numbers: Array<{ value: string; price_idr: number }> = [];
+    for (const num of specialCandidates) {
+      const chk = await this.checkNumberAvailability(num, requestingUser);
+      if (chk.available) {
+        special_numbers.push({ value: chk.normalized, price_idr: this.computeSpecialNumberPrice(chk.normalized) });
+      }
+      if (special_numbers.length >= 6) break;
+    }
+
+    const emails: Array<{ value: string; price_idr: number }> = [];
+    for (const pref of emailCandidates) {
+      const chk = await this.checkEmailAvailability(pref, requestingUser);
+      if (chk.available) {
+        emails.push({ value: chk.normalizedEmail, price_idr: this.premiumConfig.customEmailPriceIdr });
+      }
+      if (emails.length >= 4) break;
+    }
+
+    return { regular_numbers, special_numbers, emails };
+  }
+
+  public computeSpecialNumberPrice(normalized: string): number {
+    if (/^(\d)\1+$/.test(normalized)) {
+      if (normalized.length === 3) return 1000000;
+      return 500000;
+    }
+    if (normalized.length === 3) {
+      return Math.max(250000, this.premiumConfig.customNumberSpecialPriceIdr);
+    }
+    return this.premiumConfig.customNumberRegularPriceIdr;
+  }
+
+  public async createOrderCheckout(
+    user: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    input: {
+      package_code: string;
+      requested_number?: string;
+      requested_email?: string;
+      payment_method?: string;
+    }
+  ): Promise<{ success: boolean; order?: IdentityOrderDTO; error?: string; statusCode?: number }> {
+    this.expireStaleReservations();
+    const pkg = this.getPackages().find((p) => p.code === input.package_code && p.active);
+    if (!pkg) {
+      return { success: false, error: 'Paket Identitas Ngopi tidak ditemukan atau sedang nonaktif.', statusCode: 400 };
+    }
+    if (pkg.code === 'vip_inquiry') {
+      return {
+        success: false,
+        error: 'Untuk permintaan identitas khusus (1–100 / brand resmi), silakan kirim permintaan ke Tim Ngopi melalui form permintaan khusus.',
+        statusCode: 400,
+      };
+    }
+
+    let normalizedNumber: string | null = null;
+    let normalizedEmail: string | null = null;
+    let serverAmountIdr = pkg.price_idr;
+
+    const needsNumber = pkg.code === 'number_regular' || pkg.code === 'number_special' || pkg.code === 'bundle_identity';
+    const needsEmail = pkg.code === 'email_personal' || pkg.code === 'bundle_identity';
+
+    if (needsNumber) {
+      const rawNum = String(input.requested_number || '').trim();
+      if (!rawNum) {
+        return { success: false, error: 'Nomor Pilihan wajib diisi untuk paket ini.', statusCode: 400 };
+      }
+      const numCheck = await this.checkNumberAvailability(rawNum, user);
+      if (!numCheck.available) {
+        return { success: false, error: numCheck.reason || 'Nomor Pilihan tidak tersedia.', statusCode: 409 };
+      }
+      const nVal = Number(numCheck.normalized);
+      if (nVal >= 0 && nVal <= 100 && !this.isFounderUser(user)) {
+        return {
+          success: false,
+          error: 'Nomor 1–100 dialokasikan untuk kebutuhan resmi Ngopi. Untuk permintaan identitas khusus, hubungi Tim Ngopi.',
+          statusCode: 403,
+        };
+      }
+      if (pkg.code === 'number_regular') {
+        if (numCheck.normalized.length < 4 || numCheck.normalized.length > 6) {
+          return {
+            success: false,
+            error: 'Paket Nomor Pilihan Reguler berlaku untuk nomor 4–6 angka (minimal 1010). Untuk 3 angka/kembar, pilih Paket Spesial.',
+            statusCode: 400,
+          };
+        }
+        serverAmountIdr = this.premiumConfig.customNumberRegularPriceIdr;
+      } else if (pkg.code === 'number_special') {
+        const isTwin = /^(\d)\1+$/.test(numCheck.normalized);
+        if (numCheck.normalized.length !== 3 && !isTwin) {
+          return {
+            success: false,
+            error: 'Paket Nomor Pilihan Spesial khusus untuk 3 angka (101–999) atau angka kembar (misal 777, 8888).',
+            statusCode: 400,
+          };
+        }
+        serverAmountIdr = this.computeSpecialNumberPrice(numCheck.normalized);
+      }
+      normalizedNumber = numCheck.normalized;
+    }
+
+    if (needsEmail) {
+      const rawEmail = String(input.requested_email || '').trim();
+      if (!rawEmail) {
+        return { success: false, error: 'Alamat Email Pilihan @ngopi.top wajib diisi untuk paket ini.', statusCode: 400 };
+      }
+      const emailCheck = await this.checkEmailAvailability(rawEmail, user);
+      if (!emailCheck.available) {
+        return { success: false, error: emailCheck.reason || 'Alamat email tidak tersedia.', statusCode: 409 };
+      }
+      normalizedEmail = emailCheck.normalizedEmail;
+    }
+
+    if (pkg.code === 'bundle_identity') {
+      serverAmountIdr = this.premiumConfig.bundleNumberAndEmailPriceIdr;
+    }
+
+    // Concurrency guard for requested number/email lock
+    const lockKeys: string[] = [];
+    if (normalizedNumber) lockKeys.push(`num:${normalizedNumber}`);
+    if (normalizedEmail) lockKeys.push(`email:${normalizedEmail.toLowerCase()}`);
+
+    for (const k of lockKeys) {
+      if (this.checkoutLocks.has(k)) {
+        return { success: false, error: 'Identitas sedang diproses oleh transaksi lain. Silakan coba sesaat lagi.', statusCode: 409 };
+      }
+    }
+
+    lockKeys.forEach((k) => this.checkoutLocks.add(k));
+    try {
+      // Double-check reservation inside lock
+      if (normalizedNumber && this.findActiveOrderReservation('number', normalizedNumber, user.id)) {
+        return { success: false, error: `Nomor Pilihan ${normalizedNumber} sedang direservasi oleh pengguna lain.`, statusCode: 409 };
+      }
+      if (normalizedEmail && this.findActiveOrderReservation('email', normalizedEmail, user.id)) {
+        return { success: false, error: `Alamat ${normalizedEmail} sedang direservasi oleh pengguna lain.`, statusCode: 409 };
+      }
+
+      const uniqueCode = 101 + (crypto.randomBytes(2).readUInt16BE(0) % 898); // 101..998
+      const now = new Date();
+      const reservedUntil = new Date(now.getTime() + 30 * 60 * 1000); // 30 minutes TTL
+      const orderCode = `NGOPI-${now.toISOString().slice(2, 10).replace(/-/g, '')}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+
+      const order: IdentityOrderDTO = {
+        id: `ord-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`,
+        order_code: orderCode,
+        user_id: user.id,
+        username: user.username,
+        package_code: pkg.code,
+        requested_number: normalizedNumber,
+        requested_email: normalizedEmail,
+        amount_idr: serverAmountIdr,
+        unique_code: uniqueCode,
+        total_transfer_idr: serverAmountIdr + uniqueCode,
+        payment_method: String(input.payment_method || 'bank_bri_transfer'),
+        status: 'pending_payment',
+        reserved_until: reservedUntil.toISOString(),
+        created_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      };
+
+      this.orders.unshift(order);
+      this.appendAuditLog(user.id, 'ORDER_CREATED', 'IdentityOrder', order.id, user.id, {
+        order_code: order.order_code,
+        package_code: order.package_code,
+        requested_number: normalizedNumber,
+        requested_email: normalizedEmail,
+        total_transfer_idr: order.total_transfer_idr,
+      });
+      this.saveToDisk();
+
+      return { success: true, order };
+    } finally {
+      lockKeys.forEach((k) => this.checkoutLocks.delete(k));
+    }
+  }
+
+  private async verifyBankMutationAdapter(
+    order: IdentityOrderDTO,
+    paymentReference?: string
+  ): Promise<{ verified: boolean; provider: string; reason?: string }> {
+    const mutationApiUrl = process.env.BRI_MUTATION_API_URL;
+    const mutationApiKey = process.env.BRI_MUTATION_API_KEY;
+    if (!mutationApiUrl || !mutationApiKey) {
+      return {
+        verified: false,
+        provider: 'manual_admin_queue',
+        reason: 'Menunggu verifikasi mutasi Bank BRI oleh Tim Ngopi (webhook mutasi bank otomatis belum dikonfigurasi).',
+      };
+    }
+
+    try {
+      const resp = await fetch(mutationApiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${mutationApiKey}`,
+        },
+        body: JSON.stringify({
+          order_code: order.order_code,
+          expected_amount_idr: order.total_transfer_idr,
+          account_number: '141101000456562',
+          payment_reference: paymentReference || order.payment_reference || null,
+        }),
+      });
+      if (!resp.ok) {
+        return { verified: false, provider: 'bri_mutation_api', reason: 'Mutasi belum ditemukan pada API Bank.' };
+      }
+      const data: any = await resp.json();
+      if (data && data.matched === true && Number(data.amount_idr) === order.total_transfer_idr) {
+        return { verified: true, provider: 'bri_mutation_api' };
+      }
+      return { verified: false, provider: 'bri_mutation_api', reason: 'Nominal atau referensi belum cocok di mutasi rekening.' };
+    } catch {
+      return { verified: false, provider: 'bri_mutation_api', reason: 'Gagal menghubungi layanan mutasi bank; dialihkan ke antrean verifikasi Tim Ngopi.' };
+    }
+  }
+
+  private async activateOrderIdentityAtomically(
+    order: IdentityOrderDTO,
+    actorId: string,
+    source: string
+  ): Promise<{ success: boolean; order?: IdentityOrderDTO; error?: string }> {
+    if (order.status === 'activated') {
+      return { success: true, order };
+    }
+    if (order.status === 'expired' || order.status === 'cancelled' || order.status === 'rejected') {
+      return { success: false, error: `Pesanan berstatus ${order.status} tidak dapat diaktivasi.` };
+    }
+
+    // Re-verify BOTH number and email for all-or-nothing bundling consistency before mutating state
+    const targetUser = { id: order.user_id, username: order.username || 'user', role: 'user', bmc_id: null };
+    if (order.requested_number) {
+      const numCheck = await this.checkNumberAvailability(order.requested_number, targetUser);
+      if (!numCheck.available) {
+        return { success: false, error: numCheck.reason || 'Nomor Pilihan sudah terpakai.' };
+      }
+    }
+    if (order.requested_email) {
+      const emailCheck = await this.checkEmailAvailability(order.requested_email, targetUser);
+      if (!emailCheck.available) {
+        return { success: false, error: emailCheck.reason || 'Email Pilihan sudah terpakai.' };
+      }
+    }
+
+    // Commit both atomically
+    if (order.requested_number) {
+      this.customNumbers.set(order.user_id, order.requested_number);
+    }
+    if (order.requested_email) {
+      const prefix = order.requested_email.replace(/@ngopi\.top$/i, '').toLowerCase();
+      this.customEmails.set(order.user_id, prefix);
+    }
+
+    const nowIso = new Date().toISOString();
+    order.status = 'activated';
+    order.paid_at = order.paid_at || nowIso;
+    order.activated_at = nowIso;
+    order.updated_at = nowIso;
+
+    this.appendAuditLog(actorId, 'ORDER_ACTIVATED', 'IdentityOrder', order.id, order.user_id, {
+      source,
+      order_code: order.order_code,
+      activated_number: order.requested_number,
+      activated_email: order.requested_email,
+    });
+    this.saveToDisk();
+
+    return { success: true, order };
+  }
+
+  public async submitOrderProof(
+    user: { id: string; username: string },
+    orderId: string,
+    input: { proof_url?: string; payment_reference?: string; bank_sender_name?: string }
+  ): Promise<{ success: boolean; order?: IdentityOrderDTO; autoActivated?: boolean; message?: string; error?: string }> {
+    this.expireStaleReservations();
+    const order = this.orders.find((o) => (o.id === orderId || o.order_code === orderId) && o.user_id === user.id);
+    if (!order) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+    if (order.status === 'activated') {
+      return { success: true, order, autoActivated: true, message: 'Pesanan sudah aktif sebelumnya.' };
+    }
+    if (order.status === 'expired' || order.status === 'cancelled' || order.status === 'rejected') {
+      return { success: false, error: `Pesanan berstatus "${order.status}". Silakan buat pesanan baru.` };
+    }
+
+    const cleanProof = String(input.proof_url || '').trim();
+    const cleanRef = String(input.payment_reference || '').trim();
+    if (!cleanProof && !cleanRef) {
+      return { success: false, error: 'Lampirkan URL/foto bukti transfer atau nomor referensi transfer.' };
+    }
+
+    order.proof_url = cleanProof || order.proof_url || null;
+    order.payment_reference = cleanRef || order.payment_reference || null;
+    order.bank_sender_name = String(input.bank_sender_name || '').trim() || order.bank_sender_name || null;
+    order.status = 'verifying';
+    order.updated_at = new Date().toISOString();
+
+    this.appendAuditLog(user.id, 'PROOF_SUBMITTED', 'IdentityOrder', order.id, user.id, {
+      order_code: order.order_code,
+      has_proof_url: Boolean(cleanProof),
+      payment_reference: cleanRef,
+    });
+
+    // Only auto-activate if a real bank mutation verification provider confirms it!
+    const mutationCheck = await this.verifyBankMutationAdapter(order, cleanRef);
+    if (mutationCheck.verified) {
+      const activated = await this.activateOrderIdentityAtomically(order, 'system-bank-mutation', mutationCheck.provider);
+      if (activated.success) {
+        return {
+          success: true,
+          order: activated.order,
+          autoActivated: true,
+          message: 'Pembayaran terverifikasi otomatis melalui mutasi bank dan Identitas Ngopi Anda telah aktif!',
+        };
+      }
+    }
+
+    this.saveToDisk();
+    return {
+      success: true,
+      order,
+      autoActivated: false,
+      message:
+        mutationCheck.reason ||
+        'Bukti transfer diterima dan berstatus Menunggu Verifikasi Tim Ngopi (maksimal 1x24 jam). Anda juga dapat konfirmasi ke WA 08174139994.',
+    };
+  }
+
+  public verifyWebhookSignature(rawPayload: string, signatureHeader?: string): boolean {
+    const secret = process.env.PAYMENT_WEBHOOK_SECRET || process.env.JWT_SECRET || '';
+    if (!secret || !signatureHeader) return false;
+    const expected = crypto.createHmac('sha256', secret).update(rawPayload).digest('hex');
+    const provided = signatureHeader.replace(/^sha256=/i, '').trim();
+    if (expected.length !== provided.length) return false;
+    try {
+      return crypto.timingSafeEqual(Buffer.from(expected, 'utf8'), Buffer.from(provided, 'utf8'));
+    } catch {
+      return false;
+    }
+  }
+
+  public async processPaymentWebhook(
+    payload: { order_code?: string; order_id?: string; status?: string; amount_idr?: number; payment_reference?: string },
+    rawBody: string,
+    signatureHeader?: string
+  ): Promise<{ success: boolean; alreadyActivated?: boolean; order?: IdentityOrderDTO; error?: string; statusCode?: number }> {
+    if (!this.verifyWebhookSignature(rawBody, signatureHeader)) {
+      return { success: false, error: 'Invalid webhook signature', statusCode: 401 };
+    }
+
+    const order = this.orders.find(
+      (o) =>
+        (payload.order_id && o.id === payload.order_id) ||
+        (payload.order_code && o.order_code === payload.order_code)
+    );
+    if (!order) {
+      return { success: false, error: 'Order not found', statusCode: 404 };
+    }
+
+    if (order.status === 'activated') {
+      return { success: true, alreadyActivated: true, order };
+    }
+
+    const paidStatus = String(payload.status || '').toLowerCase();
+    if (paidStatus !== 'paid' && paidStatus !== 'settlement' && paidStatus !== 'success') {
+      return { success: false, error: `Unsupported webhook payment status: ${paidStatus}`, statusCode: 400 };
+    }
+
+    if (
+      typeof payload.amount_idr === 'number' &&
+      payload.amount_idr < order.amount_idr
+    ) {
+      return { success: false, error: 'Paid amount is less than order price', statusCode: 400 };
+    }
+
+    if (payload.payment_reference) {
+      order.payment_reference = payload.payment_reference;
+    }
+    order.status = 'paid';
+    order.paid_at = new Date().toISOString();
+
+    const activated = await this.activateOrderIdentityAtomically(order, 'payment-webhook', 'webhook_hmac');
+    if (!activated.success) {
+      return { success: false, error: activated.error, statusCode: 409 };
+    }
+    return { success: true, alreadyActivated: false, order: activated.order };
+  }
+
+  public async approveOrderByAdmin(
+    adminUser: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    orderId: string,
+    action: 'approve' | 'reject',
+    adminNote?: string
+  ): Promise<{ success: boolean; order?: IdentityOrderDTO; error?: string }> {
+    if (!this.isFounderUser(adminUser)) {
+      return { success: false, error: 'Hanya Tim Ngopi / Founder yang berwenang memverifikasi pesanan.' };
+    }
+    const order = this.orders.find((o) => o.id === orderId || o.order_code === orderId);
+    if (!order) {
+      return { success: false, error: 'Pesanan tidak ditemukan.' };
+    }
+
+    if (action === 'reject') {
+      if (order.status === 'activated') {
+        return { success: false, error: 'Pesanan sudah aktif.' };
+      }
+      order.status = 'rejected';
+      order.admin_note = adminNote || 'Pembayaran belum terverifikasi.';
+      order.updated_at = new Date().toISOString();
+      this.appendAuditLog(adminUser.id, 'ORDER_REJECTED', 'IdentityOrder', order.id, order.user_id, {
+        order_code: order.order_code,
+        admin_note: order.admin_note,
+      });
+      this.saveToDisk();
+      return { success: true, order };
+    }
+
+    order.admin_note = adminNote || 'Diverifikasi oleh Tim Ngopi.';
+    return this.activateOrderIdentityAtomically(order, adminUser.id, 'admin_manual_approval');
+  }
+
+  public getMyOrders(userId: string): IdentityOrderDTO[] {
+    this.expireStaleReservations();
+    return this.orders.filter((o) => o.user_id === userId);
+  }
+
+  public getAllOrdersForAdmin(adminUser: { username?: string | null; role?: string | null; bmc_id?: number | null }): IdentityOrderDTO[] {
+    if (!this.isFounderUser(adminUser)) return [];
+    this.expireStaleReservations();
+    return this.orders;
+  }
+
+  public createVipRequest(
+    user: { id: string; username: string },
+    input: { requested_number?: string; requested_email?: string; notes?: string }
+  ): { success: boolean; request?: VipIdentityRequestDTO; error?: string } {
+    const cleanNotes = String(input.notes || '').trim();
+    const cleanNum = input.requested_number ? String(input.requested_number).trim() : null;
+    const cleanEmail = input.requested_email ? String(input.requested_email).trim().toLowerCase() : null;
+    if (!cleanNum && !cleanEmail && !cleanNotes) {
+      return { success: false, error: 'Isi nomor/email yang diinginkan atau catatan permintaan Anda.' };
+    }
+    const now = new Date().toISOString();
+    const reqItem: VipIdentityRequestDTO = {
+      id: `vipreq-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      user_id: user.id,
+      username: user.username,
+      requested_number: cleanNum,
+      requested_email: cleanEmail,
+      notes: cleanNotes || 'Permintaan identitas khusus Ngopi.',
+      status: 'pending',
+      created_at: now,
+      updated_at: now,
+    };
+    this.vipRequests.unshift(reqItem);
+    this.appendAuditLog(user.id, 'VIP_REQUEST_CREATED', 'VipIdentityRequest', reqItem.id, user.id, {
+      requested_number: cleanNum,
+      requested_email: cleanEmail,
+    });
+    this.saveToDisk();
+    return { success: true, request: reqItem };
+  }
+
+  public listVipRequests(user: { id: string; username?: string | null; role?: string | null; bmc_id?: number | null }): VipIdentityRequestDTO[] {
+    if (this.isFounderUser(user)) {
+      return this.vipRequests;
+    }
+    return this.vipRequests.filter((r) => r.user_id === user.id);
+  }
+
+  public adminUpdateVipRequest(
+    adminUser: { id: string; username?: string | null; role?: string | null; bmc_id?: number | null },
+    requestId: string,
+    status: 'reviewed' | 'approved' | 'rejected',
+    adminNote?: string
+  ): { success: boolean; request?: VipIdentityRequestDTO; error?: string } {
+    if (!this.isFounderUser(adminUser)) {
+      return { success: false, error: 'Hanya Tim Ngopi yang dapat memperbarui status permintaan khusus.' };
+    }
+    const reqItem = this.vipRequests.find((r) => r.id === requestId);
+    if (!reqItem) {
+      return { success: false, error: 'Permintaan tidak ditemukan.' };
+    }
+    reqItem.status = status;
+    reqItem.admin_note = adminNote || reqItem.admin_note || null;
+    reqItem.updated_at = new Date().toISOString();
+    this.appendAuditLog(adminUser.id, 'VIP_REQUEST_UPDATED', 'VipIdentityRequest', reqItem.id, reqItem.user_id, {
+      status,
+      admin_note: reqItem.admin_note,
+    });
+    this.saveToDisk();
+    return { success: true, request: reqItem };
+  }
+
+  public getAdminAuditLogs(adminUser: { username?: string | null; role?: string | null; bmc_id?: number | null }): IdentityAuditLogDTO[] {
+    if (!this.isFounderUser(adminUser)) return [];
+    return this.auditLogs.slice(0, 200);
   }
 }
 

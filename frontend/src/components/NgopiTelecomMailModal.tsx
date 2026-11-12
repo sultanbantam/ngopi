@@ -135,8 +135,11 @@ export function computeDefaultNgopiNumber(
   if (customMap[member.id]) return customMap[member.id];
   if (member.ngopi_number) return String(member.ngopi_number);
   const uname = String(member.username || '').trim().toLowerCase();
-  if (uname === 'warung' || uname === 'founder' || uname === 'ngopi' || member.bmc_id === 1) {
+  if (uname === 'ngopi' || uname === 'founder' || member.bmc_id === 1) {
     return '0';
+  }
+  if (uname === 'warung') {
+    return '100';
   }
   return generateUglyDefaultNumber(uname || member.id);
 }
@@ -144,8 +147,11 @@ export function computeDefaultNgopiNumber(
 export function formatNgopiEmail(username: string, customEmail?: string): string {
   if (customEmail) return customEmail;
   const clean = String(username || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') {
+  if (clean === 'ngopi' || clean === 'founder') {
     return 'warung@ngopi.top';
+  }
+  if (clean === 'warung') {
+    return 'warung-ops@ngopi.top';
   }
   return generateUglyConsonantEmail(clean || 'user');
 }
@@ -210,6 +216,19 @@ export default function NgopiTelecomMailModal({
   const [founderEmailInput, setFounderEmailInput] = useState<string>('');
   const [founderEmailTargetUser, setFounderEmailTargetUser] = useState<string>('');
 
+  // Identitas Ngopi Checkout, Orders & VIP Request state
+  const [selectedPackageCode, setSelectedPackageCode] = useState<
+    'number_regular' | 'email_personal' | 'bundle_identity' | 'number_special'
+  >('bundle_identity');
+  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [adminOrders, setAdminOrders] = useState<any[]>([]);
+  const [activeOrder, setActiveOrder] = useState<any | null>(null);
+  const [proofRefInput, setProofRefInput] = useState<string>('');
+  const [proofSenderInput, setProofSenderInput] = useState<string>('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState<boolean>(false);
+  const [vipReqNotes, setVipReqNotes] = useState<string>('');
+  const [isSubmittingVipReq, setIsSubmittingVipReq] = useState<boolean>(false);
+
   // Mail state
   const [mailSubTab, setMailSubTab] = useState<'inbox' | 'sent' | 'compose'>('inbox');
   const [mails, setMails] = useState<MailItem[]>([]);
@@ -267,19 +286,26 @@ export default function NgopiTelecomMailModal({
     const list = Array.from(mergedMap.values());
     const hasMe = list.some((m) => m.id === currentUserId || m.username?.toLowerCase() === currentUsername?.toLowerCase());
     if (!hasMe && currentUsername) {
+      const unameLower = currentUsername.toLowerCase();
       list.unshift({
         id: currentUserId || 'me',
         username: currentUsername,
         display_name: currentDisplayName || currentUsername,
-        bmc_id: currentUsername.toLowerCase() === 'warung' ? 1 : undefined,
+        bmc_id: unameLower === 'ngopi' || unameLower === 'founder' ? 1 : undefined,
       });
     }
 
     const usedNums = new Set<string>();
     const result: Array<TelecomMemberItem & { ngopi_number: string; ngopi_email: string }> = [];
 
-    // Sort so Founder ('warung') is first, then by bmc_id / username
+    // Sort so Primary Founder ('ngopi' / 'founder' / bmc_id === 1) is first, then 'warung', then by bmc_id
+    const isPrimaryFounder = (m: TelecomMemberItem) => {
+      const u = m.username?.toLowerCase();
+      return u === 'ngopi' || u === 'founder' || m.bmc_id === 1;
+    };
     const sorted = [...list].sort((a, b) => {
+      if (isPrimaryFounder(a) && !isPrimaryFounder(b)) return -1;
+      if (!isPrimaryFounder(a) && isPrimaryFounder(b)) return 1;
       if (a.username?.toLowerCase() === 'warung') return -1;
       if (b.username?.toLowerCase() === 'warung') return 1;
       return (a.bmc_id || 999999) - (b.bmc_id || 999999);
@@ -288,8 +314,10 @@ export default function NgopiTelecomMailModal({
     sorted.forEach((m) => {
       let num = customNumbersMap[m.id] || m.ngopi_number || '';
       if (!num) {
-        if (m.username?.toLowerCase() === 'warung' || m.bmc_id === 1) {
+        if (isPrimaryFounder(m) && !usedNums.has('0')) {
           num = '0';
+        } else if (m.username?.toLowerCase() === 'warung') {
+          num = usedNums.has('0') ? '100' : '0';
         } else {
           let candidate = generateUglyDefaultNumber(m.username || m.id);
           let salt = 1;
@@ -371,8 +399,8 @@ export default function NgopiTelecomMailModal({
         to_username: currentUsername,
         to_email: defaultEmail,
         to_number: defaultNum,
-        subject: `Selamat Datang di Nomor Virtual #${defaultNum} & Email ${defaultEmail}! ☕`,
-        body: `Halo ${currentDisplayName || currentUsername}!\n\nAkun Anda di ngopi.top kini resmi dilengkapi dengan Nomor HP Virtual & Akun Email:\n\n• Nomor HP Virtual Ngopi: ${defaultNum}\n• Alamat Email Resmi: ${defaultEmail} (alias: ${defaultNum}@ngopi.top)\n\nAturan Penomoran Eksklusif Ngopi:\n- Nomor 0 adalah Nomor Founder (@warung).\n- Nomor 1 s/d 100 dikunci khusus oleh Founder (VIP).\n- Nomor 101 ke atas bebas dipilih atau diganti sesuai keinginan Anda selama belum dipakai orang lain!\n\nSelamat menikmati komunikasi lengkap (Chat, Telepon Dialpad, HT Radio, & Email) dalam satu aplikasi!\n\nSalam hangat,\nFounder Ngopi (#0 • warung@ngopi.top)`,
+        subject: `Selamat Datang di Identitas Ngopi #${defaultNum} & Email ${defaultEmail}! ☕`,
+        body: `Halo ${currentDisplayName || currentUsername}!\n\nAkun Anda di ngopi.top kini resmi dilengkapi dengan Identitas Ngopi:\n\n• Nomor Otomatis Ngopi: ${defaultNum}\n• Email Otomatis: ${defaultEmail} (alias: ${defaultNum}@ngopi.top)\n\nInformasi Penomoran:\n- Nomor 0 s/d 100 dialokasikan untuk operasional resmi Ngopi.\n- Nomor 101 ke atas dapat Anda pilih sesuai keinginan melalui paket Identitas Ngopi!\n\nSelamat menikmati komunikasi lengkap (Chat, Telepon Dialpad, HT Radio, & Email) dalam satu aplikasi!\n\nSalam hangat,\nTim Ngopi (#0 • warung@ngopi.top)`,
         is_read: false,
         created_at: new Date().toISOString(),
       });
@@ -456,12 +484,160 @@ export default function NgopiTelecomMailModal({
         );
         setMails(mergedMails);
       }
+
+      // Fetch user's Identity Orders (and Admin Orders if Founder/Admin)
+      const ordersRes = await axios
+        .get(`${API_URL}/telecom/orders/my`, { headers: { Authorization: `Bearer ${token}` } })
+        .catch(() => null);
+      if (Array.isArray(ordersRes?.data?.orders)) {
+        setMyOrders(ordersRes.data.orders);
+        const pendingOrVerifying = ordersRes.data.orders.find(
+          (o: any) => o.status === 'pending_payment' || o.status === 'verifying'
+        );
+        setActiveOrder(pendingOrVerifying || null);
+      }
+
+      if (Boolean(meRes?.data?.is_founder || founderFlag)) {
+        const adminOrdRes = await axios
+          .get(`${API_URL}/telecom/admin/orders`, { headers: { Authorization: `Bearer ${token}` } })
+          .catch(() => null);
+        if (Array.isArray(adminOrdRes?.data?.orders)) {
+          setAdminOrders(adminOrdRes.data.orders);
+        }
+      }
     } catch {
       // Fallback already populated cleanly
     } finally {
       setLoadingMail(false);
     }
   }, [currentUserId, currentUsername, currentDisplayName]);
+
+  const handleCreateOrderCheckout = async () => {
+    const needsNum =
+      selectedPackageCode === 'number_regular' ||
+      selectedPackageCode === 'number_special' ||
+      selectedPackageCode === 'bundle_identity';
+    const needsEmail =
+      selectedPackageCode === 'email_personal' || selectedPackageCode === 'bundle_identity';
+
+    if (needsNum && !desiredNumber.trim()) {
+      showNotice('Nomor Pilihan Diperlukan', 'Masukkan Nomor Pilihan (misal 1945 atau 777) terlebih dahulu.');
+      return;
+    }
+    if (needsEmail && !desiredEmailPrefix.trim()) {
+      showNotice('Email Pilihan Diperlukan', 'Masukkan nama Email Pilihan @ngopi.top terlebih dahulu.');
+      return;
+    }
+
+    setIsSubmittingOrder(true);
+    try {
+      const token = await getToken();
+      if (!token) {
+        showNotice('Login Diperlukan', 'Silakan login kembali untuk membuat pesanan.');
+        return;
+      }
+      const res = await axios.post(
+        `${API_URL}/telecom/orders/checkout`,
+        {
+          package_code: selectedPackageCode,
+          requested_number: needsNum ? desiredNumber.trim() : undefined,
+          requested_email: needsEmail ? desiredEmailPrefix.trim() : undefined,
+          payment_method: 'bank_bri_transfer',
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data?.order) {
+        setActiveOrder(res.data.order);
+        setMyOrders((prev) => [res.data.order, ...prev]);
+        showNotice(
+          'Pesanan & Reservasi Berhasil',
+          `Kode Pesanan: ${res.data.order.order_code}\nTotal Transfer: Rp ${Number(res.data.order.total_transfer_idr).toLocaleString('id-ID')}\nIdentitas direservasi selama 30 menit.`
+        );
+      }
+    } catch (err: any) {
+      showNotice('Gagal Membuat Pesanan', err?.response?.data?.error || 'Periksa kembali nomor/email pilihan Anda.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleSubmitOrderProof = async () => {
+    if (!activeOrder) return;
+    if (!proofRefInput.trim()) {
+      showNotice('Referensi Transfer Diperlukan', 'Masukkan nomor referensi / catatan transfer Bank BRI.');
+      return;
+    }
+    setIsSubmittingOrder(true);
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${API_URL}/telecom/orders/${activeOrder.id}/submit-proof`,
+        {
+          payment_reference: proofRefInput.trim(),
+          bank_sender_name: proofSenderInput.trim() || undefined,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data?.order) {
+        setActiveOrder(res.data.order);
+        setMyOrders((prev) => prev.map((o) => (o.id === res.data.order.id ? res.data.order : o)));
+        setProofRefInput('');
+        setProofSenderInput('');
+        if (res.data.auto_activated) {
+          await loadTelecomData();
+        }
+        showNotice('Konfirmasi Diterima', res.data.message || 'Bukti transfer berhasil dikirim.');
+      }
+    } catch (err: any) {
+      showNotice('Gagal Kirim Bukti', err?.response?.data?.error || 'Silakan coba lagi.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
+
+  const handleSendVipRequest = async () => {
+    if (!vipReqNotes.trim() && !desiredNumber.trim() && !desiredEmailPrefix.trim()) {
+      showNotice('Isi Permintaan', 'Tuliskan nomor/email khusus yang diinginkan atau catatan untuk Tim Ngopi.');
+      return;
+    }
+    setIsSubmittingVipReq(true);
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${API_URL}/telecom/vip-requests`,
+        {
+          requested_number: desiredNumber.trim() || undefined,
+          requested_email: desiredEmailPrefix.trim() || undefined,
+          notes: vipReqNotes.trim() || 'Permintaan identitas khusus Ngopi.',
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setVipReqNotes('');
+      showNotice('Permintaan Terkirim', res.data?.message || 'Permintaan Anda telah diteruskan ke Tim Ngopi.');
+    } catch (err: any) {
+      showNotice('Gagal Mengirim', err?.response?.data?.error || 'Silakan coba lagi.');
+    } finally {
+      setIsSubmittingVipReq(false);
+    }
+  };
+
+  const handleAdminApproveOrder = async (orderId: string, action: 'approve' | 'reject') => {
+    try {
+      const token = await getToken();
+      const res = await axios.post(
+        `${API_URL}/telecom/admin/orders/${orderId}/approve`,
+        { action },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (res.data?.order) {
+        setAdminOrders((prev) => prev.map((o) => (o.id === orderId ? res.data.order : o)));
+        await loadTelecomData();
+        showNotice('Sukses', res.data.message || 'Status pesanan diperbarui.');
+      }
+    } catch (err: any) {
+      showNotice('Gagal Memproses', err?.response?.data?.error || 'Terjadi kesalahan.');
+    }
+  };
 
   useEffect(() => {
     if (visible) {
@@ -546,13 +722,13 @@ export default function NgopiTelecomMailModal({
       const numVal = Number(code);
       if (!Number.isNaN(numVal) && numVal >= 1 && numVal <= 100) {
         showNotice(
-          '🔒 Nomor VIP Terkunci (1–100)',
-          `Nomor ${code} adalah Nomor Sultan VIP yang saat ini dikunci oleh Founder (#0) dan belum diaktifkan untuk pengguna.`
+          'Alokasi Resmi Ngopi',
+          `Nomor ${code} dialokasikan untuk kebutuhan resmi Ngopi. Untuk permintaan identitas khusus, hubungi Tim Ngopi.`
         );
       } else {
         showNotice(
           'Nomor Belum Terdaftar',
-          `Nomor Ngopi "${code}" belum digunakan oleh siapa pun. Anda bisa mengklaim nomor ini di tab "Nomor Unik"!`
+          `Nomor Ngopi "${code}" belum digunakan. Anda bisa mengecek ketersediaannya di tab "Identitas Ngopi"!`
         );
       }
       return;
@@ -596,7 +772,7 @@ export default function NgopiTelecomMailModal({
         checked: true,
         available: false,
         lockedVip: true,
-        message: '🔒 Nomor 0 adalah nomor eksklusif Founder Ngopi.',
+        message: 'Nomor 0 dialokasikan untuk operasional resmi Ngopi.',
       });
       return false;
     }
@@ -606,7 +782,7 @@ export default function NgopiTelecomMailModal({
         checked: true,
         available: false,
         lockedVip: true,
-        message: '👑 Nomor 1 sampai 100 adalah Nomor Sultan VIP Terkunci (Harga: Nego Langsung dengan Founder #0 / warung@ngopi.top).',
+        message: 'Nomor ini dialokasikan untuk kebutuhan resmi Ngopi. Untuk permintaan identitas khusus, hubungi Tim Ngopi.',
       });
       return false;
     }
@@ -619,7 +795,7 @@ export default function NgopiTelecomMailModal({
       setAvailabilityStatus({
         checked: true,
         available: false,
-        message: `❌ Nomor ${normalized} sudah dipakai oleh @${takenBy.username}. Coba angka unik lainnya!`,
+        message: `Nomor ${normalized} sudah digunakan oleh @${takenBy.username}. Coba angka pilihan lainnya!`,
       });
       return false;
     }
@@ -629,8 +805,8 @@ export default function NgopiTelecomMailModal({
       checked: true,
       available: true,
       message: isSpecial3DigitOrTwin
-        ? `✅ Nomor ${normalized} tersedia! Kategori: Nomor Cantik Spesial 3 Angka/Kembar (Rp 250.000 – Rp 1.000.000).`
-        : `✅ Nomor ${normalized} tersedia! Kategori: Nomor Cantik Reguler (Rp 35.000 atau Bundling + Email Rp 49.000).`,
+        ? `Tersedia — Nomor Pilihan Spesial 3 Angka/Kembar (Rp 250.000 – Rp 1.000.000).`
+        : `Tersedia — Nomor Pilihan Reguler (Rp 35.000 atau Bundling + Email Rp 49.000).`,
     });
     return true;
   };
@@ -638,8 +814,8 @@ export default function NgopiTelecomMailModal({
   const handleClaimNumber = async () => {
     if (requirePaidCustomNumber && !isFounder) {
       showNotice(
-        '💎 Fitur Premium Berbayar',
-        'Upgrade Nomor Cantik adalah Fitur Premium Berbayar:\n• Nomor Cantik Reguler (4–6 Angka): Rp 35.000\n• Bundling Hemat (Nomor + Email Cantik): Rp 49.000\n• Nomor Cantik Spesial (3 Angka / Kembar): Rp 250.000 – Rp 1.000.000\n• Nomor Sultan VIP (1–100): Nego Langsung dengan Founder (#0)\n\nSilakan hubungi Founder (#0 • warung@ngopi.top) untuk aktivasi!'
+        'Paket Identitas Ngopi',
+        'Upgrade Nomor Pilihan tersedia melalui:\n• Nomor Pilihan Reguler (4–6 Angka): Rp 35.000\n• Bundling Identitas (Nomor + Email Pilihan): Rp 49.000\n• Nomor Pilihan Spesial (3 Angka / Kembar): Rp 250.000 – Rp 1.000.000\n• Identitas Khusus (1–100): Hubungi Tim Ngopi\n\nSilakan buat pesanan checkout di bawah untuk mengunci nomor selama 30 menit!'
       );
       return;
     }
@@ -1285,7 +1461,7 @@ export default function NgopiTelecomMailModal({
             >
               <Ionicons name="sparkles" size={16} color={activeTab === 'custom_number' ? '#171411' : coffee.accent} />
               <Text style={[styles.tabBtnText, activeTab === 'custom_number' && styles.tabBtnTextActive]}>
-                Nomor Unik
+                Identitas Ngopi
               </Text>
             </TouchableOpacity>
 
@@ -1346,12 +1522,12 @@ export default function NgopiTelecomMailModal({
                     {dialedInput.trim() === '*888#'
                       ? '✨ Tekan tombol Telepon untuk cek info Nomor & Saldo Poin Kopi'
                       : Number(dialedInput) >= 1 && Number(dialedInput) <= 100
-                      ? '🔒 Nomor 1–100 adalah Nomor VIP yang dikunci oleh Founder (#0)'
-                      : 'Nomor belum terdaftar — bisa Anda klaim di tab Nomor Unik!'}
+                      ? 'Nomor ini dialokasikan untuk kebutuhan resmi Ngopi.'
+                      : 'Nomor belum terdaftar — bisa Anda cek ketersediaannya di tab Identitas Ngopi!'}
                   </Text>
                 ) : (
                   <Text style={styles.dialHintText}>
-                    Tips: Ketik <Text style={{ color: coffee.accent, fontWeight: '700' }}>0</Text> untuk menghubungi Founder,{' '}
+                    Tips: Ketik <Text style={{ color: coffee.accent, fontWeight: '700' }}>0</Text> untuk menghubungi Tim Ngopi,{' '}
                     <Text style={{ color: coffee.accent, fontWeight: '700' }}>101+</Text> untuk member, atau{' '}
                     <Text style={{ color: coffee.accent, fontWeight: '700' }}>*888#</Text> untuk cek pulsa poin.
                   </Text>
@@ -1422,30 +1598,30 @@ export default function NgopiTelecomMailModal({
               </View>
             )}
 
-            {/* TAB 2: PILIH NOMOR UNIK & PANEL FOUNDER */}
+            {/* TAB 2: IDENTITAS NGOPI (NOMOR PILIHAN & EMAIL PILIHAN) */}
             {activeTab === 'custom_number' && (
               <View>
                 <View style={styles.rulesCard}>
-                  <Text style={styles.rulesTitle}>📌 Skema Nomor Acak Bawaan & Upgrade Nomor/Email Cantik</Text>
+                  <Text style={styles.rulesTitle}>☕ Skema Identitas Otomatis & Upgrade Identitas Ngopi</Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#38bdf8' }}>Bawaan Otomatis (Nomor & Email Acak)</Text>: Seluruh user lama & baru otomatis mendapat <Text style={{ fontWeight: '700' }}>Nomor 10-Digit Acak</Text> (misal <Text style={{ fontWeight: '700' }}>7492638517</Text>) & <Text style={{ fontWeight: '700' }}>Email Konsonan Acak</Text> (misal <Text style={{ fontWeight: '700' }}>xkqzvtrmpbn@ngopi.top</Text>) yang susah dihafal.
+                    • <Text style={{ fontWeight: '800', color: '#38bdf8' }}>Nomor & Email Otomatis</Text>: Setiap member baru maupun lama otomatis mendapatkan <Text style={{ fontWeight: '700' }}>Nomor Otomatis 10-Digit</Text> & <Text style={{ fontWeight: '700' }}>Email Otomatis</Text> (@ngopi.top).
                   </Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#FFD700' }}>Nomor 0 & Email Resmi</Text>: Nomor <Text style={{ fontWeight: '700' }}>0</Text> serta nama email utama (<Text style={{ fontWeight: '700' }}>founder, warung, admin, official, cs, ceo, owner, warkop, ngopi, bmc</Text>) dikunci eksklusif untuk Founder.
+                    • <Text style={{ fontWeight: '800', color: '#FFD700' }}>Alokasi Resmi Ngopi</Text>: Nomor <Text style={{ fontWeight: '700' }}>0</Text>, <Text style={{ fontWeight: '700' }}>1–100</Text>, serta alamat operasional resmi dialokasikan untuk kebutuhan resmi Ngopi.
                   </Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#10b981' }}>Upgrade ke Nomor & Email Cantik (💎 Berbayar)</Text>: Untuk mengganti nomor/email acak ke <Text style={{ fontWeight: '700' }}>Nomor Cantik Mudah Dihafal (101+)</Text> atau <Text style={{ fontWeight: '700' }}>Email Sesuai Nama/Brand (@ngopi.top)</Text>, silakan pilih paket di bawah!
+                    • <Text style={{ fontWeight: '800', color: '#10b981' }}>Upgrade Identitas Ngopi</Text>: Ganti ke <Text style={{ fontWeight: '700' }}>Nomor Pilihan Mudah Diingat (101+)</Text> atau <Text style={{ fontWeight: '700' }}>Email Pilihan Sesuai Nama/Brand (@ngopi.top)</Text> dengan paket di bawah.
                   </Text>
                 </View>
 
-                {/* DAFTAR HARGA PAKET UPGRADE PREMIUM (RUPIAH) */}
+                {/* DAFTAR HARGA PAKET IDENTITAS NGOPI */}
                 <View style={[styles.rulesCard, { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.09)' }]}>
-                  <Text style={[styles.rulesTitle, { color: '#fbbf24' }]}>💎 Daftar Harga Upgrade Nomor & Email Cantik (Sekali Bayar Aktif Selamanya)</Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Email Cantik Sesuai Nama</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 25.000</Text></Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Cantik Reguler</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 35.000</Text></Text>
-                  <Text style={styles.ruleItem}>• 🔥 <Text style={{ fontWeight: '900', color: '#FFD700' }}>PAKET BUNDLING HEMAT (Nomor Cantik + Email Cantik)</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 10, color: '#9ca3af' }}>(Hemat Rp 11.000 - Paling Laris!)</Text></Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Cantik Spesial (3 Angka / Kembar)</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 250.000 – Rp 1.000.000</Text></Text>
-                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP (1 s/d 100) & Email Brand / Jabatan</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Nego Langsung dengan Founder (#0)</Text></Text>
+                  <Text style={[styles.rulesTitle, { color: '#fbbf24' }]}>💎 Daftar Paket Identitas Ngopi</Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Email Pilihan Personal</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 25.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Pilihan Reguler</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 35.000</Text></Text>
+                  <Text style={styles.ruleItem}>• 🔥 <Text style={{ fontWeight: '900', color: '#FFD700' }}>PAKET BUNDLING IDENTITAS (Nomor + Email Pilihan)</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 10, color: '#9ca3af' }}>(Hemat Rp 11.000 - Terlaris)</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Pilihan Spesial (3 Angka / Kembar)</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 250.000 – Rp 1.000.000</Text></Text>
+                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Identitas Khusus / Brand & VIP</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Untuk permintaan identitas khusus, hubungi Tim Ngopi.</Text></Text>
                 </View>
 
                 {/* INFO TUJUAN TRANSFER & KONFIRMASI PEMBAYARAN KE FOUNDER (#0) & WA */}
@@ -1732,6 +1908,163 @@ export default function NgopiTelecomMailModal({
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* SECTION 3: CHECKOUT & RESERVASI IDENTITAS NGOPI */}
+                <View style={{ marginTop: 22, paddingTop: 16, borderTopWidth: 1, borderTopColor: coffee.border }}>
+                  <Text style={styles.sectionLabel}>3. Pesan & Reservasi Identitas Ngopi (30 Menit)</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
+                    {[
+                      { code: 'number_regular' as const, label: 'Nomor Reguler (Rp 35rb)' },
+                      { code: 'email_personal' as const, label: 'Email Personal (Rp 25rb)' },
+                      { code: 'bundle_identity' as const, label: 'Bundling Hemat (Rp 49rb)' },
+                      { code: 'number_special' as const, label: 'Nomor Spesial (Rp 250rb+)' },
+                    ].map((pkgOpt) => (
+                      <TouchableOpacity
+                        key={pkgOpt.code}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          borderWidth: 1,
+                          borderColor: selectedPackageCode === pkgOpt.code ? '#f59e0b' : coffee.border,
+                          backgroundColor:
+                            selectedPackageCode === pkgOpt.code ? 'rgba(245, 158, 11, 0.18)' : coffee.surface,
+                        }}
+                        onPress={() => setSelectedPackageCode(pkgOpt.code)}
+                      >
+                        <Text
+                          style={{
+                            color: selectedPackageCode === pkgOpt.code ? '#fbbf24' : coffee.text,
+                            fontSize: 11,
+                            fontWeight: '800',
+                          }}
+                        >
+                          {pkgOpt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  <TouchableOpacity
+                    style={[styles.primaryClaimBtn, isSubmittingOrder && { opacity: 0.6 }]}
+                    onPress={handleCreateOrderCheckout}
+                    disabled={isSubmittingOrder}
+                  >
+                    <Ionicons name="cart" size={18} color="#171411" />
+                    <Text style={styles.primaryClaimBtnText}>
+                      {isSubmittingOrder ? 'Memproses Reservasi...' : 'Buat Pesanan & Reservasi'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {activeOrder && (
+                    <View
+                      style={{
+                        marginTop: 12,
+                        backgroundColor: '#120d0a',
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: '#f59e0b',
+                        padding: 12,
+                      }}
+                    >
+                      <Text style={{ color: '#fbbf24', fontSize: 13, fontWeight: '900' }}>
+                        🧾 Pesanan Aktif: {activeOrder.order_code} ({activeOrder.status.toUpperCase()})
+                      </Text>
+                      <Text style={{ color: coffee.text, fontSize: 12, marginTop: 4 }}>
+                        • Total Transfer BRI: Rp {Number(activeOrder.total_transfer_idr).toLocaleString('id-ID')} (termasuk kode unik {activeOrder.unique_code}){'\n'}
+                        {activeOrder.requested_number ? `• Nomor Pilihan: ${activeOrder.requested_number}\n` : ''}
+                        {activeOrder.requested_email ? `• Email Pilihan: ${activeOrder.requested_email}` : ''}
+                      </Text>
+
+                      {activeOrder.status === 'pending_payment' && (
+                        <View style={{ marginTop: 10, gap: 8 }}>
+                          <TextInput
+                            style={styles.claimInput}
+                            value={proofRefInput}
+                            onChangeText={setProofRefInput}
+                            placeholder="Nomor Referensi / Catatan Transfer BRI"
+                            placeholderTextColor={coffee.muted}
+                          />
+                          <TextInput
+                            style={styles.claimInput}
+                            value={proofSenderInput}
+                            onChangeText={setProofSenderInput}
+                            placeholder="Nama Pengirim Rekening (Opsional)"
+                            placeholderTextColor={coffee.muted}
+                          />
+                          <TouchableOpacity
+                            style={[styles.primaryClaimBtn, isSubmittingOrder && { opacity: 0.6 }]}
+                            onPress={handleSubmitOrderProof}
+                            disabled={isSubmittingOrder}
+                          >
+                            <Ionicons name="cloud-upload" size={16} color="#171411" />
+                            <Text style={styles.primaryClaimBtnText}>Kirim Bukti Pembayaran</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Form Permintaan Identitas Khusus */}
+                  <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.border }}>
+                    <Text style={styles.subHintLabel}>
+                      Untuk permintaan identitas khusus (1–100 / brand resmi), hubungi Tim Ngopi:
+                    </Text>
+                    <View style={styles.claimInputRow}>
+                      <TextInput
+                        style={styles.claimInput}
+                        value={vipReqNotes}
+                        onChangeText={setVipReqNotes}
+                        placeholder="Tulis permintaan identitas khusus Anda..."
+                        placeholderTextColor={coffee.muted}
+                      />
+                      <TouchableOpacity
+                        style={styles.checkBtn}
+                        onPress={handleSendVipRequest}
+                        disabled={isSubmittingVipReq}
+                      >
+                        <Text style={styles.checkBtnText}>
+                          {isSubmittingVipReq ? 'Mengirim...' : 'Hubungi Tim Ngopi'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+
+                {isFounder && adminOrders.length > 0 && (
+                  <View style={{ marginTop: 18, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.08)' }}>
+                    <Text style={{ color: '#10b981', fontSize: 13, fontWeight: '900', marginBottom: 8 }}>
+                      🛡️ Antrean Verifikasi Pesanan Tim Ngopi ({adminOrders.length})
+                    </Text>
+                    {adminOrders.slice(0, 5).map((ord) => (
+                      <View key={ord.id} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: coffee.border }}>
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>
+                          {ord.order_code} • @{ord.username} • {ord.status}
+                        </Text>
+                        <Text style={{ color: coffee.secondary, fontSize: 11 }}>
+                          Rp {Number(ord.total_transfer_idr).toLocaleString('id-ID')} | {ord.requested_number || '-'} | {ord.requested_email || '-'}
+                          {ord.payment_reference ? ` | Ref: ${ord.payment_reference}` : ''}
+                        </Text>
+                        {(ord.status === 'pending_payment' || ord.status === 'verifying') && (
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+                              onPress={() => handleAdminApproveOrder(ord.id, 'approve')}
+                            >
+                              <Text style={{ color: '#171411', fontSize: 11, fontWeight: '900' }}>Setujui & Aktifkan</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ backgroundColor: '#ef4444', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+                              onPress={() => handleAdminApproveOrder(ord.id, 'reject')}
+                            >
+                              <Text style={{ color: '#fff', fontSize: 11, fontWeight: '800' }}>Tolak</Text>
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 {/* FOUNDER EXCLUSIVE VIP UNLOCK PANEL (1..100 & LOCKED EMAILS & PREMIUM SWITCH) */}
                 {isFounder && (

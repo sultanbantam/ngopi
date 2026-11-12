@@ -746,3 +746,103 @@ model BotChessProfile {
   @@map("bot_chess_profiles")
 }
 
+// ==========================================
+// IDENTITAS NGOPI (NOMOR PILIHAN, EMAIL, RESERVASI, & TRANSAKSI)
+// ==========================================
+
+model NgopiIdentity {
+  id          String    @id @default(uuid())
+  user_id     String?   @map("user_id")
+  type        String    // "number" | "email"
+  value       String    // Normalized value, e.g. "1945" or "budi@ngopi.top"
+  category    String    @default("automatic") // "automatic" | "regular" | "bundling" | "special" | "vip" | "system"
+  status      String    @default("assigned") // "available" | "reserved" | "assigned" | "reserved_system" | "disabled"
+  assigned_at DateTime? @map("assigned_at")
+  updated_by  String?   @map("updated_by")
+  created_at  DateTime  @default(now()) @map("created_at")
+  updated_at  DateTime  @updatedAt @map("updated_at")
+
+  @@unique([type, value])
+  @@index([user_id])
+  @@index([status])
+  @@map("ngopi_identities")
+}
+
+model IdentityPackage {
+  id                      String   @id @default(uuid())
+  code                    String   @unique // "regular_number" | "personal_email" | "bundling" | "special_number" | "vip_request"
+  name                    String
+  type                    String   // "number" | "email" | "bundling" | "vip"
+  price_idr               Int      @map("price_idr")
+  min_price_idr           Int?     @map("min_price_idr")
+  max_price_idr           Int?     @map("max_price_idr")
+  min_length              Int?     @map("min_length")
+  max_length              Int?     @map("max_length")
+  is_active               Boolean  @default(true) @map("is_active")
+  reservation_ttl_minutes Int      @default(30) @map("reservation_ttl_minutes")
+  description             String?
+  updated_at              DateTime @updatedAt @map("updated_at")
+
+  @@map("identity_packages")
+}
+
+model IdentityOrder {
+  id                 String    @id @default(uuid())
+  order_code         String    @unique @map("order_code")
+  user_id            String    @map("user_id")
+  package_code       String    @map("package_code")
+  requested_number   String?   @map("requested_number")
+  requested_email    String?   @map("requested_email")
+  amount_idr         Int       @map("amount_idr")
+  unique_code        Int       @default(0) @map("unique_code")
+  total_transfer_idr Int       @map("total_transfer_idr")
+  payment_method     String    @default("bank_bri") @map("payment_method")
+  payment_reference  String?   @map("payment_reference")
+  proof_url          String?   @map("proof_url")
+  status             String    @default("pending_payment") // "pending_payment" | "verifying" | "paid" | "activated" | "expired" | "failed" | "cancelled"
+  reserved_until     DateTime  @map("reserved_until")
+  paid_at            DateTime? @map("paid_at")
+  activated_at       DateTime? @map("activated_at")
+  failure_reason     String?   @map("failure_reason")
+  created_at         DateTime  @default(now()) @map("created_at")
+  updated_at         DateTime  @updatedAt @map("updated_at")
+
+  @@index([user_id])
+  @@index([status])
+  @@index([reserved_until])
+  @@map("identity_orders")
+}
+
+model VipIdentityRequest {
+  id               String   @id @default(uuid())
+  user_id          String   @map("user_id")
+  requested_number String?  @map("requested_number")
+  requested_email  String?  @map("requested_email")
+  request_type     String   @default("vip_number") @map("request_type") // "vip_number" | "brand_email" | "special"
+  user_note        String?  @map("user_note")
+  status           String   @default("pending") // "pending" | "in_review" | "approved" | "rejected"
+  handled_by       String?  @map("handled_by")
+  admin_note       String?  @map("admin_note")
+  created_at       DateTime @default(now()) @map("created_at")
+  updated_at       DateTime @updatedAt @map("updated_at")
+
+  @@index([user_id])
+  @@index([status])
+  @@map("vip_identity_requests")
+}
+
+model IdentityAuditLog {
+  id             String   @id @default(uuid())
+  actor_id       String   @map("actor_id")
+  target_user_id String?  @map("target_user_id")
+  action         String
+  identity_type  String?  @map("identity_type")
+  identity_value String?  @map("identity_value")
+  metadata       Json?
+  created_at     DateTime @default(now()) @map("created_at")
+
+  @@index([actor_id])
+  @@index([target_user_id])
+  @@map("identity_audit_logs")
+}
+

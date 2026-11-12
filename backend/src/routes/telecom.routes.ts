@@ -397,4 +397,265 @@ router.delete('/mail/:id', verifyJWT, async (req: Request, res: Response): Promi
   }
 });
 
+// =========================================================================
+// IDENTITAS NGOPI: PACKAGES, RECOMMENDATIONS, ORDERS, WEBHOOK & VIP REQUEST
+// =========================================================================
+
+// GET /api/telecom/packages
+router.get('/packages', verifyJWT, async (_req: Request, res: Response): Promise<void> => {
+  try {
+    res.status(200).json({
+      packages: telecomService.getPackages(),
+      premium_config: telecomService.getPremiumConfig(),
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /packages error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/recommendations
+router.get('/recommendations', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const recommendations = await telecomService.getAvailableRecommendations(user);
+    res.status(200).json(recommendations);
+  } catch (err) {
+    console.error('[TelecomRoutes] /recommendations error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/orders/checkout
+router.post('/orders/checkout', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const { package_code, requested_number, requested_email, payment_method } = req.body || {};
+    const result = await telecomService.createOrderCheckout(user, {
+      package_code: String(package_code || ''),
+      requested_number: requested_number !== undefined ? String(requested_number) : undefined,
+      requested_email: requested_email !== undefined ? String(requested_email) : undefined,
+      payment_method: payment_method !== undefined ? String(payment_method) : undefined,
+    });
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ error: result.error });
+      return;
+    }
+    res.status(201).json({
+      message: 'Pesanan berhasil dibuat dan identitas direservasi selama 30 menit.',
+      order: result.order,
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /orders/checkout error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/orders/:id/submit-proof
+router.post('/orders/:id/submit-proof', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const { proof_url, payment_reference, bank_sender_name } = req.body || {};
+    const result = await telecomService.submitOrderProof(user, String(req.params.id || ''), {
+      proof_url: proof_url !== undefined ? String(proof_url) : undefined,
+      payment_reference: payment_reference !== undefined ? String(payment_reference) : undefined,
+      bank_sender_name: bank_sender_name !== undefined ? String(bank_sender_name) : undefined,
+    });
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(200).json({
+      message: result.message,
+      order: result.order,
+      auto_activated: Boolean(result.autoActivated),
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /orders/:id/submit-proof error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/orders/webhook (HMAC-SHA256 verified)
+router.post('/orders/webhook', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const signature = String(req.headers['x-ngopi-signature'] || req.headers['x-webhook-signature'] || '');
+    const rawBody = typeof req.body === 'string' ? req.body : JSON.stringify(req.body || {});
+    const result = await telecomService.processPaymentWebhook(req.body || {}, rawBody, signature);
+    if (!result.success) {
+      res.status(result.statusCode || 400).json({ error: result.error });
+      return;
+    }
+    res.status(200).json({
+      ok: true,
+      already_activated: Boolean(result.alreadyActivated),
+      order: result.order,
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /orders/webhook error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/orders/my
+router.get('/orders/my', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    res.status(200).json({ orders: telecomService.getMyOrders(user.id) });
+  } catch (err) {
+    console.error('[TelecomRoutes] /orders/my error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/vip-requests
+router.post('/vip-requests', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const { requested_number, requested_email, notes } = req.body || {};
+    const result = telecomService.createVipRequest(user, {
+      requested_number: requested_number !== undefined ? String(requested_number) : undefined,
+      requested_email: requested_email !== undefined ? String(requested_email) : undefined,
+      notes: notes !== undefined ? String(notes) : undefined,
+    });
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(201).json({
+      message: 'Permintaan identitas khusus telah dikirim ke Tim Ngopi.',
+      request: result.request,
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /vip-requests error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/vip-requests
+router.get('/vip-requests', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    res.status(200).json({ requests: telecomService.listVipRequests(user) });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/admin/orders
+router.get('/admin/orders', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user || !telecomService.isFounderUser(user)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    res.status(200).json({ orders: telecomService.getAllOrdersForAdmin(user) });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/admin/orders/:id/approve
+router.post('/admin/orders/:id/approve', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user || !telecomService.isFounderUser(user)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    const { action, admin_note } = req.body || {};
+    const act = action === 'reject' ? 'reject' : 'approve';
+    const result = await telecomService.approveOrderByAdmin(user, String(req.params.id || ''), act, admin_note);
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(200).json({
+      message: act === 'approve' ? 'Pesanan disetujui dan Identitas Ngopi diaktifkan.' : 'Pesanan ditolak.',
+      order: result.order,
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/telecom/admin/packages/:code
+router.put('/admin/packages/:code', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user || !telecomService.isFounderUser(user)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    const result = telecomService.updatePackageByAdmin(user, String(req.params.code || ''), req.body || {});
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(200).json({ package: result.package });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// PUT /api/telecom/admin/vip-requests/:id
+router.put('/admin/vip-requests/:id', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user || !telecomService.isFounderUser(user)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    const { status, admin_note } = req.body || {};
+    const validStatus = status === 'approved' || status === 'rejected' ? status : 'reviewed';
+    const result = telecomService.adminUpdateVipRequest(user, String(req.params.id || ''), validStatus, admin_note);
+    if (!result.success) {
+      res.status(400).json({ error: result.error });
+      return;
+    }
+    res.status(200).json({ request: result.request });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/admin/audit-logs
+router.get('/admin/audit-logs', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user || !telecomService.isFounderUser(user)) {
+      res.status(403).json({ error: 'Forbidden' });
+      return;
+    }
+    res.status(200).json({ audit_logs: telecomService.getAdminAuditLogs(user) });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 export default router;
