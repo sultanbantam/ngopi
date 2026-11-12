@@ -537,26 +537,11 @@ export default function BambupediaRoom() {
   }, [appendMessage]);
 
   const sortedMembers = useMemo(() => {
-    const usedNums = new Set<string>();
     return members.map((m, idx) => {
       const uname = normalizeUsername(m.username).toLowerCase();
-      let num = m.ngopi_number || '';
-      if (!num) {
-        if (uname === 'warung' || m.bmc_id === 1) {
-          num = '0';
-        } else {
-          let candidate = m.bmc_id && m.bmc_id > 0 ? 100 + m.bmc_id : 101 + idx;
-          if (candidate < 101) candidate = 101;
-          while (usedNums.has(String(candidate))) {
-            candidate += 1;
-          }
-          num = String(candidate);
-        }
-      }
-      usedNums.add(num);
       return {
         ...m,
-        ngopi_number: num,
+        ngopi_number: computeDefaultNgopiNumber(m, idx, {}),
         ngopi_email: m.ngopi_email || formatNgopiEmail(uname),
       };
     });
@@ -919,7 +904,7 @@ export default function BambupediaRoom() {
             <Text style={styles.memberName} numberOfLines={1}>{displayName}</Text>
             {isMe ? <Text style={styles.meBadge}>kamu</Text> : null}
           </View>
-          <Text style={styles.memberHandle} numberOfLines={1}>#{item.ngopi_number || "101"} • {item.ngopi_email || `${normalizeUsername(item.username)}@ngopi.top`}</Text>
+          <Text style={styles.memberHandle} numberOfLines={1}>#{item.ngopi_number || computeDefaultNgopiNumber(item, 0, {})} • {item.ngopi_email || formatNgopiEmail(normalizeUsername(item.username))}</Text>
           <Text style={[styles.presenceText, isOnline ? styles.presenceTextOnline : styles.presenceTextOffline]} numberOfLines={1}>
             {isOnline ? 'Online' : formatLastSeen(item.last_seen)}
           </Text>
@@ -1290,6 +1275,16 @@ export default function BambupediaRoom() {
             accessibilityLabel={`Poin Kopi: ${userPoints}`}
           >
             <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+          </TouchableOpacity>
+
+          {/* Nomor HP & Email (@ngopi.top) Header Button */}
+          <TouchableOpacity
+            style={[styles.htRadioHeaderBtn, { backgroundColor: 'rgba(59, 130, 246, 0.16)', borderColor: '#3b82f6' }]}
+            onPress={() => setTelecomModalVisible(true)}
+            accessibilityLabel="Buka Nomor HP & Email Ngopi"
+          >
+            <Ionicons name="call" size={15} color="#60a5fa" />
+            <Text style={[styles.htRadioHeaderBtnText, { color: '#60a5fa' }]}>Telepon & Email</Text>
           </TouchableOpacity>
 
           {/* HT Radio Walkie-Talkie Button */}

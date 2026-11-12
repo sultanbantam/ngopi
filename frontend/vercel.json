@@ -124,5 +124,5 @@
   ],
   "framework": null,
   "buildCommand": "npm run build",
-  "installCommand": "npm ci"
+  "installCommand": "npm install --legacy-peer-deps"
 }

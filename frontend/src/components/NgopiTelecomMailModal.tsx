@@ -61,9 +61,61 @@ interface Props {
   initialTab?: 'dialpad' | 'custom_number' | 'mail';
 }
 
+const CONSONANTS = 'bcdfghjklmnpqrstvwxz';
+
+export function generateUglyDefaultNumber(usernameOrId: string): string {
+  const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
+  if (clean === 'warung' || clean === 'founder') return '0';
+  let h1 = 2166136261;
+  let h2 = 16777619;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ (ch * 31), 2166136261) >>> 0;
+  }
+  const firstDigits = ['7', '8', '9', '6'];
+  let result = firstDigits[h1 % 4];
+  let state = (h1 ^ h2) >>> 0;
+  for (let i = 1; i < 10; i++) {
+    state = (Math.imul(state, 1664525) + 1013904223 + i * 97) >>> 0;
+    let d = String((state % 9) + 1);
+    if (d === result[result.length - 1]) {
+      d = String(((Number(d) + 3) % 9) + 1);
+    }
+    if (result.length >= 1 && Math.abs(Number(d) - Number(result[result.length - 1])) === 1) {
+      d = String(((Number(d) + 4) % 9) + 1);
+    }
+    result += d;
+  }
+  return result;
+}
+
+export function generateUglyConsonantEmail(usernameOrId: string): string {
+  const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
+  if (clean === 'warung' || clean === 'founder') return 'warung@ngopi.top';
+  let h1 = 1315423911;
+  let h2 = 2654435761;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761) >>> 0;
+    h2 = Math.imul(h2 + ch * (i + 17), 1597334677) >>> 0;
+  }
+  let prefix = '';
+  let state = (h1 ^ h2) >>> 0;
+  for (let i = 0; i < 11; i++) {
+    state = (Math.imul(state, 22695477) + 1 + i * 53) >>> 0;
+    let c = CONSONANTS[state % CONSONANTS.length];
+    if (prefix.length > 0 && c === prefix[prefix.length - 1]) {
+      c = CONSONANTS[(state + 7) % CONSONANTS.length];
+    }
+    prefix += c;
+  }
+  return `${prefix}@ngopi.top`;
+}
+
 export function computeDefaultNgopiNumber(
   member: TelecomMemberItem,
-  indexInSorted: number,
+  _indexInSorted: number,
   customMap: Record<string, string>
 ): string {
   if (customMap[member.id]) return customMap[member.id];
@@ -72,17 +124,16 @@ export function computeDefaultNgopiNumber(
   if (uname === 'warung' || member.bmc_id === 1) {
     return '0';
   }
-  const base = member.bmc_id && member.bmc_id > 0 ? 100 + member.bmc_id : 101 + indexInSorted;
-  return String(Math.max(101, base));
+  return generateUglyDefaultNumber(uname || member.id);
 }
 
-export function formatNgopiEmail(username: string): string {
-  const clean = String(username || 'user')
-    .trim()
-    .toLowerCase()
-    .replace(/^@/, '')
-    .replace(/[^a-z0-9._-]/g, '');
-  return `${clean || 'user'}@ngopi.top`;
+export function formatNgopiEmail(username: string, customEmail?: string): string {
+  if (customEmail) return customEmail;
+  const clean = String(username || 'user').trim().toLowerCase().replace(/^@/, '');
+  if (clean === 'warung' || clean === 'founder') {
+    return 'warung@ngopi.top';
+  }
+  return generateUglyConsonantEmail(clean || 'user');
 }
 
 export default function NgopiTelecomMailModal({
@@ -132,8 +183,8 @@ export default function NgopiTelecomMailModal({
   const [isClaimingEmail, setIsClaimingEmail] = useState<boolean>(false);
 
   // Premium Mode state (Managed by Founder #0)
-  const [requirePaidCustomNumber, setRequirePaidCustomNumber] = useState<boolean>(false);
-  const [requirePaidCustomEmail, setRequirePaidCustomEmail] = useState<boolean>(false);
+  const [requirePaidCustomNumber, setRequirePaidCustomNumber] = useState<boolean>(true);
+  const [requirePaidCustomEmail, setRequirePaidCustomEmail] = useState<boolean>(true);
 
   // Founder VIP Assign state (1..100 & Locked @ngopi.top Emails)
   const [vipTargetUsername, setVipTargetUsername] = useState<string>('');
@@ -208,30 +259,31 @@ export default function NgopiTelecomMailModal({
       return (a.bmc_id || 999999) - (b.bmc_id || 999999);
     });
 
-    sorted.forEach((m, idx) => {
+    sorted.forEach((m) => {
       let num = customNumbersMap[m.id] || m.ngopi_number || '';
       if (!num) {
         if (m.username?.toLowerCase() === 'warung' || m.bmc_id === 1) {
           num = '0';
         } else {
-          let candidate = m.bmc_id && m.bmc_id > 0 ? 100 + m.bmc_id : 101 + idx;
-          if (candidate < 101) candidate = 101;
-          while (usedNums.has(String(candidate))) {
-            candidate += 1;
+          let candidate = generateUglyDefaultNumber(m.username || m.id);
+          let salt = 1;
+          while (usedNums.has(candidate)) {
+            candidate = generateUglyDefaultNumber(`${m.username}_${salt}`);
+            salt += 1;
           }
-          num = String(candidate);
+          num = candidate;
         }
       }
       usedNums.add(num);
       result.push({
         ...m,
         ngopi_number: num,
-        ngopi_email: m.ngopi_email || formatNgopiEmail(m.username),
+        ngopi_email: customEmailsMap[m.id] || m.ngopi_email || formatNgopiEmail(m.username),
       });
     });
 
     return result;
-  }, [members, currentUserId, currentUsername, currentDisplayName, customNumbersMap]);
+  }, [members, currentUserId, currentUsername, currentDisplayName, customNumbersMap, customEmailsMap]);
 
   const loadTelecomData = useCallback(async () => {
     const uname = String(currentUsername || '').trim().toLowerCase();
@@ -1025,19 +1077,26 @@ export default function NgopiTelecomMailModal({
             {activeTab === 'custom_number' && (
               <View>
                 <View style={styles.rulesCard}>
-                  <Text style={styles.rulesTitle}>📌 Aturan Nomor Virtual & Email Resmi @ngopi.top</Text>
+                  <Text style={styles.rulesTitle}>📌 Skema Nomor Acak Bawaan & Upgrade Nomor/Email Cantik</Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#38bdf8' }}>Otomatis untuk Semua User</Text>: Seluruh user lama maupun baru langsung otomatis mendapatkan Nomor Ngopi urut (<Text style={{ fontWeight: '700' }}>101+</Text>) dan email <Text style={{ fontWeight: '700' }}>username@ngopi.top</Text> secara gratis tanpa perlu buat manual!
+                    • <Text style={{ fontWeight: '800', color: '#38bdf8' }}>Bawaan Otomatis (Nomor & Email Acak)</Text>: Seluruh user lama & baru otomatis mendapat <Text style={{ fontWeight: '700' }}>Nomor 10-Digit Acak</Text> (misal <Text style={{ fontWeight: '700' }}>7492638517</Text>) & <Text style={{ fontWeight: '700' }}>Email Konsonan Acak</Text> (misal <Text style={{ fontWeight: '700' }}>xkqzvtrmpbn@ngopi.top</Text>) yang susah dihafal.
                   </Text>
                   <Text style={styles.ruleItem}>
                     • <Text style={{ fontWeight: '800', color: '#FFD700' }}>Nomor 0 & Email Resmi</Text>: Nomor <Text style={{ fontWeight: '700' }}>0</Text> serta nama email utama (<Text style={{ fontWeight: '700' }}>founder, warung, admin, official, cs, ceo, owner, warkop, ngopi, bmc</Text>) dikunci eksklusif untuk Founder.
                   </Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor VIP 1 s/d 100</Text>: Dikunci khusus oleh Founder (#0) untuk member VIP/Prioritas.
+                    • <Text style={{ fontWeight: '800', color: '#10b981' }}>Upgrade ke Nomor & Email Cantik (💎 Berbayar)</Text>: Untuk mengganti nomor/email acak ke <Text style={{ fontWeight: '700' }}>Nomor Cantik Mudah Dihafal (101+)</Text> atau <Text style={{ fontWeight: '700' }}>Email Sesuai Nama/Brand (@ngopi.top)</Text>, silakan pilih paket di bawah!
                   </Text>
-                  <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#10b981' }}>Ganti Nomor Cantik (101+) & Custom Email</Text>: Bebas request angka unik / nama email cantik selama belum dipakai orang lain {requirePaidCustomNumber || requirePaidCustomEmail ? '(💎 Fitur Premium Berbayar)' : '(🎁 Gratis Masa Uji Coba — Segera Jadi Fitur Premium)'}.
-                  </Text>
+                </View>
+
+                {/* DAFTAR HARGA PAKET UPGRADE PREMIUM (RUPIAH) */}
+                <View style={[styles.rulesCard, { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.09)' }]}>
+                  <Text style={[styles.rulesTitle, { color: '#fbbf24' }]}>💎 Daftar Harga Upgrade Nomor & Email Cantik (Sekali Bayar Aktif Selamanya)</Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Email Cantik Sesuai Nama</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 25.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Cantik Reguler</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 35.000</Text></Text>
+                  <Text style={styles.ruleItem}>• 🔥 <Text style={{ fontWeight: '900', color: '#FFD700' }}>PAKET BUNDLING HEMAT (Nomor Cantik + Email Cantik)</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 10, color: '#9ca3af' }}>(Hemat Rp 11.000 - Paling Laris!)</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Spesial 3 Angka / Kembar</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 75.000</Text></Text>
+                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP Terkunci (1 s/d 100)</Text>: <Text style={{ fontWeight: '900', color: '#f97316' }}>Rp 250.000</Text></Text>
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -24,11 +24,13 @@ export interface NgopiMailMessage {
 export interface PremiumTelecomConfig {
   requirePaymentForCustomNumber: boolean;
   requirePaymentForCustomEmail: boolean;
-  customNumberPricePoints: number;
-  customNumberPriceIdr: number;
-  vipNumberPriceIdr: number;
-  customEmailPricePoints: number;
   customEmailPriceIdr: number;
+  customNumberRegularPriceIdr: number;
+  customNumberSpecialPriceIdr: number;
+  bundleNumberAndEmailPriceIdr: number;
+  vipNumberPriceIdr: number;
+  customNumberPricePoints: number;
+  customEmailPricePoints: number;
 }
 
 interface TelecomStoreData {
@@ -39,6 +41,58 @@ interface TelecomStoreData {
   extraLockedEmails: string[]; // additional email local-parts locked by Founder
   premiumConfig?: PremiumTelecomConfig;
   mails: NgopiMailMessage[];
+}
+
+const CONSONANTS = 'bcdfghjklmnpqrstvwxz';
+
+export function generateUglyDefaultNumber(usernameOrId: string): string {
+  const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
+  if (clean === 'warung' || clean === 'founder') return '0';
+  let h1 = 2166136261;
+  let h2 = 16777619;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 16777619) >>> 0;
+    h2 = Math.imul(h2 ^ (ch * 31), 2166136261) >>> 0;
+  }
+  const firstDigits = ['7', '8', '9', '6'];
+  let result = firstDigits[h1 % 4];
+  let state = (h1 ^ h2) >>> 0;
+  for (let i = 1; i < 10; i++) {
+    state = (Math.imul(state, 1664525) + 1013904223 + i * 97) >>> 0;
+    let d = String((state % 9) + 1);
+    if (d === result[result.length - 1]) {
+      d = String(((Number(d) + 3) % 9) + 1);
+    }
+    if (result.length >= 1 && Math.abs(Number(d) - Number(result[result.length - 1])) === 1) {
+      d = String(((Number(d) + 4) % 9) + 1);
+    }
+    result += d;
+  }
+  return result;
+}
+
+export function generateUglyConsonantEmail(usernameOrId: string): string {
+  const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
+  if (clean === 'warung' || clean === 'founder') return 'warung@ngopi.top';
+  let h1 = 1315423911;
+  let h2 = 2654435761;
+  for (let i = 0; i < clean.length; i++) {
+    const ch = clean.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761) >>> 0;
+    h2 = Math.imul(h2 + ch * (i + 17), 1597334677) >>> 0;
+  }
+  let prefix = '';
+  let state = (h1 ^ h2) >>> 0;
+  for (let i = 0; i < 11; i++) {
+    state = (Math.imul(state, 22695477) + 1 + i * 53) >>> 0;
+    let c = CONSONANTS[state % CONSONANTS.length];
+    if (prefix.length > 0 && c === prefix[prefix.length - 1]) {
+      c = CONSONANTS[(state + 7) % CONSONANTS.length];
+    }
+    prefix += c;
+  }
+  return `${prefix}@ngopi.top`;
 }
 
 export const DEFAULT_LOCKED_EMAIL_PREFIXES = [
@@ -83,7 +137,7 @@ export const DEFAULT_LOCKED_EMAIL_PREFIXES = [
   'root',
   'bot',
   'vip',
-  'VVIP',
+  'vvip',
   'premium',
   'partner',
   'merchant',
@@ -102,13 +156,15 @@ export class TelecomService {
   private vipEmailsUnlocked: Map<string, string> = new Map();
   private extraLockedEmails: Set<string> = new Set();
   private premiumConfig: PremiumTelecomConfig = {
-    requirePaymentForCustomNumber: false, // Free during trial, Founder can toggle ON anytime
-    requirePaymentForCustomEmail: false,
-    customNumberPricePoints: 500,
-    customNumberPriceIdr: 25000,
-    vipNumberPriceIdr: 250000,
-    customEmailPricePoints: 500,
+    requirePaymentForCustomNumber: true,
+    requirePaymentForCustomEmail: true,
     customEmailPriceIdr: 25000,
+    customNumberRegularPriceIdr: 35000,
+    customNumberSpecialPriceIdr: 75000,
+    bundleNumberAndEmailPriceIdr: 49000,
+    vipNumberPriceIdr: 250000,
+    customNumberPricePoints: 1000,
+    customEmailPricePoints: 1000,
   };
   private mails: NgopiMailMessage[] = [];
 
@@ -208,12 +264,10 @@ export class TelecomService {
       .replace(/@ngopi\.top$/i, '');
     if (!clean) return true;
 
-    // Check if unlocked specifically for this user by Founder
     if (requestingUserId && this.vipEmailsUnlocked.get(clean) === requestingUserId) {
       return false;
     }
 
-    // Numbers 0..100 as email handles (0@ngopi.top .. 100@ngopi.top) are also locked
     if (/^\d+$/.test(clean)) {
       const num = Number(clean);
       if (num >= 0 && num <= 100) {
@@ -230,18 +284,20 @@ export class TelecomService {
     return false;
   }
 
+  /**
+   * Default email for regular users is a consonant-only hard-to-memorize email (e.g. xkqzvtrmpbn@ngopi.top)
+   * unless they are Founder (warung@ngopi.top) or have a paid/unlocked custom email!
+   */
   public formatEmail(username: string, userId?: string): string {
     if (userId && this.customEmails.has(userId)) {
       const customPrefix = this.customEmails.get(userId)!;
       return `${customPrefix}@ngopi.top`;
     }
-    const clean = String(username || 'user')
-      .trim()
-      .toLowerCase()
-      .replace(/^@/, '')
-      .replace(/@ngopi\.top$/i, '')
-      .replace(/[^a-z0-9._-]/g, '');
-    return `${clean || 'user'}@ngopi.top`;
+    const clean = String(username || 'user').trim().toLowerCase().replace(/^@/, '');
+    if (clean === 'warung' || clean === 'founder') {
+      return 'warung@ngopi.top';
+    }
+    return generateUglyConsonantEmail(clean || userId || 'user');
   }
 
   public getPremiumConfig(): PremiumTelecomConfig {
@@ -265,10 +321,9 @@ export class TelecomService {
 
   /**
    * Compute a user's active Ngopi Number:
-   * - Founder gets "0" (unless they explicitly set another custom number)
-   * - Locked VIP numbers 1..100 if assigned by Founder
-   * - Custom number >= 101 if claimed by user
-   * - Otherwise deterministic default starting from 101 (100 + bmc_id)
+   * - Founder gets "0"
+   * - Paid/VIP custom number if claimed/assigned
+   * - Otherwise deterministic 10-digit random-looking hard-to-memorize number (e.g. 7492638517)
    */
   public getNumberForUser(
     user: { id: string; username?: string | null; role?: string | null; bmc_id?: number | null }
@@ -280,26 +335,10 @@ export class TelecomService {
 
     const uname = String(user.username || '').trim().toLowerCase();
     if (uname === 'warung' || user.bmc_id === 1) {
-      const zeroTakenByOther = Array.from(this.customNumbers.entries()).some(
-        ([uid, num]) => num === '0' && uid !== user.id
-      );
-      if (!zeroTakenByOther) {
-        return '0';
-      }
+      return '0';
     }
 
-    const baseBmc = typeof user.bmc_id === 'number' && user.bmc_id > 0 ? user.bmc_id : 1;
-    let candidateNum = 100 + baseBmc;
-    if (candidateNum < 101) candidateNum = 101;
-    const claimedSet = new Set<string>();
-    for (const [uid, num] of this.customNumbers.entries()) {
-      if (uid !== user.id) claimedSet.add(num);
-    }
-
-    while (claimedSet.has(String(candidateNum))) {
-      candidateNum += 1;
-    }
-    return String(candidateNum);
+    return generateUglyDefaultNumber(uname || user.id);
   }
 
   public buildDirectoryMap(
@@ -318,23 +357,25 @@ export class TelecomService {
       } else if (u.username.trim().toLowerCase() === 'warung' || u.bmc_id === 1) {
         if (!usedNumbers.has('0')) {
           usedNumbers.add('0');
-          result.set(u.id, { number: '0', email });
+          result.set(u.id, { number: '0', email: 'warung@ngopi.top' });
         }
       }
     }
 
-    // Second pass: deterministic >= 101 for everyone else (existing users automatically get 101+)
-    const sorted = [...users].sort((a, b) => (a.bmc_id || 999999) - (b.bmc_id || 999999));
-    for (const u of sorted) {
+    // Second pass: deterministic ugly 10-digit random number & consonant-only email for everyone else
+    for (const u of users) {
       if (result.has(u.id)) continue;
-      let candidate = 100 + (u.bmc_id && u.bmc_id > 0 ? u.bmc_id : 1);
-      if (candidate < 101) candidate = 101;
-      while (usedNumbers.has(String(candidate))) {
-        candidate += 1;
+      let uglyNum = generateUglyDefaultNumber(u.username || u.id);
+      let salt = 1;
+      while (usedNumbers.has(uglyNum)) {
+        uglyNum = generateUglyDefaultNumber(`${u.username}_${salt}`);
+        salt += 1;
       }
-      const numStr = String(candidate);
-      usedNumbers.add(numStr);
-      result.set(u.id, { number: numStr, email: this.formatEmail(u.username, u.id) });
+      usedNumbers.add(uglyNum);
+      result.set(u.id, {
+        number: uglyNum,
+        email: this.formatEmail(u.username, u.id),
+      });
     }
 
     return result;
@@ -359,7 +400,7 @@ export class TelecomService {
   public async checkNumberAvailability(
     rawNumber: string,
     requestingUser: { id: string; username: string; role?: string | null; bmc_id?: number | null }
-  ): Promise<{ available: boolean; normalized: string; lockedVip: boolean; reason?: string; ownerUsername?: string }> {
+  ): Promise<{ available: boolean; normalized: string; lockedVip: boolean; reason?: string; ownerUsername?: string; suggestedPriceIdr?: number }> {
     const parsed = this.normalizeNumberInput(rawNumber);
     if (!parsed.valid) {
       return { available: false, normalized: '', lockedVip: false, reason: parsed.error };
@@ -384,7 +425,8 @@ export class TelecomService {
           available: false,
           normalized,
           lockedVip: true,
-          reason: 'Nomor 1 sampai 100 dikunci khusus oleh Founder (VIP). Silakan pilih nomor mulai dari 101 ke atas atau hubungi Founder.',
+          suggestedPriceIdr: this.premiumConfig.vipNumberPriceIdr,
+          reason: `🔒 Nomor ${normalized} adalah Nomor Sultan VIP (1–100) yang dikunci oleh Founder (Biaya Aktivasi VIP: Rp ${this.premiumConfig.vipNumberPriceIdr.toLocaleString('id-ID')}).`,
         };
       }
     }
@@ -410,7 +452,15 @@ export class TelecomService {
       }
     }
 
-    return { available: true, normalized, lockedVip: false };
+    const isSpecial = normalized.length <= 3 || /^(\d)\1+$/.test(normalized);
+    const price = isSpecial ? this.premiumConfig.customNumberSpecialPriceIdr : this.premiumConfig.customNumberRegularPriceIdr;
+
+    return {
+      available: true,
+      normalized,
+      lockedVip: false,
+      suggestedPriceIdr: price,
+    };
   }
 
   public async claimNumber(
@@ -421,7 +471,7 @@ export class TelecomService {
     if (this.premiumConfig.requirePaymentForCustomNumber && !isFounder) {
       return {
         success: false,
-        error: `Fitur Ganti Nomor Cantik saat ini berstatus FITUR PREMIUM (Biaya: Rp ${this.premiumConfig.customNumberPriceIdr.toLocaleString('id-ID')} atau ${this.premiumConfig.customNumberPricePoints} Poin Kopi). Silakan hubungi Founder (#0 / warung@ngopi.top) untuk aktivasi.`,
+        error: `Fitur Ganti Nomor Cantik adalah FITUR PREMIUM BERBAYAR (Mulai Rp ${this.premiumConfig.customNumberRegularPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Nomor + Email Cantik Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}). Silakan hubungi Founder (#0 / warung@ngopi.top) untuk aktivasi!`,
       };
     }
 
@@ -438,7 +488,7 @@ export class TelecomService {
   public async checkEmailAvailability(
     rawEmailOrPrefix: string,
     requestingUser: { id: string; username: string; role?: string | null; bmc_id?: number | null }
-  ): Promise<{ available: boolean; normalizedEmail: string; prefix: string; lockedVip: boolean; reason?: string }> {
+  ): Promise<{ available: boolean; normalizedEmail: string; prefix: string; lockedVip: boolean; reason?: string; suggestedPriceIdr?: number }> {
     const cleanPrefix = String(rawEmailOrPrefix || '')
       .trim()
       .toLowerCase()
@@ -475,9 +525,8 @@ export class TelecomService {
 
     for (const u of allUsers) {
       const entry = dir.get(u.id);
-      const uDefaultPrefix = u.username.trim().toLowerCase();
-      const uActivePrefix = entry ? entry.email.replace(/@ngopi\.top$/i, '').toLowerCase() : uDefaultPrefix;
-      if ((uActivePrefix === cleanPrefix || uDefaultPrefix === cleanPrefix) && u.id !== requestingUser.id) {
+      const uActivePrefix = entry ? entry.email.replace(/@ngopi\.top$/i, '').toLowerCase() : '';
+      if (uActivePrefix === cleanPrefix && u.id !== requestingUser.id) {
         return {
           available: false,
           normalizedEmail,
@@ -493,7 +542,8 @@ export class TelecomService {
       normalizedEmail,
       prefix: cleanPrefix,
       lockedVip: false,
-      reason: `✅ Alamat ${normalizedEmail} tersedia dan siap digunakan!`,
+      suggestedPriceIdr: this.premiumConfig.customEmailPriceIdr,
+      reason: `✅ Alamat ${normalizedEmail} tersedia! (Biaya Aktivasi Email Cantik: Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')})`,
     };
   }
 
@@ -505,7 +555,7 @@ export class TelecomService {
     if (this.premiumConfig.requirePaymentForCustomEmail && !isFounder) {
       return {
         success: false,
-        error: `Fitur Custom Nama Email @ngopi.top saat ini berstatus FITUR PREMIUM (Biaya: Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')} atau ${this.premiumConfig.customEmailPricePoints} Poin Kopi). Silakan hubungi Founder (#0) untuk aktivasi.`,
+        error: `Fitur Ganti Email Cantik @ngopi.top adalah FITUR PREMIUM BERBAYAR (Rp ${this.premiumConfig.customEmailPriceIdr.toLocaleString('id-ID')} atau Paket Bundling Nomor + Email Cantik Rp ${this.premiumConfig.bundleNumberAndEmailPriceIdr.toLocaleString('id-ID')}). Silakan hubungi Founder (#0) untuk aktivasi!`,
       };
     }
 
@@ -525,7 +575,7 @@ export class TelecomService {
     rawNumber: string
   ): Promise<{ success: boolean; number?: string; targetUsername?: string; error?: string }> {
     if (!this.isFounderUser(founderUser)) {
-      return { success: false, error: 'Hanya Founder yang dapat membuka dan memberikan nomor terkunci (0-100).' };
+      return { success: false, error: 'Hanya Founder yang dapat membuka dan memberikan nomor kepada member.' };
     }
 
     const parsed = this.normalizeNumberInput(rawNumber);
@@ -572,7 +622,7 @@ export class TelecomService {
     targetUsernameOrId?: string
   ): Promise<{ success: boolean; email?: string; targetUsername?: string; lockedPrefixes?: string[]; error?: string }> {
     if (!this.isFounderUser(founderUser)) {
-      return { success: false, error: 'Hanya Founder (#0) yang dapat mengunci atau membuka email @ngopi.top.' };
+      return { success: false, error: 'Hanya Founder (#0) yang dapat mengunci atau memberikan email @ngopi.top.' };
     }
 
     const cleanPrefix = String(emailPrefixRaw || '')
@@ -596,7 +646,6 @@ export class TelecomService {
       };
     }
 
-    // unlock_assign to a specific user
     const cleanTarget = String(targetUsernameOrId || '').trim().replace(/^@/, '');
     const targetUser = await prisma.user.findFirst({
       where: {
@@ -662,11 +711,9 @@ export class TelecomService {
     for (const u of allUsers) {
       const meta = dir.get(u.id) || { number: this.getNumberForUser(u), email: this.formatEmail(u.username, u.id) };
       const numberEmail = `${meta.number}@ngopi.top`;
-      const defaultUserEmail = `${u.username.toLowerCase()}@ngopi.top`;
       if (
         meta.number === cleanedNumber ||
         meta.email.toLowerCase() === cleanedEmail ||
-        defaultUserEmail === cleanedEmail ||
         numberEmail === cleanedEmail ||
         u.username.toLowerCase() === cleanedUsername ||
         u.id === raw
@@ -682,9 +729,6 @@ export class TelecomService {
     return null;
   }
 
-  // ============================================================================
-  // NGOPI MAIL (@ngopi.top)
-  // ============================================================================
   private ensureWelcomeMail(user: { id: string; username: string; display_name?: string | null }, ngopiNumber: string, ngopiEmail: string): void {
     const hasWelcome = this.mails.some((m) => m.to_user_id === user.id && m.id.startsWith('welcome-'));
     if (hasWelcome) return;
@@ -701,7 +745,7 @@ export class TelecomService {
       to_email: ngopiEmail,
       to_number: ngopiNumber,
       subject: `Selamat Datang di Ngopi Mail & Nomor Virtual #${ngopiNumber}! ☕`,
-      body: `Halo ${user.display_name || user.username}!\n\nAkun Anda kini telah dilengkapi secara otomatis dengan Identitas Telekomunikasi & Email resmi ekosistem ngopi.top:\n\n• Nomor HP Virtual Ngopi: ${ngopiNumber}\n• Alamat Email Resmi: ${ngopiEmail} (atau ${ngopiNumber}@ngopi.top)\n\nAnda dapat:\n1. Menghubungi teman cukup dengan mengetik Nomor Ngopi mereka di Papan Telepon (Dialpad).\n2. Mengganti Nomor Ngopi Anda ke nomor cantik pilihan Anda sendiri (mulai dari 101 ke atas) atau mengklaim nama email cantik @ngopi.top.\n3. Mengirim dan menerima surat elektronik resmi antar sesama pengguna @ngopi.top.\n\nSalam hangat,\nFounder Ngopi (#0 - warung@ngopi.top)`,
+      body: `Halo ${user.display_name || user.username}!\n\nAkun Anda telah mendapatkan Nomor HP Virtual & Email bawaan (acak):\n• Nomor Virtual Bawaan: ${ngopiNumber}\n• Email Bawaan: ${ngopiEmail}\n\nIngin mengganti ke Nomor Cantik yang mudah dihafal (misal 101, 777, 1945) dan Email Cantik sesuai nama Anda (${user.username.toLowerCase()}@ngopi.top)?\nSilakan buka tab "Nomor & Email Cantik" untuk memilih paket upgrade Premium!\n\nSalam hangat,\nFounder Ngopi (#0 - warung@ngopi.top)`,
       is_read: false,
       created_at: new Date().toISOString(),
     };
@@ -744,7 +788,7 @@ export class TelecomService {
     if (!recipient) {
       return {
         success: false,
-        error: `Tujuan "${cleanTo}" tidak ditemukan. Masukkan alamat seperti username@ngopi.top atau Nomor Ngopi yang terdaftar.`,
+        error: `Tujuan "${cleanTo}" tidak ditemukan. Masukkan alamat @ngopi.top atau Nomor Ngopi yang terdaftar.`,
       };
     }
 
