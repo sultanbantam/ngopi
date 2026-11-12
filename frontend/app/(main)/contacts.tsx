@@ -16,7 +16,7 @@ import { profileSlug } from '../../src/utils/profileLink';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useNightMode } from '../../src/theme/nightMode';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
-import NgopiTelecomMailModal, { formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
+import NgopiTelecomMailModal, { computeDefaultNgopiNumber, formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
@@ -786,7 +786,7 @@ export default function ContactsScreen() {
                   📞 Nomor HP Ngopi & Email @ngopi.top
                 </Text>
                 <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: 2 }}>
-                  Nomor: #{currentUsername?.toLowerCase() === 'warung' || currentBmcId === '1' ? '0 (Founder)' : currentBmcId ? String(100 + Number(currentBmcId)) : '101'} • {formatNgopiEmail(currentUsername)}
+                  Nomor: #{currentUsername?.toLowerCase() === 'warung' || currentBmcId === '1' ? '0 (Founder)' : computeDefaultNgopiNumber({ id: currentUserId || 'me', username: currentUsername }, 0, {})} • {formatNgopiEmail(currentUsername)}
                 </Text>
               </View>
               <Text style={{ color: coffee.accent, fontWeight: '800', fontSize: 12 }}>Ganti Nomor →</Text>

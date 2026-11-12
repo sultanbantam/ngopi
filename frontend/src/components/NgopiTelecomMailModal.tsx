@@ -472,7 +472,7 @@ export default function NgopiTelecomMailModal({
         checked: true,
         available: false,
         lockedVip: true,
-        message: '🔒 Nomor 1 sampai 100 dikunci khusus oleh Founder. Silakan pilih nomor mulai dari 101 ke atas!',
+        message: '👑 Nomor 1 sampai 100 adalah Nomor Sultan VIP Terkunci (Harga: Nego Langsung dengan Founder #0 / warung@ngopi.top).',
       });
       return false;
     }
@@ -490,10 +490,13 @@ export default function NgopiTelecomMailModal({
       return false;
     }
 
+    const isSpecial3DigitOrTwin = normalized.length <= 3 || /^(\d)\1+$/.test(normalized);
     setAvailabilityStatus({
       checked: true,
       available: true,
-      message: `✅ Nomor ${normalized} tersedia dan belum dipakai siapa pun!`,
+      message: isSpecial3DigitOrTwin
+        ? `✅ Nomor ${normalized} tersedia! Kategori: Nomor Cantik Spesial 3 Angka/Kembar (Rp 250.000 – Rp 1.000.000).`
+        : `✅ Nomor ${normalized} tersedia! Kategori: Nomor Cantik Reguler (Rp 35.000 atau Bundling + Email Rp 49.000).`,
     });
     return true;
   };
@@ -502,7 +505,7 @@ export default function NgopiTelecomMailModal({
     if (requirePaidCustomNumber && !isFounder) {
       showNotice(
         '💎 Fitur Premium Berbayar',
-        'Ganti Nomor Cantik saat ini berstatus Fitur Premium Berbayar.\n\nNomor bawaan Anda (101+) sudah aktif secara gratis! Untuk mengganti ke Nomor Cantik atau Nomor VIP (1–100), silakan hubungi Founder (#0 • warung@ngopi.top).'
+        'Upgrade Nomor Cantik adalah Fitur Premium Berbayar:\n• Nomor Cantik Reguler (4–6 Angka): Rp 35.000\n• Bundling Hemat (Nomor + Email Cantik): Rp 49.000\n• Nomor Cantik Spesial (3 Angka / Kembar): Rp 250.000 – Rp 1.000.000\n• Nomor Sultan VIP (1–100): Nego Langsung dengan Founder (#0)\n\nSilakan hubungi Founder (#0 • warung@ngopi.top) untuk aktivasi!'
       );
       return;
     }
@@ -1095,8 +1098,8 @@ export default function NgopiTelecomMailModal({
                   <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Email Cantik Sesuai Nama</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 25.000</Text></Text>
                   <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Cantik Reguler</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 35.000</Text></Text>
                   <Text style={styles.ruleItem}>• 🔥 <Text style={{ fontWeight: '900', color: '#FFD700' }}>PAKET BUNDLING HEMAT (Nomor Cantik + Email Cantik)</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 10, color: '#9ca3af' }}>(Hemat Rp 11.000 - Paling Laris!)</Text></Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Spesial 3 Angka / Kembar</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 75.000</Text></Text>
-                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP Terkunci (1 s/d 100)</Text>: <Text style={{ fontWeight: '900', color: '#f97316' }}>Rp 250.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Cantik Spesial (3 Angka / Kembar)</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 250.000 – Rp 1.000.000</Text></Text>
+                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP (1 s/d 100) & Email Brand / Jabatan</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Nego Langsung dengan Founder (#0)</Text></Text>
                 </View>
 
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>

@@ -160,9 +160,9 @@ export class TelecomService {
     requirePaymentForCustomEmail: true,
     customEmailPriceIdr: 25000,
     customNumberRegularPriceIdr: 35000,
-    customNumberSpecialPriceIdr: 75000,
+    customNumberSpecialPriceIdr: 250000,
     bundleNumberAndEmailPriceIdr: 49000,
-    vipNumberPriceIdr: 250000,
+    vipNumberPriceIdr: 1000000,
     customNumberPricePoints: 1000,
     customEmailPricePoints: 1000,
   };
@@ -426,7 +426,7 @@ export class TelecomService {
           normalized,
           lockedVip: true,
           suggestedPriceIdr: this.premiumConfig.vipNumberPriceIdr,
-          reason: `🔒 Nomor ${normalized} adalah Nomor Sultan VIP (1–100) yang dikunci oleh Founder (Biaya Aktivasi VIP: Rp ${this.premiumConfig.vipNumberPriceIdr.toLocaleString('id-ID')}).`,
+          reason: `🔒 Nomor ${normalized} adalah Nomor Sultan VIP (1–100) yang dikunci oleh Founder (Harga: Nego Langsung dengan Founder #0 / warung@ngopi.top).`,
         };
       }
     }

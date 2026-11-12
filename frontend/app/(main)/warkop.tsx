@@ -42,7 +42,7 @@ import { WARKOP_TEBAK_TEBAKAN, TebakTebakan } from '../../src/data/tebakTebakan'
 import { FEATURE_TIPS, FeatureTip } from '../../src/data/tips';
 import LeaderboardModal from '../../src/components/LeaderboardModal';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
-import NgopiTelecomMailModal, { formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
+import NgopiTelecomMailModal, { computeDefaultNgopiNumber, formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
 import CompilationAlbumModal from '../../src/components/CompilationAlbumModal';
 import CafeCheckinModal from '../../src/components/CafeCheckinModal';
 import CafePartnerModal from '../../src/components/CafePartnerModal';
