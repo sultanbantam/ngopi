@@ -2,8 +2,66 @@ import { Router, Request, Response } from 'express';
 import { verifyJWT } from '../middleware/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { telecomService } from '../services/telecom.service';
+import { getSocketIO } from '../sockets';
 
 const router = Router();
+
+// GET /api/telecom/directory — Resilient public member & telecom directory for Web & Mobile
+router.get('/directory', async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const allUsers = await prisma.user.findMany({
+      orderBy: { created_at: 'asc' },
+      select: {
+        id: true,
+        username: true,
+        display_name: true,
+        avatar_url: true,
+        bmc_id: true,
+        role: true,
+        is_online: true,
+        status: true,
+        last_seen: true,
+        created_at: true,
+      },
+    });
+    const dir = telecomService.buildDirectoryMap(allUsers);
+    const enriched = allUsers.map((u: any) => {
+      const meta = dir.get(u.id) || {
+        number: telecomService.getNumberForUser(u),
+        email: telecomService.formatEmail(u.username, u.id),
+      };
+      return {
+        ...u,
+        ngopi_number: meta.number,
+        ngopi_email: meta.email,
+      };
+    });
+    res.status(200).json({
+      total: enriched.length,
+      members: enriched,
+      premium_config: telecomService.getPremiumConfig(),
+    });
+  } catch (err) {
+    console.error('[TelecomRoutes] /directory error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/public-lookup/:identifier — Fast Dialpad / Email lookup
+router.get('/public-lookup/:identifier', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const identifier = String(req.params.identifier || '').trim();
+    const resolved = await telecomService.resolveUserByIdentifier(identifier);
+    if (!resolved) {
+      res.status(404).json({ error: `Nomor atau alamat "${identifier}" belum terdaftar.` });
+      return;
+    }
+    res.status(200).json(resolved);
+  } catch (err) {
+    console.error('[TelecomRoutes] /public-lookup error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
 
 const getAuthenticatedDbUser = async (req: Request) => {
   const userId = (req as any).user?.id;
@@ -279,11 +337,25 @@ router.post('/mail/send', verifyJWT, async (req: Request, res: Response): Promis
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    const { to, subject, body } = req.body || {};
-    const result = await telecomService.sendMail(user, String(to ?? ''), String(subject ?? ''), String(body ?? ''));
+    const { to, subject, body, attachments } = req.body || {};
+    const result = await telecomService.sendMail(
+      user,
+      String(to ?? ''),
+      String(subject ?? ''),
+      String(body ?? ''),
+      Array.isArray(attachments) ? attachments : undefined
+    );
     if (!result.success) {
       res.status(400).json({ error: result.error });
       return;
+    }
+    if (result.mail) {
+      try {
+        const io = getSocketIO();
+        if (io) {
+          io.to(result.mail.to_user_id).emit('telecom_new_mail', result.mail);
+        }
+      } catch {}
     }
     res.status(201).json({
       message: 'Email berhasil dikirim!',

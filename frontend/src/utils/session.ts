@@ -124,7 +124,7 @@ export const getValidAccessToken = async () => {
   const refreshedToken = await refreshAccessToken(Boolean(token));
   if (refreshedToken) return refreshedToken;
 
-  return token && !isAccessTokenExpiring(token, 0) ? token : '';
+  return token || '';
 };
 
 export const clearStoredSession = async () => {

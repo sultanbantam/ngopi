@@ -10,13 +10,18 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import axios from 'axios';
 import { router } from 'expo-router';
 import { coffee } from '../theme/coffee';
 import * as SecureStore from '../utils/storage';
+import { socketService } from '../utils/socket';
 
 const API_URL = 'https://api.ngopi.top/api';
 const LOCAL_CUSTOM_NUMBERS_KEY = 'ngopi.telecom.custom_numbers.v1';
@@ -33,6 +38,14 @@ export interface TelecomMemberItem {
   ngopi_email?: string;
 }
 
+export interface MailAttachment {
+  url: string;
+  name: string;
+  type: 'image' | 'video' | 'document';
+  size?: number;
+  mime_type?: string;
+}
+
 interface MailItem {
   id: string;
   from_user_id: string;
@@ -46,6 +59,7 @@ interface MailItem {
   to_number: string;
   subject: string;
   body: string;
+  attachments?: MailAttachment[];
   is_read: boolean;
   created_at: string;
 }
@@ -185,6 +199,10 @@ export default function NgopiTelecomMailModal({
   // Premium Mode state (Managed by Founder #0)
   const [requirePaidCustomNumber, setRequirePaidCustomNumber] = useState<boolean>(true);
   const [requirePaidCustomEmail, setRequirePaidCustomEmail] = useState<boolean>(true);
+  const [paymentInfo, setPaymentInfo] = useState<string>(
+    '• Tujuan Transfer (Bank / QRIS / E-Wallet / BMC): Konfirmasi langsung ke Founder Ngopi (#0 • warung@ngopi.top)\n• Cara Aktivasi Cepat: Klik tombol "Pesan & Lampirkan Bukti Transfer ke Founder (#0)" di bawah untuk mengirim pilihan Nomor/Email Cantik beserta lampiran bukti transfer.'
+  );
+  const [httpDirectory, setHttpDirectory] = useState<TelecomMemberItem[]>([]);
 
   // Founder VIP Assign state (1..100 & Locked @ngopi.top Emails)
   const [vipTargetUsername, setVipTargetUsername] = useState<string>('');
@@ -199,6 +217,8 @@ export default function NgopiTelecomMailModal({
   const [composeTo, setComposeTo] = useState<string>('');
   const [composeSubject, setComposeSubject] = useState<string>('');
   const [composeBody, setComposeBody] = useState<string>('');
+  const [composeAttachments, setComposeAttachments] = useState<MailAttachment[]>([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState<boolean>(false);
   const [isSendingMail, setIsSendingMail] = useState<boolean>(false);
   const [loadingMail, setLoadingMail] = useState<boolean>(false);
 
@@ -236,9 +256,15 @@ export default function NgopiTelecomMailModal({
     return (await SecureStore.getItemAsync('token')) || '';
   };
 
-  // Build full directory with numbers & emails
+  // Build full directory with numbers & emails (combining props + HTTP fallback directory)
   const enrichedDirectory = useMemo(() => {
-    const list = [...members];
+    const mergedMap = new Map<string, TelecomMemberItem>();
+    [...httpDirectory, ...members].forEach((m) => {
+      if (m && m.id) {
+        mergedMap.set(m.id, { ...mergedMap.get(m.id), ...m });
+      }
+    });
+    const list = Array.from(mergedMap.values());
     const hasMe = list.some((m) => m.id === currentUserId || m.username?.toLowerCase() === currentUsername?.toLowerCase());
     if (!hasMe && currentUsername) {
       list.unshift({
@@ -283,12 +309,25 @@ export default function NgopiTelecomMailModal({
     });
 
     return result;
-  }, [members, currentUserId, currentUsername, currentDisplayName, customNumbersMap, customEmailsMap]);
+  }, [httpDirectory, members, currentUserId, currentUsername, currentDisplayName, customNumbersMap, customEmailsMap]);
 
   const loadTelecomData = useCallback(async () => {
     const uname = String(currentUsername || '').trim().toLowerCase();
     const founderFlag = uname === 'warung' || uname === 'founder' || uname === 'admin';
     setIsFounder(founderFlag);
+
+    // Always fetch resilient directory so HP/Mobile has all members even before Socket connects
+    axios
+      .get(`${API_URL}/telecom/directory`)
+      .then((res) => {
+        if (Array.isArray(res.data?.members) && res.data.members.length > 0) {
+          setHttpDirectory(res.data.members);
+        }
+        if (res.data?.premium_config?.paymentInfo) {
+          setPaymentInfo(String(res.data.premium_config.paymentInfo));
+        }
+      })
+      .catch(() => {});
 
     // Load local custom numbers fallback
     let localCustom: Record<string, string> = {};
@@ -304,7 +343,7 @@ export default function NgopiTelecomMailModal({
     const meEntry = enrichedDirectory.find(
       (m) => m.id === currentUserId || m.username?.toLowerCase() === uname
     );
-    const defaultNum = localCustom[currentUserId] || meEntry?.ngopi_number || (founderFlag ? '0' : '101');
+    const defaultNum = localCustom[currentUserId] || meEntry?.ngopi_number || (founderFlag ? '0' : generateUglyDefaultNumber(uname || currentUserId));
     const defaultEmail = formatNgopiEmail(currentUsername || 'user');
     setMyNumber(defaultNum);
     setMyEmail(defaultEmail);
@@ -340,39 +379,74 @@ export default function NgopiTelecomMailModal({
     }
     setMails(storedMails);
 
-    // Try syncing with backend /api/telecom/me & /api/telecom/mail/inbox
+    // Sync with backend /api/telecom/me, /api/telecom/mail/inbox & /api/telecom/mail/sent
     try {
       const token = await getToken();
       if (!token) return;
-      const [meRes, inboxRes] = await Promise.all([
-        axios.get(`${API_URL}/telecom/me`, { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get(`${API_URL}/telecom/mail/inbox`, { headers: { Authorization: `Bearer ${token}` } }),
+      setLoadingMail(true);
+      const [meRes, inboxRes, sentRes] = await Promise.all([
+        axios.get(`${API_URL}/telecom/me`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+        axios.get(`${API_URL}/telecom/mail/inbox`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
+        axios.get(`${API_URL}/telecom/mail/sent`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null),
       ]);
-      if (meRes.data?.ngopi_number) {
+      if (meRes?.data?.ngopi_number) {
         setMyNumber(String(meRes.data.ngopi_number));
         setMyEmail(String(meRes.data.ngopi_email || defaultEmail));
         setIsFounder(Boolean(meRes.data.is_founder || founderFlag));
       }
-      if (Array.isArray(meRes.data?.locked_email_prefixes)) {
+      if (Array.isArray(meRes?.data?.locked_email_prefixes)) {
         setLockedEmailPrefixes(meRes.data.locked_email_prefixes);
       }
-      if (meRes.data?.premium_config) {
+      if (meRes?.data?.premium_config) {
         setRequirePaidCustomNumber(Boolean(meRes.data.premium_config.requirePaymentForCustomNumber));
         setRequirePaidCustomEmail(Boolean(meRes.data.premium_config.requirePaymentForCustomEmail));
+        if (meRes.data.premium_config.paymentInfo) {
+          setPaymentInfo(String(meRes.data.premium_config.paymentInfo));
+        }
       }
-      if (Array.isArray(inboxRes.data?.mails) && inboxRes.data.mails.length > 0) {
-        setMails(inboxRes.data.mails);
+      const serverInbox: MailItem[] = Array.isArray(inboxRes?.data?.mails) ? inboxRes.data.mails : [];
+      const serverSent: MailItem[] = Array.isArray(sentRes?.data?.mails) ? sentRes.data.mails : [];
+      if (serverInbox.length > 0 || serverSent.length > 0) {
+        const combinedMap = new Map<string, MailItem>();
+        [...serverInbox, ...serverSent, ...storedMails].forEach((m) => {
+          if (m && m.id && !combinedMap.has(m.id)) {
+            combinedMap.set(m.id, m);
+          }
+        });
+        const mergedMails = Array.from(combinedMap.values()).sort(
+          (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setMails(mergedMails);
       }
     } catch {
       // Fallback already populated cleanly
+    } finally {
+      setLoadingMail(false);
     }
-  }, [currentUserId, currentUsername, currentDisplayName, enrichedDirectory]);
+  }, [currentUserId, currentUsername, currentDisplayName]);
 
   useEffect(() => {
     if (visible) {
       loadTelecomData();
     }
   }, [visible, loadTelecomData]);
+
+  // Real-time Socket listener for incoming @ngopi.top emails
+  useEffect(() => {
+    const socket = socketService.socket;
+    if (!socket) return;
+    const handleNewMail = (newMail: MailItem) => {
+      if (!newMail || !newMail.id) return;
+      setMails((prev) => {
+        if (prev.some((m) => m.id === newMail.id)) return prev;
+        return [newMail, ...prev];
+      });
+    };
+    socket.on('telecom_new_mail', handleNewMail);
+    return () => {
+      socket.off('telecom_new_mail', handleNewMail);
+    };
+  }, [visible]);
 
   // Dialpad lookup
   const dialedMember = useMemo(() => {
@@ -392,10 +466,10 @@ export default function NgopiTelecomMailModal({
     setDialedInput((prev) => (prev.length < 15 ? prev + key : prev));
   };
 
-  const handleDialAction = (mode: 'voice' | 'video' | 'chat' | 'mail') => {
+  const handleDialAction = async (mode: 'voice' | 'video' | 'chat' | 'mail') => {
     const code = dialedInput.trim();
     if (!code) {
-      showNotice('Papan Telepon', 'Ketik Nomor Ngopi tujuan terlebih dahulu (contoh: 0 untuk Founder, atau 101, 102, dst).');
+      showNotice('Papan Telepon', 'Ketik Nomor Ngopi tujuan terlebih dahulu (contoh: 0 untuk Founder, atau nomor member tujuan).');
       return;
     }
 
@@ -408,37 +482,59 @@ export default function NgopiTelecomMailModal({
       return;
     }
 
-    if (!dialedMember) {
+    let targetMember: (TelecomMemberItem & { ngopi_number: string; ngopi_email: string }) | null = dialedMember;
+
+    // Fallback: query backend /api/telecom/public-lookup/:identifier if local directory doesn't have it yet
+    if (!targetMember) {
+      try {
+        const cleanCode = code.replace(/^#/, '');
+        const lookupRes = await axios.get(`${API_URL}/telecom/public-lookup/${encodeURIComponent(cleanCode)}`);
+        if (lookupRes.data?.id) {
+          targetMember = {
+            id: lookupRes.data.id,
+            username: lookupRes.data.username,
+            display_name: lookupRes.data.display_name || lookupRes.data.username,
+            avatar_url: lookupRes.data.avatar_url,
+            bmc_id: lookupRes.data.bmc_id,
+            role: lookupRes.data.role,
+            ngopi_number: String(lookupRes.data.ngopi_number || cleanCode),
+            ngopi_email: String(lookupRes.data.ngopi_email || formatNgopiEmail(lookupRes.data.username)),
+          };
+        }
+      } catch {}
+    }
+
+    if (!targetMember) {
       const numVal = Number(code);
       if (!Number.isNaN(numVal) && numVal >= 1 && numVal <= 100) {
         showNotice(
           '🔒 Nomor VIP Terkunci (1–100)',
-          `Nomor ${code} adalah nomor VIP yang saat ini dikunci oleh Founder (#0) dan belum diaktifkan untuk pengguna.`
+          `Nomor ${code} adalah Nomor Sultan VIP yang saat ini dikunci oleh Founder (#0) dan belum diaktifkan untuk pengguna.`
         );
       } else {
         showNotice(
           'Nomor Belum Terdaftar',
-          `Nomor Ngopi "${code}" belum digunakan oleh siapa pun. Anda bisa mengklaim nomor ini di tab "Pilih Nomor Unik"!`
+          `Nomor Ngopi "${code}" belum digunakan oleh siapa pun. Anda bisa mengklaim nomor ini di tab "Nomor Unik"!`
         );
       }
       return;
     }
 
     if (mode === 'mail') {
-      setComposeTo(dialedMember.ngopi_email);
+      setComposeTo(targetMember.ngopi_email);
       setActiveTab('mail');
       setMailSubTab('compose');
       return;
     }
 
     onClose();
-    const targetName = dialedMember.display_name || dialedMember.username;
+    const targetName = targetMember.display_name || targetMember.username;
     if (mode === 'chat') {
-      router.push({ pathname: '/(main)/chat/[id]', params: { id: dialedMember.id, name: targetName } });
+      router.push({ pathname: '/(main)/chat/[id]', params: { id: targetMember.id, name: targetName } });
     } else if (mode === 'voice') {
-      router.push({ pathname: '/(main)/call/[id]', params: { id: dialedMember.id, name: targetName, isVideo: 'false' } });
+      router.push({ pathname: '/(main)/call/[id]', params: { id: targetMember.id, name: targetName, isVideo: 'false' } });
     } else if (mode === 'video') {
-      router.push({ pathname: '/(main)/call/[id]', params: { id: dialedMember.id, name: targetName, isVideo: 'true' } });
+      router.push({ pathname: '/(main)/call/[id]', params: { id: targetMember.id, name: targetName, isVideo: 'true' } });
     }
   };
 
@@ -762,6 +858,208 @@ export default function NgopiTelecomMailModal({
     } catch {}
   };
 
+  const handleSavePaymentInfo = async () => {
+    if (!isFounder) return;
+    try {
+      const token = await getToken();
+      if (token) {
+        await axios
+          .post(
+            `${API_URL}/telecom/premium-config`,
+            { paymentInfo },
+            { headers: { Authorization: `Bearer ${token}` } }
+          )
+          .catch(() => {});
+      }
+      showNotice('✅ Info Pembayaran Disimpan', 'Informasi tujuan transfer rekening / QRIS berhasil diperbarui untuk seluruh pengguna.');
+    } catch {}
+  };
+
+  const handleOrderUpgradeToFounder = () => {
+    const numPart = desiredNumber.trim() ? `• Nomor Cantik Pilihan: #${desiredNumber.trim()}\n` : '';
+    const emailPart = desiredEmailPrefix.trim()
+      ? `• Email Cantik Pilihan: ${desiredEmailPrefix.trim().replace(/@ngopi\.top$/i, '')}@ngopi.top\n`
+      : '';
+    setComposeTo('warung@ngopi.top');
+    setComposeSubject(`Konfirmasi Upgrade Nomor / Email Cantik (@${currentUsername})`);
+    setComposeBody(
+      `Halo Founder Ngopi (#0),\n\nSaya (@${currentUsername} • Nomor Bawaan #${myNumber}) ingin memesan / mengonfirmasi pembayaran upgrade:\n${numPart}${emailPart || '• Paket: Nomor & Email Cantik\n'}\nBerikut saya lampirkan bukti transfer pembayarannya. Mohon bantuannya untuk diaktifkan.\n\nTerima kasih! ☕`
+    );
+    setActiveTab('mail');
+    setMailSubTab('compose');
+  };
+
+  // Upload attachment (Document / Image / Video) for @ngopi.top Email
+  const uploadMailAttachment = async (
+    uri: string,
+    fallbackCategory: 'image' | 'video' | 'document',
+    originalName?: string,
+    mimeType?: string,
+    rawFile?: any,
+    fileSize?: number
+  ): Promise<MailAttachment | null> => {
+    if (fileSize && fileSize > 25 * 1024 * 1024) {
+      showNotice('Ukuran File Terlalu Besar', 'Batas ukuran per lampiran adalah maksimal 25 MB.');
+      return null;
+    }
+    setIsUploadingAttachment(true);
+    try {
+      const extFromName = originalName?.split('.').pop()?.toLowerCase() || '';
+      const resolvedMime =
+        mimeType ||
+        (fallbackCategory === 'image'
+          ? 'image/jpeg'
+          : fallbackCategory === 'video'
+          ? 'video/mp4'
+          : extFromName === 'pdf'
+          ? 'application/pdf'
+          : 'application/octet-stream');
+      const fallbackName =
+        originalName ||
+        `lampiran_${Date.now()}.${
+          extFromName || (fallbackCategory === 'image' ? 'jpg' : fallbackCategory === 'video' ? 'mp4' : 'pdf')
+        }`;
+
+      const formData = new FormData();
+      if (Platform.OS === 'web') {
+        let fileObj: File;
+        if (rawFile && (rawFile instanceof File || rawFile instanceof Blob)) {
+          fileObj = new File([rawFile], fallbackName, { type: resolvedMime || rawFile.type || 'application/octet-stream' });
+        } else if (uri.startsWith('data:')) {
+          const arr = uri.split(',');
+          const mimeMatch = arr[0].match(/:(.*?);/);
+          const bstr = atob(arr[1]);
+          let n = bstr.length;
+          const u8arr = new Uint8Array(n);
+          while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+          }
+          const blob = new Blob([u8arr], { type: resolvedMime || mimeMatch?.[1] || 'application/octet-stream' });
+          fileObj = new File([blob], fallbackName, { type: blob.type });
+        } else {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          fileObj = new File([blob], fallbackName, { type: resolvedMime || blob.type || 'application/octet-stream' });
+        }
+        formData.append('file', fileObj);
+      } else {
+        formData.append('file', {
+          uri,
+          name: fallbackName,
+          type: resolvedMime,
+        } as any);
+      }
+
+      const token = await getToken();
+      const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await axios.post(`${API_URL}/upload`, formData, { headers });
+      if (res.data?.url) {
+        const returnedType = res.data.type === 'image' || res.data.type === 'video' ? res.data.type : fallbackCategory;
+        return {
+          url: String(res.data.url),
+          name: String(res.data.name || fallbackName),
+          type: returnedType,
+          size: typeof res.data.size === 'number' ? res.data.size : fileSize,
+          mime_type: String(res.data.mime_type || resolvedMime),
+        };
+      }
+      return null;
+    } catch (err: any) {
+      const errMsg = err?.response?.data?.error || err?.message || 'Gagal mengunggah berkas lampiran.';
+      showNotice('Gagal Upload Lampiran', String(errMsg));
+      return null;
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
+
+  const handlePickMailImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: false,
+        quality: 0.85,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const asset = result.assets[0];
+        const fileName = asset.fileName || `gambar_${Date.now()}.${asset.mimeType?.split('/')[1] || 'jpg'}`;
+        const uploaded = await uploadMailAttachment(
+          asset.uri,
+          'image',
+          fileName,
+          asset.mimeType,
+          (asset as any).file,
+          asset.fileSize
+        );
+        if (uploaded) {
+          setComposeAttachments((prev) => [...prev, uploaded]);
+        }
+      }
+    } catch (e: any) {
+      showNotice('Gagal Memilih Gambar', e?.message || 'Tidak dapat membuka galeri gambar.');
+    }
+  };
+
+  const handlePickMailVideo = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+        allowsEditing: false,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const asset = result.assets[0];
+        const fileName = asset.fileName || `video_${Date.now()}.${asset.mimeType?.split('/')[1] || 'mp4'}`;
+        const uploaded = await uploadMailAttachment(
+          asset.uri,
+          'video',
+          fileName,
+          asset.mimeType || 'video/mp4',
+          (asset as any).file,
+          asset.fileSize
+        );
+        if (uploaded) {
+          setComposeAttachments((prev) => [...prev, uploaded]);
+        }
+      }
+    } catch (e: any) {
+      showNotice('Gagal Memilih Video', e?.message || 'Tidak dapat membuka galeri video.');
+    }
+  };
+
+  const handlePickMailDocument = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        copyToCacheDirectory: true,
+        type: '*/*',
+      });
+      if (!result.canceled && result.assets?.[0]?.uri) {
+        const doc = result.assets[0];
+        const mime = doc.mimeType || '';
+        const category: 'image' | 'video' | 'document' = mime.startsWith('image/')
+          ? 'image'
+          : mime.startsWith('video/')
+          ? 'video'
+          : 'document';
+        const uploaded = await uploadMailAttachment(
+          doc.uri,
+          category,
+          doc.name || `dokumen_${Date.now()}`,
+          doc.mimeType,
+          (doc as any).file,
+          doc.size
+        );
+        if (uploaded) {
+          setComposeAttachments((prev) => [...prev, uploaded]);
+        }
+      }
+    } catch (e: any) {
+      showNotice('Gagal Memilih Dokumen', e?.message || 'Tidak dapat membuka pemilih berkas.');
+    }
+  };
+
   // Send Email (@ngopi.top)
   const handleSendMail = async () => {
     const rawTo = composeTo.trim();
@@ -772,8 +1070,8 @@ export default function NgopiTelecomMailModal({
       showNotice('Alamat Tujuan Kosong', 'Masukkan alamat email tujuan (contoh: warung@ngopi.top) atau Nomor Ngopi (contoh: 0 atau 101).');
       return;
     }
-    if (!cleanBody) {
-      showNotice('Isi Email Kosong', 'Tulis isi surat elektronik Anda terlebih dahulu.');
+    if (!cleanBody && composeAttachments.length === 0) {
+      showNotice('Isi Email Kosong', 'Tulis isi surat elektronik Anda atau lampirkan berkas (dokumen/gambar/video) terlebih dahulu.');
       return;
     }
 
@@ -785,7 +1083,7 @@ export default function NgopiTelecomMailModal({
         m.username?.toLowerCase() === cleanKey
     );
 
-    if (!recipient && !rawTo.includes('@')) {
+    if (!recipient && !rawTo.includes('@') && !/^\d+$/.test(cleanKey)) {
       showNotice('Tujuan Tidak Ditemukan', `Pengguna atau nomor "${rawTo}" belum ditemukan di direktori Ngopi.`);
       return;
     }
@@ -798,7 +1096,12 @@ export default function NgopiTelecomMailModal({
         const res = await axios
           .post(
             `${API_URL}/telecom/mail/send`,
-            { to: rawTo, subject: cleanSubject, body: cleanBody },
+            {
+              to: rawTo,
+              subject: cleanSubject,
+              body: cleanBody || `(Melampirkan ${composeAttachments.length} berkas)`,
+              attachments: composeAttachments.length > 0 ? composeAttachments : undefined,
+            },
             { headers: { Authorization: `Bearer ${token}` } }
           )
           .catch(() => null);
@@ -820,7 +1123,8 @@ export default function NgopiTelecomMailModal({
           to_email: recipient?.ngopi_email || (rawTo.includes('@') ? rawTo : `${cleanKey}@ngopi.top`),
           to_number: recipient?.ngopi_number || cleanKey,
           subject: cleanSubject,
-          body: cleanBody,
+          body: cleanBody || `(Melampirkan ${composeAttachments.length} berkas)`,
+          attachments: composeAttachments.length > 0 ? composeAttachments : undefined,
           is_read: false,
           created_at: new Date().toISOString(),
         };
@@ -838,6 +1142,7 @@ export default function NgopiTelecomMailModal({
       setComposeTo('');
       setComposeSubject('');
       setComposeBody('');
+      setComposeAttachments([]);
       setMailSubTab('sent');
       showNotice('📧 Email Terkirim!', `Surat elektronik berhasil dikirim ke ${createdMail.to_email}.`);
     } finally {
@@ -1102,6 +1407,65 @@ export default function NgopiTelecomMailModal({
                   <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP (1 s/d 100) & Email Brand / Jabatan</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Nego Langsung dengan Founder (#0)</Text></Text>
                 </View>
 
+                {/* INFO TUJUAN TRANSFER & KONFIRMASI PEMBAYARAN KE FOUNDER (#0) */}
+                <View style={[styles.rulesCard, { borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.08)' }]}>
+                  <Text style={[styles.rulesTitle, { color: '#10b981' }]}>💳 Kemana Transfer Pembayaran Nomor Cantik & Email Cantik?</Text>
+                  <Text style={[styles.ruleItem, { color: coffee.text, lineHeight: 19 }]}>{paymentInfo}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        minWidth: 180,
+                        backgroundColor: '#10b981',
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onPress={handleOrderUpgradeToFounder}
+                    >
+                      <Ionicons name="mail" size={16} color="#171411" />
+                      <Text style={{ color: '#171411', fontSize: 12, fontWeight: '900' }}>
+                        Pesan & Kirim Bukti Transfer ke #0
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: coffee.surface,
+                        borderWidth: 1,
+                        borderColor: coffee.accent,
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        const founderEntry = enrichedDirectory.find(
+                          (m) => m.ngopi_number === '0' || m.username?.toLowerCase() === 'warung'
+                        );
+                        if (founderEntry) {
+                          onClose();
+                          router.push({
+                            pathname: '/(main)/chat/[id]',
+                            params: { id: founderEntry.id, name: founderEntry.display_name || founderEntry.username },
+                          });
+                        } else {
+                          handleOrderUpgradeToFounder();
+                        }
+                      }}
+                    >
+                      <Ionicons name="chatbubble-ellipses" size={16} color={coffee.accent} />
+                      <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800' }}>Chat Founder (#0)</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={[styles.sectionLabel, { marginBottom: 0 }]}>1. Pilih / Ganti Nomor Unik (101+)</Text>
                   <View style={{ backgroundColor: requirePaidCustomNumber ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: requirePaidCustomNumber ? '#f59e0b' : '#10b981' }}>
@@ -1363,6 +1727,25 @@ export default function NgopiTelecomMailModal({
                         </Text>
                       </TouchableOpacity>
                     </View>
+
+                    {/* 4. Atur Info Rekening / QRIS Tujuan Transfer */}
+                    <Text style={[styles.sectionLabel, { marginTop: 16, marginBottom: 6, color: '#FFD700' }]}>
+                      D. Atur Info Rekening / QRIS Tujuan Transfer Pembayaran
+                    </Text>
+                    <TextInput
+                      style={[styles.claimInput, { minHeight: 74, textAlignVertical: 'top', paddingTop: 8 }]}
+                      value={paymentInfo}
+                      onChangeText={setPaymentInfo}
+                      placeholder="Masukkan nomor rekening Bank / E-Wallet / instruksi QRIS..."
+                      placeholderTextColor={coffee.muted}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={[styles.checkBtn, { marginTop: 8, paddingVertical: 10, backgroundColor: '#10b981' }]}
+                      onPress={handleSavePaymentInfo}
+                    >
+                      <Text style={[styles.checkBtnText, { color: '#171411' }]}>💾 Simpan Info Rekening / Pembayaran</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -1377,6 +1760,7 @@ export default function NgopiTelecomMailModal({
                     onPress={() => {
                       setSelectedMail(null);
                       setMailSubTab('inbox');
+                      loadTelecomData();
                     }}
                   >
                     <Ionicons name="mail-unread-outline" size={15} color={mailSubTab === 'inbox' ? coffee.accent : coffee.secondary} />
@@ -1390,6 +1774,7 @@ export default function NgopiTelecomMailModal({
                     onPress={() => {
                       setSelectedMail(null);
                       setMailSubTab('sent');
+                      loadTelecomData();
                     }}
                   >
                     <Ionicons name="paper-plane-outline" size={15} color={mailSubTab === 'sent' ? coffee.accent : coffee.secondary} />
@@ -1409,6 +1794,14 @@ export default function NgopiTelecomMailModal({
                     <Text style={[styles.mailSubText, mailSubTab === 'compose' && styles.mailSubTextActive]}>
                       + Tulis Email
                     </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.mailSubBtn, { flex: 0, paddingHorizontal: 10 }]}
+                    onPress={() => loadTelecomData()}
+                    accessibilityLabel="Segarkan Email"
+                  >
+                    <Ionicons name="refresh" size={15} color={coffee.accent} />
                   </TouchableOpacity>
                 </View>
 
@@ -1433,6 +1826,79 @@ export default function NgopiTelecomMailModal({
                     </View>
 
                     <Text style={styles.mailDetailBody}>{selectedMail.body}</Text>
+
+                    {/* Render Email Attachments (Documents, Images, Videos) */}
+                    {Array.isArray(selectedMail.attachments) && selectedMail.attachments.length > 0 && (
+                      <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.border }}>
+                        <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '800', marginBottom: 8 }}>
+                          📎 Lampiran Berkas ({selectedMail.attachments.length}):
+                        </Text>
+                        {selectedMail.attachments.map((att, idx) => (
+                          <View
+                            key={`${att.url}-${idx}`}
+                            style={{
+                              backgroundColor: '#120d0a',
+                              borderRadius: 10,
+                              borderWidth: 1,
+                              borderColor: coffee.border,
+                              padding: 10,
+                              marginBottom: 8,
+                            }}
+                          >
+                            {att.type === 'image' && (
+                              <TouchableOpacity onPress={() => Linking.openURL(att.url)} activeOpacity={0.85}>
+                                <Image
+                                  source={{ uri: att.url }}
+                                  style={{ width: '100%', height: 190, borderRadius: 8, marginBottom: 8, backgroundColor: '#000' }}
+                                  resizeMode="contain"
+                                />
+                              </TouchableOpacity>
+                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <Ionicons
+                                  name={
+                                    att.type === 'image'
+                                      ? 'image-outline'
+                                      : att.type === 'video'
+                                      ? 'videocam-outline'
+                                      : 'document-text-outline'
+                                  }
+                                  size={20}
+                                  color={att.type === 'image' ? '#10b981' : att.type === 'video' ? '#38bdf8' : '#fbbf24'}
+                                />
+                                <View style={{ flex: 1 }}>
+                                  <Text style={{ color: coffee.text, fontSize: 12, fontWeight: '700' }} numberOfLines={1}>
+                                    {att.name || 'Lampiran Berkas'}
+                                  </Text>
+                                  <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                                    {att.type === 'image' ? 'Gambar' : att.type === 'video' ? 'Video' : 'Dokumen'}
+                                    {att.size ? ` • ${(att.size / 1024).toFixed(1)} KB` : ''}
+                                  </Text>
+                                </View>
+                              </View>
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: coffee.accent,
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 6,
+                                  borderRadius: 8,
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                }}
+                                onPress={() => Linking.openURL(att.url)}
+                              >
+                                <Ionicons name="download-outline" size={14} color="#171411" />
+                                <Text style={{ color: '#171411', fontSize: 11, fontWeight: '800' }}>
+                                  {att.type === 'video' ? 'Putar / Unduh' : 'Buka / Unduh'}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
 
                     <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
                       <TouchableOpacity
@@ -1496,7 +1962,7 @@ export default function NgopiTelecomMailModal({
 
                     <Text style={[styles.inputLabel, { marginTop: 10 }]}>Isi Surat Elektronik:</Text>
                     <TextInput
-                      style={[styles.claimInput, { minHeight: 120, textAlignVertical: 'top', paddingTop: 10 }]}
+                      style={[styles.claimInput, { minHeight: 110, textAlignVertical: 'top', paddingTop: 10 }]}
                       value={composeBody}
                       onChangeText={setComposeBody}
                       placeholder="Tulis isi email Anda di sini..."
@@ -1504,14 +1970,137 @@ export default function NgopiTelecomMailModal({
                       multiline
                     />
 
+                    {/* FITUR LAMPIRAN FILE (DOKUMEN, GAMBAR, VIDEO) */}
+                    <Text style={[styles.inputLabel, { marginTop: 12 }]}>
+                      📎 Lampirkan Berkas (Dokumen, Gambar, atau Video — Maks 25 MB/file):
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#120d0a',
+                          borderWidth: 1,
+                          borderColor: '#10b981',
+                          paddingVertical: 9,
+                          borderRadius: 10,
+                        }}
+                        onPress={handlePickMailImage}
+                        disabled={isUploadingAttachment}
+                      >
+                        <Ionicons name="image-outline" size={16} color="#10b981" />
+                        <Text style={{ color: '#10b981', fontSize: 11, fontWeight: '800' }}>Gambar</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#120d0a',
+                          borderWidth: 1,
+                          borderColor: '#38bdf8',
+                          paddingVertical: 9,
+                          borderRadius: 10,
+                        }}
+                        onPress={handlePickMailVideo}
+                        disabled={isUploadingAttachment}
+                      >
+                        <Ionicons name="videocam-outline" size={16} color="#38bdf8" />
+                        <Text style={{ color: '#38bdf8', fontSize: 11, fontWeight: '800' }}>Video</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 6,
+                          backgroundColor: '#120d0a',
+                          borderWidth: 1,
+                          borderColor: '#fbbf24',
+                          paddingVertical: 9,
+                          borderRadius: 10,
+                        }}
+                        onPress={handlePickMailDocument}
+                        disabled={isUploadingAttachment}
+                      >
+                        <Ionicons name="document-attach-outline" size={16} color="#fbbf24" />
+                        <Text style={{ color: '#fbbf24', fontSize: 11, fontWeight: '800' }}>Dokumen</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {isUploadingAttachment && (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                        <ActivityIndicator size="small" color={coffee.accent} />
+                        <Text style={{ color: coffee.accent, fontSize: 12 }}>Mengunggah lampiran berkas...</Text>
+                      </View>
+                    )}
+
+                    {composeAttachments.length > 0 && (
+                      <View style={{ marginTop: 10, gap: 6 }}>
+                        {composeAttachments.map((att, idx) => (
+                          <View
+                            key={`${att.url}-${idx}`}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              backgroundColor: '#120d0a',
+                              borderWidth: 1,
+                              borderColor: coffee.border,
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <Ionicons
+                                name={
+                                  att.type === 'image'
+                                    ? 'image'
+                                    : att.type === 'video'
+                                    ? 'videocam'
+                                    : 'document-text'
+                                }
+                                size={16}
+                                color={att.type === 'image' ? '#10b981' : att.type === 'video' ? '#38bdf8' : '#fbbf24'}
+                              />
+                              <Text style={{ color: coffee.text, fontSize: 12, fontWeight: '700', flex: 1 }} numberOfLines={1}>
+                                {att.name}
+                              </Text>
+                            </View>
+                            <TouchableOpacity
+                              onPress={() =>
+                                setComposeAttachments((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))
+                              }
+                              style={{ padding: 4 }}
+                            >
+                              <Ionicons name="close-circle" size={18} color="#ef4444" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
                     <TouchableOpacity
-                      style={[styles.primaryClaimBtn, isSendingMail && { opacity: 0.6 }]}
+                      style={[styles.primaryClaimBtn, (isSendingMail || isUploadingAttachment) && { opacity: 0.6 }]}
                       onPress={handleSendMail}
-                      disabled={isSendingMail}
+                      disabled={isSendingMail || isUploadingAttachment}
                     >
                       <Ionicons name="send" size={16} color="#171411" />
                       <Text style={styles.primaryClaimBtnText}>
-                        {isSendingMail ? 'Mengirim Email...' : 'Kirim Email Sekarang'}
+                        {isSendingMail
+                          ? 'Mengirim Email...'
+                          : composeAttachments.length > 0
+                          ? `Kirim Email (+${composeAttachments.length} Lampiran)`
+                          : 'Kirim Email Sekarang'}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1534,6 +2123,17 @@ export default function NgopiTelecomMailModal({
                           onPress={() => {
                             item.is_read = true;
                             setSelectedMail({ ...item, is_read: true });
+                            getToken().then((token) => {
+                              if (token) {
+                                axios
+                                  .post(
+                                    `${API_URL}/telecom/mail/${encodeURIComponent(item.id)}/read`,
+                                    {},
+                                    { headers: { Authorization: `Bearer ${token}` } }
+                                  )
+                                  .catch(() => {});
+                              }
+                            });
                           }}
                         >
                           <View style={styles.mailRowHeader}>
@@ -1549,9 +2149,25 @@ export default function NgopiTelecomMailModal({
                               })}
                             </Text>
                           </View>
-                          <Text style={styles.mailRowSubject} numberOfLines={1}>
-                            {item.subject}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                            <Text style={[styles.mailRowSubject, { flex: 1 }]} numberOfLines={1}>
+                              {item.subject}
+                            </Text>
+                            {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                              <View
+                                style={{
+                                  backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                                  borderRadius: 6,
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                }}
+                              >
+                                <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '800' }}>
+                                  📎 {item.attachments.length} file
+                                </Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={styles.mailRowPreview} numberOfLines={2}>
                             {item.body}
                           </Text>

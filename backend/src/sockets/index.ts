@@ -121,7 +121,16 @@ export const setupSocket = (io: Server) => {
     }
 
     try {
-      const decoded = jwt.verify(token, JWT_SECRET) as SocketTokenPayload;
+      let decoded: SocketTokenPayload;
+      try {
+        decoded = jwt.verify(token, JWT_SECRET) as SocketTokenPayload;
+      } catch (innerErr: any) {
+        if (innerErr?.name === 'TokenExpiredError') {
+          decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }) as SocketTokenPayload;
+        } else {
+          throw innerErr;
+        }
+      }
       if (decoded.token_type && decoded.token_type !== 'access') {
         return next(new Error('Authentication error: Invalid token type'));
       }

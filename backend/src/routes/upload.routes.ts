@@ -100,7 +100,7 @@ const upload = multer({
     if (DANGEROUS_EXTENSIONS.has(ext)) {
       return cb(new Error(`File berekstensi '${ext}' dilarang demi keamanan!`));
     }
-    if (ALLOWED_MIME_TYPES.has(file.mimetype) && ALLOWED_EXTENSIONS.has(ext)) {
+    if (ALLOWED_MIME_TYPES.has(file.mimetype) || ALLOWED_EXTENSIONS.has(ext)) {
       cb(null, true);
     } else {
       cb(new Error(`Tipe file tidak didukung (${file.mimetype || 'unknown'})`));

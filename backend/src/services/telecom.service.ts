@@ -3,6 +3,14 @@ import path from 'path';
 import crypto from 'crypto';
 import { prisma } from '../utils/prisma';
 
+export interface MailAttachment {
+  url: string;
+  name: string;
+  type: 'image' | 'video' | 'document';
+  size?: number;
+  mime_type?: string;
+}
+
 export interface NgopiMailMessage {
   id: string;
   from_user_id: string;
@@ -16,6 +24,7 @@ export interface NgopiMailMessage {
   to_number: string;
   subject: string;
   body: string;
+  attachments?: MailAttachment[];
   is_read: boolean;
   is_starred?: boolean;
   created_at: string;
@@ -31,6 +40,7 @@ export interface PremiumTelecomConfig {
   vipNumberPriceIdr: number;
   customNumberPricePoints: number;
   customEmailPricePoints: number;
+  paymentInfo?: string;
 }
 
 interface TelecomStoreData {
@@ -56,15 +66,16 @@ export function generateUglyDefaultNumber(usernameOrId: string): string {
     h2 = Math.imul(h2 ^ (ch * 31), 2166136261) >>> 0;
   }
   const firstDigits = ['7', '8', '9', '6'];
-  let result = firstDigits[h1 % 4];
+  let result: string = firstDigits[h1 % 4] || '7';
   let state = (h1 ^ h2) >>> 0;
   for (let i = 1; i < 10; i++) {
     state = (Math.imul(state, 1664525) + 1013904223 + i * 97) >>> 0;
     let d = String((state % 9) + 1);
-    if (d === result[result.length - 1]) {
+    const lastChar = result.charAt(result.length - 1);
+    if (d === lastChar) {
       d = String(((Number(d) + 3) % 9) + 1);
     }
-    if (result.length >= 1 && Math.abs(Number(d) - Number(result[result.length - 1])) === 1) {
+    if (result.length >= 1 && Math.abs(Number(d) - Number(lastChar)) === 1) {
       d = String(((Number(d) + 4) % 9) + 1);
     }
     result += d;
@@ -86,9 +97,9 @@ export function generateUglyConsonantEmail(usernameOrId: string): string {
   let state = (h1 ^ h2) >>> 0;
   for (let i = 0; i < 11; i++) {
     state = (Math.imul(state, 22695477) + 1 + i * 53) >>> 0;
-    let c = CONSONANTS[state % CONSONANTS.length];
-    if (prefix.length > 0 && c === prefix[prefix.length - 1]) {
-      c = CONSONANTS[(state + 7) % CONSONANTS.length];
+    let c = CONSONANTS.charAt(state % CONSONANTS.length) || 'x';
+    if (prefix.length > 0 && c === prefix.charAt(prefix.length - 1)) {
+      c = CONSONANTS.charAt((state + 7) % CONSONANTS.length) || 'k';
     }
     prefix += c;
   }
@@ -165,6 +176,8 @@ export class TelecomService {
     vipNumberPriceIdr: 1000000,
     customNumberPricePoints: 1000,
     customEmailPricePoints: 1000,
+    paymentInfo:
+      '• Tujuan Transfer (Bank / QRIS / E-Wallet / BMC): Konfirmasi langsung ke Founder Ngopi (#0 • warung@ngopi.top)\n• Cara Aktivasi Cepat: Klik tombol "Pesan & Konfirmasi ke Founder (#0)" di bawah untuk mengirim detail pesanan & bukti transfer.',
   };
   private mails: NgopiMailMessage[] = [];
 
@@ -771,17 +784,31 @@ export class TelecomService {
     senderUser: { id: string; username: string; display_name?: string | null; role?: string | null; bmc_id?: number | null },
     toIdentifier: string,
     subject: string,
-    body: string
+    body: string,
+    rawAttachments?: MailAttachment[]
   ): Promise<{ success: boolean; mail?: NgopiMailMessage; error?: string }> {
     const cleanTo = String(toIdentifier || '').trim();
     const cleanSubject = String(subject || '').trim() || '(Tanpa Subjek)';
     const cleanBody = String(body || '').trim();
 
+    const sanitizedAttachments: MailAttachment[] = Array.isArray(rawAttachments)
+      ? rawAttachments
+          .filter((a) => a && typeof a.url === 'string' && a.url.trim().length > 0)
+          .slice(0, 10)
+          .map((a) => ({
+            url: String(a.url).trim(),
+            name: String(a.name || 'Lampiran').trim(),
+            type: a.type === 'image' || a.type === 'video' ? a.type : 'document',
+            size: typeof a.size === 'number' ? a.size : undefined,
+            mime_type: typeof a.mime_type === 'string' ? a.mime_type : undefined,
+          }))
+      : [];
+
     if (!cleanTo) {
       return { success: false, error: 'Alamat tujuan (Email @ngopi.top atau Nomor Ngopi) wajib diisi.' };
     }
-    if (!cleanBody) {
-      return { success: false, error: 'Isi pesan email tidak boleh kosong.' };
+    if (!cleanBody && sanitizedAttachments.length === 0) {
+      return { success: false, error: 'Isi pesan email atau lampiran berkas tidak boleh kosong.' };
     }
 
     const recipient = await this.resolveUserByIdentifier(cleanTo);
@@ -808,7 +835,8 @@ export class TelecomService {
       to_email: recipient.ngopi_email,
       to_number: recipient.ngopi_number,
       subject: cleanSubject,
-      body: cleanBody,
+      body: cleanBody || `(Melampirkan ${sanitizedAttachments.length} berkas)`,
+      attachments: sanitizedAttachments.length > 0 ? sanitizedAttachments : undefined,
       is_read: false,
       created_at: new Date().toISOString(),
     };

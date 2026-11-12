@@ -377,7 +377,45 @@ export default function BambupediaRoom() {
     let active = true;
     let removeSocketListeners: (() => void) | null = null;
 
+    const handleMembersHttp = (memberList: Member[]) => {
+      if (!Array.isArray(memberList)) return;
+      const unique = new Map<string, Member>();
+      memberList.forEach((item) => {
+        if (!item?.id || !item?.username) return;
+        const hasOnlineFlag = typeof item.is_online === 'boolean';
+        const isOnline = hasOnlineFlag ? item.is_online : item.user_status ? item.user_status === 'online' : false;
+        unique.set(item.id, {
+          ...item,
+          display_name: item.display_name || item.username,
+          avatar_url: item.avatar_url || null,
+          is_online: isOnline,
+          user_status: isOnline ? 'online' : 'offline',
+        });
+      });
+      const nextMembers = Array.from(unique.values()).sort((a, b) => {
+        const aOnline = a.is_online || a.user_status === 'online';
+        const bOnline = b.is_online || b.user_status === 'online';
+        if (aOnline !== bOnline) return aOnline ? -1 : 1;
+        return (a.display_name || a.username).localeCompare(b.display_name || b.username);
+      });
+      const nextOnline = Math.max(1, nextMembers.filter((m) => m.is_online || m.user_status === 'online').length);
+      setMembers(nextMembers);
+      setMemberSummary({
+        online: nextOnline,
+        total: nextMembers.length,
+        label: nextMembers.length > 0 ? `${nextOnline} online - ${nextMembers.length} anggota` : 'Memuat anggota',
+      });
+    };
+
     const setupSocket = async () => {
+      axios
+        .get(`${API_URL}/telecom/directory`)
+        .then((res) => {
+          if (active && Array.isArray(res.data?.members) && res.data.members.length > 0) {
+            handleMembersHttp(res.data.members);
+          }
+        })
+        .catch(() => {});
       const socket = await socketService.connect();
       if (!active || !socket) return;
 
@@ -468,6 +506,17 @@ export default function BambupediaRoom() {
         else if (payload?.user) appendMessage(createLocalWelcomeMessage(payload.user));
       };
 
+      const fetchDirectoryFallback = async () => {
+        try {
+          const res = await axios.get(`${API_URL}/telecom/directory`);
+          if (active && Array.isArray(res.data?.members) && res.data.members.length > 0) {
+            handleMembers(res.data.members);
+          }
+        } catch {}
+      };
+
+      fetchDirectoryFallback();
+
       socket.on('connect', handleConnect);
       socket.on('disconnect', handleDisconnect);
       socket.on('bambupedia_online_users', handleMembers);
@@ -503,7 +552,26 @@ export default function BambupediaRoom() {
   }, [appendMessage]);
 
   useEffect(() => {
-    if (drawerVisible) socketService.socket?.emit('request_bambupedia_members');
+    if (drawerVisible) {
+      socketService.socket?.emit('request_bambupedia_members');
+      if (members.length === 0) {
+        axios
+          .get(`${API_URL}/telecom/directory`)
+          .then((res) => {
+            if (Array.isArray(res.data?.members) && res.data.members.length > 0) {
+              const rawList = res.data.members as Member[];
+              const nextOnline = Math.max(1, rawList.filter((m) => m.is_online || m.user_status === 'online').length);
+              setMembers(rawList);
+              setMemberSummary({
+                online: nextOnline,
+                total: rawList.length,
+                label: `${nextOnline} online - ${rawList.length} anggota`,
+              });
+            }
+          })
+          .catch(() => {});
+      }
+    }
   }, [drawerVisible]);
 
   useEffect(() => {
@@ -541,7 +609,7 @@ export default function BambupediaRoom() {
       const uname = normalizeUsername(m.username).toLowerCase();
       return {
         ...m,
-        ngopi_number: computeDefaultNgopiNumber(m, idx, {}),
+        ngopi_number: m.ngopi_number || computeDefaultNgopiNumber(m, idx, {}),
         ngopi_email: m.ngopi_email || formatNgopiEmail(uname),
       };
     });

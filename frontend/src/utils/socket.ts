@@ -20,7 +20,7 @@ class SocketService {
       extraHeaders: {
         'ngrok-skip-browser-warning': '69420'
       },
-      transports: ['websocket'],
+      transports: ['websocket', 'polling'],
       withCredentials: true
     });
   }
