@@ -79,7 +79,7 @@ const CONSONANTS = 'bcdfghjklmnpqrstvwxz';
 
 export function generateUglyDefaultNumber(usernameOrId: string): string {
   const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder') return '0';
+  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') return '0';
   let h1 = 2166136261;
   let h2 = 16777619;
   for (let i = 0; i < clean.length; i++) {
@@ -106,7 +106,7 @@ export function generateUglyDefaultNumber(usernameOrId: string): string {
 
 export function generateUglyConsonantEmail(usernameOrId: string): string {
   const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder') return 'warung@ngopi.top';
+  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') return 'warung@ngopi.top';
   let h1 = 1315423911;
   let h2 = 2654435761;
   for (let i = 0; i < clean.length; i++) {
@@ -135,7 +135,7 @@ export function computeDefaultNgopiNumber(
   if (customMap[member.id]) return customMap[member.id];
   if (member.ngopi_number) return String(member.ngopi_number);
   const uname = String(member.username || '').trim().toLowerCase();
-  if (uname === 'warung' || member.bmc_id === 1) {
+  if (uname === 'warung' || uname === 'founder' || uname === 'ngopi' || member.bmc_id === 1) {
     return '0';
   }
   return generateUglyDefaultNumber(uname || member.id);
@@ -144,7 +144,7 @@ export function computeDefaultNgopiNumber(
 export function formatNgopiEmail(username: string, customEmail?: string): string {
   if (customEmail) return customEmail;
   const clean = String(username || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder') {
+  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') {
     return 'warung@ngopi.top';
   }
   return generateUglyConsonantEmail(clean || 'user');
@@ -200,7 +200,7 @@ export default function NgopiTelecomMailModal({
   const [requirePaidCustomNumber, setRequirePaidCustomNumber] = useState<boolean>(true);
   const [requirePaidCustomEmail, setRequirePaidCustomEmail] = useState<boolean>(true);
   const [paymentInfo, setPaymentInfo] = useState<string>(
-    '• Tujuan Transfer (Bank / QRIS / E-Wallet / BMC): Konfirmasi langsung ke Founder Ngopi (#0 • warung@ngopi.top)\n• Cara Aktivasi Cepat: Klik tombol "Pesan & Lampirkan Bukti Transfer ke Founder (#0)" di bawah untuk mengirim pilihan Nomor/Email Cantik beserta lampiran bukti transfer.'
+    '• Bank Tujuan: Bank BRI\n• Nomor Rekening: 141101000456562\n• Atas Nama: Yayasan Sabumi Nusantara Jaya\n• Konfirmasi Pembayaran: Ke Akun Founder (#0 • warung@ngopi.top) atau WhatsApp: 08174139994'
   );
   const [httpDirectory, setHttpDirectory] = useState<TelecomMemberItem[]>([]);
 
@@ -313,7 +313,7 @@ export default function NgopiTelecomMailModal({
 
   const loadTelecomData = useCallback(async () => {
     const uname = String(currentUsername || '').trim().toLowerCase();
-    const founderFlag = uname === 'warung' || uname === 'founder' || uname === 'admin';
+    const founderFlag = uname === 'warung' || uname === 'founder' || uname === 'ngopi' || uname === 'admin';
     setIsFounder(founderFlag);
 
     // Always fetch resilient directory so HP/Mobile has all members even before Socket connects
@@ -1448,15 +1448,63 @@ export default function NgopiTelecomMailModal({
                   <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Nomor Sultan VIP (1 s/d 100) & Email Brand / Jabatan</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Nego Langsung dengan Founder (#0)</Text></Text>
                 </View>
 
-                {/* INFO TUJUAN TRANSFER & KONFIRMASI PEMBAYARAN KE FOUNDER (#0) */}
+                {/* INFO TUJUAN TRANSFER & KONFIRMASI PEMBAYARAN KE FOUNDER (#0) & WA */}
                 <View style={[styles.rulesCard, { borderColor: '#10b981', backgroundColor: 'rgba(16, 185, 129, 0.08)' }]}>
-                  <Text style={[styles.rulesTitle, { color: '#10b981' }]}>💳 Kemana Transfer Pembayaran Nomor Cantik & Email Cantik?</Text>
-                  <Text style={[styles.ruleItem, { color: coffee.text, lineHeight: 19 }]}>{paymentInfo}</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+                  <Text style={[styles.rulesTitle, { color: '#10b981' }]}>💳 Informasi Rekening Transfer & Konfirmasi Pembayaran</Text>
+                  <View
+                    style={{
+                      backgroundColor: '#120d0a',
+                      borderRadius: 10,
+                      borderWidth: 1,
+                      borderColor: coffee.border,
+                      padding: 12,
+                      marginBottom: 8,
+                    }}
+                  >
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700' }}>BANK TUJUAN TRANSFER:</Text>
+                    <Text style={{ color: '#38bdf8', fontSize: 15, fontWeight: '900', marginTop: 2 }}>BANK BRI</Text>
+
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700', marginTop: 8 }}>NOMOR REKENING:</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                      <Text style={{ color: '#FFD700', fontSize: 17, fontWeight: '900', letterSpacing: 1 }}>141101000456562</Text>
+                      <TouchableOpacity
+                        style={{
+                          backgroundColor: 'rgba(255, 215, 0, 0.16)',
+                          borderWidth: 1,
+                          borderColor: '#FFD700',
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 5,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                        onPress={() => copyText('141101000456562', 'Nomor Rekening BRI Yayasan Sabumi Nusantara Jaya')}
+                      >
+                        <Ionicons name="copy-outline" size={13} color="#FFD700" />
+                        <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '800' }}>Salin No. Rek</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700', marginTop: 8 }}>NAMA REKENING:</Text>
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '800', marginTop: 2 }}>
+                      Yayasan Sabumi Nusantara Jaya
+                    </Text>
+
+                    <View style={{ height: 1, backgroundColor: coffee.border, marginVertical: 10 }} />
+
+                    <Text style={{ color: coffee.secondary, fontSize: 11, fontWeight: '700' }}>KONFIRMASI PEMBAYARAN:</Text>
+                    <Text style={{ color: coffee.text, fontSize: 12, marginTop: 3, lineHeight: 18 }}>
+                      • Akun Founder Ngopi: <Text style={{ color: '#10b981', fontWeight: '800' }}>#0 • warung@ngopi.top</Text>{'\n'}
+                      • WhatsApp Resmi: <Text style={{ color: '#22c55e', fontWeight: '800' }}>08174139994</Text>
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                     <TouchableOpacity
                       style={{
                         flex: 1,
-                        minWidth: 180,
+                        minWidth: 160,
                         backgroundColor: '#10b981',
                         paddingVertical: 10,
                         paddingHorizontal: 12,
@@ -1470,9 +1518,41 @@ export default function NgopiTelecomMailModal({
                     >
                       <Ionicons name="mail" size={16} color="#171411" />
                       <Text style={{ color: '#171411', fontSize: 12, fontWeight: '900' }}>
-                        Pesan & Kirim Bukti Transfer ke #0
+                        Kirim Bukti ke Email #0
                       </Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        minWidth: 160,
+                        backgroundColor: '#25D366',
+                        paddingVertical: 10,
+                        paddingHorizontal: 12,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        const numPart = desiredNumber.trim() ? `Nomor Cantik #${desiredNumber.trim()}` : '';
+                        const mailPart = desiredEmailPrefix.trim()
+                          ? `Email ${desiredEmailPrefix.trim().replace(/@ngopi\.top$/i, '')}@ngopi.top`
+                          : '';
+                        const orderText = [numPart, mailPart].filter(Boolean).join(' & ') || 'Paket Nomor/Email Cantik';
+                        const waMsg = encodeURIComponent(
+                          `Halo Admin/Founder Ngopi, saya @${currentUsername} (Nomor bawaan #${myNumber}) ingin konfirmasi transfer ke Bank BRI 141101000456562 (Yayasan Sabumi Nusantara Jaya) untuk pemesanan: ${orderText}.`
+                        );
+                        Linking.openURL(`https://wa.me/628174139994?text=${waMsg}`);
+                      }}
+                    >
+                      <Ionicons name="logo-whatsapp" size={16} color="#171411" />
+                      <Text style={{ color: '#171411', fontSize: 12, fontWeight: '900' }}>
+                        WA: 08174139994
+                      </Text>
+                    </TouchableOpacity>
+
                     <TouchableOpacity
                       style={{
                         backgroundColor: coffee.surface,
@@ -1488,7 +1568,7 @@ export default function NgopiTelecomMailModal({
                       }}
                       onPress={() => {
                         const founderEntry = enrichedDirectory.find(
-                          (m) => m.ngopi_number === '0' || m.username?.toLowerCase() === 'warung'
+                          (m) => m.ngopi_number === '0' || m.username?.toLowerCase() === 'warung' || m.username?.toLowerCase() === 'ngopi'
                         );
                         if (founderEntry) {
                           onClose();

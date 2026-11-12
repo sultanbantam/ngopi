@@ -57,7 +57,7 @@ const CONSONANTS = 'bcdfghjklmnpqrstvwxz';
 
 export function generateUglyDefaultNumber(usernameOrId: string): string {
   const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder') return '0';
+  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') return '0';
   let h1 = 2166136261;
   let h2 = 16777619;
   for (let i = 0; i < clean.length; i++) {
@@ -85,7 +85,7 @@ export function generateUglyDefaultNumber(usernameOrId: string): string {
 
 export function generateUglyConsonantEmail(usernameOrId: string): string {
   const clean = String(usernameOrId || 'user').trim().toLowerCase().replace(/^@/, '');
-  if (clean === 'warung' || clean === 'founder') return 'warung@ngopi.top';
+  if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') return 'warung@ngopi.top';
   let h1 = 1315423911;
   let h2 = 2654435761;
   for (let i = 0; i < clean.length; i++) {
@@ -177,7 +177,7 @@ export class TelecomService {
     customNumberPricePoints: 1000,
     customEmailPricePoints: 1000,
     paymentInfo:
-      '• Tujuan Transfer (Bank / QRIS / E-Wallet / BMC): Konfirmasi langsung ke Founder Ngopi (#0 • warung@ngopi.top)\n• Cara Aktivasi Cepat: Klik tombol "Pesan & Konfirmasi ke Founder (#0)" di bawah untuk mengirim detail pesanan & bukti transfer.',
+      '• Bank Tujuan: Bank BRI\n• Nomor Rekening: 141101000456562\n• Atas Nama: Yayasan Sabumi Nusantara Jaya\n• Konfirmasi Pembayaran: Ke Akun Founder (#0 • warung@ngopi.top) atau WhatsApp: 08174139994',
   };
   private mails: NgopiMailMessage[] = [];
 
@@ -230,6 +230,13 @@ export class TelecomService {
         }
         if (parsed.premiumConfig) {
           this.premiumConfig = { ...this.premiumConfig, ...parsed.premiumConfig };
+          if (
+            !this.premiumConfig.paymentInfo ||
+            this.premiumConfig.paymentInfo.includes('Tujuan Transfer (Bank / QRIS')
+          ) {
+            this.premiumConfig.paymentInfo =
+              '• Bank Tujuan: Bank BRI\n• Nomor Rekening: 141101000456562\n• Atas Nama: Yayasan Sabumi Nusantara Jaya\n• Konfirmasi Pembayaran: Ke Akun Founder (#0 • warung@ngopi.top) atau WhatsApp: 08174139994';
+          }
         }
         if (Array.isArray(parsed.mails)) {
           this.mails = parsed.mails;
@@ -260,7 +267,7 @@ export class TelecomService {
   public isFounderUser(user: { username?: string | null; role?: string | null; bmc_id?: number | null }): boolean {
     const uname = String(user.username || '').trim().toLowerCase();
     const role = String(user.role || '').trim().toLowerCase();
-    return uname === 'warung' || uname === 'founder' || uname === 'admin' || role === 'admin' || role === 'superadmin' || user.bmc_id === 1;
+    return uname === 'warung' || uname === 'founder' || uname === 'ngopi' || uname === 'admin' || role === 'admin' || role === 'superadmin' || user.bmc_id === 1;
   }
 
   public getLockedEmailPrefixes(): string[] {
@@ -307,7 +314,7 @@ export class TelecomService {
       return `${customPrefix}@ngopi.top`;
     }
     const clean = String(username || 'user').trim().toLowerCase().replace(/^@/, '');
-    if (clean === 'warung' || clean === 'founder') {
+    if (clean === 'warung' || clean === 'founder' || clean === 'ngopi') {
       return 'warung@ngopi.top';
     }
     return generateUglyConsonantEmail(clean || userId || 'user');
@@ -347,7 +354,7 @@ export class TelecomService {
     }
 
     const uname = String(user.username || '').trim().toLowerCase();
-    if (uname === 'warung' || user.bmc_id === 1) {
+    if (uname === 'warung' || uname === 'founder' || uname === 'ngopi' || user.bmc_id === 1) {
       return '0';
     }
 
@@ -364,14 +371,13 @@ export class TelecomService {
     for (const u of users) {
       const custom = this.customNumbers.get(u.id);
       const email = this.formatEmail(u.username, u.id);
+      const unameLower = u.username.trim().toLowerCase();
       if (custom) {
         usedNumbers.add(custom);
         result.set(u.id, { number: custom, email });
-      } else if (u.username.trim().toLowerCase() === 'warung' || u.bmc_id === 1) {
-        if (!usedNumbers.has('0')) {
-          usedNumbers.add('0');
-          result.set(u.id, { number: '0', email: 'warung@ngopi.top' });
-        }
+      } else if (unameLower === 'warung' || unameLower === 'founder' || unameLower === 'ngopi' || u.bmc_id === 1) {
+        usedNumbers.add('0');
+        result.set(u.id, { number: '0', email: 'warung@ngopi.top' });
       }
     }
 
@@ -767,10 +773,24 @@ export class TelecomService {
     this.saveToDisk();
   }
 
-  public getInboxForUser(user: { id: string; username: string; display_name?: string | null }, ngopiNumber: string, ngopiEmail: string): NgopiMailMessage[] {
+  public getInboxForUser(
+    user: { id: string; username: string; display_name?: string | null; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string
+  ): NgopiMailMessage[] {
     this.ensureWelcomeMail(user, ngopiNumber, ngopiEmail);
+    const isFounder = this.isFounderUser(user) || ngopiNumber === '0' || ngopiEmail.toLowerCase() === 'warung@ngopi.top';
+    const founderEmails = new Set(['warung@ngopi.top', 'founder@ngopi.top', 'ngopi@ngopi.top', 'admin@ngopi.top', '0@ngopi.top']);
     return this.mails
-      .filter((m) => m.to_user_id === user.id || m.to_email.toLowerCase() === ngopiEmail.toLowerCase() || m.to_number === ngopiNumber)
+      .filter((m) => {
+        if (m.to_user_id === user.id || m.to_email.toLowerCase() === ngopiEmail.toLowerCase() || m.to_number === ngopiNumber) {
+          return true;
+        }
+        if (isFounder && (m.to_number === '0' || founderEmails.has(m.to_email.toLowerCase()))) {
+          return true;
+        }
+        return false;
+      })
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   }
 
