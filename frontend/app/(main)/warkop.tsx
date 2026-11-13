@@ -1096,12 +1096,12 @@ export default function BambupediaRoom() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.featuredHtTitleRow}>
-                  <Text style={styles.featuredHtTitle}>Nomor HP & Email Ngopi</Text>
+                  <Text style={styles.featuredHtTitle}>Identitas Ngopi</Text>
                   <View style={[styles.offlineBadge, { backgroundColor: '#3b82f6' }]}>
-                    <Text style={styles.offlineBadgeText}>#0 & @NGOPI.TOP</Text>
+                    <Text style={styles.offlineBadgeText}>@NGOPI.TOP</Text>
                   </View>
                 </View>
-                <Text style={styles.featuredHtDesc}>Dialpad telepon, klaim nomor unik (0 Founder, 1-100 VIP, 101+ bebas) & Email @ngopi.top</Text>
+                <Text style={styles.featuredHtDesc}>Panggilan, Pilih Nomor (101+ bebas) & Email Ngopi internal untuk terhubung</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
@@ -1345,14 +1345,14 @@ export default function BambupediaRoom() {
             <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
           </TouchableOpacity>
 
-          {/* Nomor HP & Email (@ngopi.top) Header Button */}
+          {/* Identitas Ngopi (@ngopi.top) Header Button */}
           <TouchableOpacity
             style={[styles.htRadioHeaderBtn, { backgroundColor: 'rgba(59, 130, 246, 0.16)', borderColor: '#3b82f6' }]}
             onPress={() => setTelecomModalVisible(true)}
-            accessibilityLabel="Buka Nomor HP & Email Ngopi"
+            accessibilityLabel="Buka Identitas Ngopi"
           >
             <Ionicons name="call" size={15} color="#60a5fa" />
-            <Text style={[styles.htRadioHeaderBtnText, { color: '#60a5fa' }]}>Telepon & Email</Text>
+            <Text style={[styles.htRadioHeaderBtnText, { color: '#60a5fa' }]}>Identitas Ngopi</Text>
           </TouchableOpacity>
 
           {/* HT Radio Walkie-Talkie Button */}
@@ -1518,9 +1518,9 @@ export default function BambupediaRoom() {
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(59, 130, 246, 0.18)', borderColor: '#3b82f6' }]}
               onPress={() => setTelecomModalVisible(true)}
-              accessibilityLabel="Buka Nomor HP & Email Ngopi"
+              accessibilityLabel="Buka Identitas Ngopi"
             >
-              <Text style={[styles.quickChipText, { color: '#60a5fa', fontWeight: '800' }]}>📞 Nomor & Email</Text>
+              <Text style={[styles.quickChipText, { color: '#60a5fa', fontWeight: '800' }]}>📞 Identitas Ngopi</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

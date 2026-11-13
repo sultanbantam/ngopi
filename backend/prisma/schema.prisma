@@ -846,3 +846,35 @@ model IdentityAuditLog {
   @@map("identity_audit_logs")
 }
 
+model NgopiMail {
+  id                String               @id @default(uuid())
+  from_user_id      String               @map("from_user_id")
+  from_username     String               @map("from_username")
+  from_display_name String?              @map("from_display_name")
+  from_email        String               @map("from_email")
+  from_number       String               @map("from_number")
+  subject           String
+  body              String
+  attachments       Json?
+  created_at        DateTime             @default(now()) @map("created_at")
+  recipients        NgopiMailRecipient[]
+
+  @@index([from_user_id, created_at])
+  @@map("ngopi_mails")
+}
+
+model NgopiMailRecipient {
+  id           String    @id @default(uuid())
+  mail_id      String    @map("mail_id")
+  recipient_id String    @map("recipient_id")
+  to_email     String    @map("to_email")
+  to_number    String    @map("to_number")
+  read_at      DateTime? @map("read_at")
+  received_at  DateTime  @default(now()) @map("received_at")
+  mail         NgopiMail @relation(fields: [mail_id], references: [id], onDelete: Cascade)
+
+  @@unique([mail_id, recipient_id])
+  @@index([recipient_id, read_at, received_at])
+  @@map("ngopi_mail_recipients")
+}
+

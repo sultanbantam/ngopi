@@ -161,7 +161,7 @@ router.post('/number/claim', verifyJWT, async (req: Request, res: Response): Pro
       return;
     }
     res.status(200).json({
-      message: `Nomor Ngopi Anda berhasil diubah menjadi ${result.number}!`,
+      message: `Nomor Ngopi kamu berhasil diubah menjadi ${result.number}!`,
       ngopi_number: result.number,
       number_alias_email: `${result.number}@ngopi.top`,
     });
@@ -290,7 +290,7 @@ router.post('/premium-config', verifyJWT, async (req: Request, res: Response): P
   }
 });
 
-// GET /api/telecom/mail/inbox
+// GET /api/telecom/mail/inbox?filter=all|unread
 router.get('/mail/inbox', verifyJWT, async (req: Request, res: Response): Promise<void> => {
   try {
     const user = await getAuthenticatedDbUser(req);
@@ -301,14 +301,66 @@ router.get('/mail/inbox', verifyJWT, async (req: Request, res: Response): Promis
     const resolved = await telecomService.resolveUserByIdentifier(user.id);
     const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
     const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
-    const inbox = telecomService.getInboxForUser(user, ngopiNumber, ngopiEmail);
+    const filterParam = String(req.query.filter || 'all').toLowerCase() === 'unread' ? 'unread' : 'all';
+    const inbox = telecomService.getInboxForUser(user, ngopiNumber, ngopiEmail, filterParam);
+    const unreadCount = telecomService.getUnreadCountForUser(user, ngopiNumber, ngopiEmail);
     res.status(200).json({
       ngopi_number: ngopiNumber,
       ngopi_email: ngopiEmail,
+      unread_count: unreadCount,
       mails: inbox,
     });
   } catch (err) {
     console.error('[TelecomRoutes] /mail/inbox error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/mail/unread-count
+router.get('/mail/unread-count', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const resolved = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
+    const unreadCount = telecomService.getUnreadCountForUser(user, ngopiNumber, ngopiEmail);
+    res.status(200).json({ unread_count: unreadCount });
+  } catch (err) {
+    console.error('[TelecomRoutes] /mail/unread-count error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/mail/bulk-read-status
+router.post('/mail/bulk-read-status', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const { mail_ids, is_read } = req.body || {};
+    if (!Array.isArray(mail_ids) || typeof is_read !== 'boolean') {
+      res.status(400).json({ error: 'mail_ids (array) dan is_read (boolean) wajib diisi.' });
+      return;
+    }
+    const resolved = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
+    const result = telecomService.bulkUpdateMailReadStatus(user, ngopiNumber, ngopiEmail, mail_ids, is_read);
+    try {
+      const io = getSocketIO();
+      if (io) {
+        io.to(user.id).emit('telecom_unread_count', { unread_count: result.unread_count });
+      }
+    } catch {}
+    res.status(200).json(result);
+  } catch (err) {
+    console.error('[TelecomRoutes] /mail/bulk-read-status error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -325,6 +377,29 @@ router.get('/mail/sent', verifyJWT, async (req: Request, res: Response): Promise
     res.status(200).json({ mails: sent });
   } catch (err) {
     console.error('[TelecomRoutes] /mail/sent error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// GET /api/telecom/mail/:id
+router.get('/mail/:id', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const resolved = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
+    const mail = telecomService.getMailDetailForUser(user, ngopiNumber, ngopiEmail, String(req.params.id || ''));
+    if (!mail) {
+      res.status(404).json({ error: 'Pesan tidak ditemukan atau kamu tidak memiliki akses.' });
+      return;
+    }
+    res.status(200).json({ mail });
+  } catch (err) {
+    console.error('[TelecomRoutes] GET /mail/:id error:', err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
@@ -354,11 +429,20 @@ router.post('/mail/send', verifyJWT, async (req: Request, res: Response): Promis
         const io = getSocketIO();
         if (io) {
           io.to(result.mail.to_user_id).emit('telecom_new_mail', result.mail);
+          const recipientResolved = await telecomService.resolveUserByIdentifier(result.mail.to_user_id);
+          if (recipientResolved) {
+            const recipientUnread = telecomService.getUnreadCountForUser(
+              { id: recipientResolved.id, username: recipientResolved.username, role: recipientResolved.role, bmc_id: recipientResolved.bmc_id },
+              recipientResolved.ngopi_number,
+              recipientResolved.ngopi_email
+            );
+            io.to(result.mail.to_user_id).emit('telecom_unread_count', { unread_count: recipientUnread });
+          }
         }
       } catch {}
     }
     res.status(201).json({
-      message: 'Email berhasil dikirim!',
+      message: 'Pesan berhasil dikirim!',
       mail: result.mail,
     });
   } catch (err) {
@@ -375,8 +459,49 @@ router.post('/mail/:id/read', verifyJWT, async (req: Request, res: Response): Pr
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    telecomService.markMailRead(user.id, String(req.params.id || ''));
-    res.status(200).json({ ok: true });
+    const resolved = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
+    const result = telecomService.markMailRead(user, ngopiNumber, ngopiEmail, String(req.params.id || ''));
+    if (!result.success) {
+      res.status(404).json({ error: 'Pesan tidak ditemukan atau bukan milik akun kamu.' });
+      return;
+    }
+    try {
+      const io = getSocketIO();
+      if (io) {
+        io.to(user.id).emit('telecom_unread_count', { unread_count: result.unread_count });
+      }
+    } catch {}
+    res.status(200).json({ ok: true, changed: result.changed, mail: result.mail, unread_count: result.unread_count });
+  } catch (err) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// POST /api/telecom/mail/:id/unread
+router.post('/mail/:id/unread', verifyJWT, async (req: Request, res: Response): Promise<void> => {
+  try {
+    const user = await getAuthenticatedDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const resolved = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolved?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolved?.ngopi_email || telecomService.formatEmail(user.username, user.id);
+    const result = telecomService.markMailUnread(user, ngopiNumber, ngopiEmail, String(req.params.id || ''));
+    if (!result.success) {
+      res.status(404).json({ error: 'Pesan tidak ditemukan atau bukan milik akun kamu.' });
+      return;
+    }
+    try {
+      const io = getSocketIO();
+      if (io) {
+        io.to(user.id).emit('telecom_unread_count', { unread_count: result.unread_count });
+      }
+    } catch {}
+    res.status(200).json({ ok: true, changed: result.changed, mail: result.mail, unread_count: result.unread_count });
   } catch (err) {
     res.status(500).json({ error: 'Internal server error' });
   }

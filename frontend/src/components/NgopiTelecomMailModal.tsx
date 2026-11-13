@@ -12,6 +12,8 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  useWindowDimensions,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
@@ -61,6 +63,7 @@ interface MailItem {
   body: string;
   attachments?: MailAttachment[];
   is_read: boolean;
+  read_at?: string | null;
   created_at: string;
 }
 
@@ -230,7 +233,14 @@ export default function NgopiTelecomMailModal({
   const [isSubmittingVipReq, setIsSubmittingVipReq] = useState<boolean>(false);
 
   // Mail state
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isMobileViewport = windowWidth < 768;
+  const isDesktopTwoPane = windowWidth >= 960;
+
   const [mailSubTab, setMailSubTab] = useState<'inbox' | 'sent' | 'compose'>('inbox');
+  const [inboxFilter, setInboxFilter] = useState<'all' | 'unread'>('all');
+  const [selectedMailIds, setSelectedMailIds] = useState<string[]>([]);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [mails, setMails] = useState<MailItem[]>([]);
   const [selectedMail, setSelectedMail] = useState<MailItem | null>(null);
   const [composeTo, setComposeTo] = useState<string>('');
@@ -255,14 +265,18 @@ export default function NgopiTelecomMailModal({
     }
   };
 
-  const copyText = async (text: string, label: string) => {
+  const copyText = async (text: string, label: string, keyId?: string) => {
     try {
       if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
         await Clipboard.setStringAsync(text);
       }
-      showNotice('Berhasil Disalin', `${label} (${text}) telah disalin ke papan klip.`);
+      if (keyId) {
+        setCopiedKey(keyId);
+        setTimeout(() => setCopiedKey((prev) => (prev === keyId ? null : prev)), 2000);
+      }
+      showNotice('Disalin', `${label} (${text}) sudah disalin.`);
     } catch {
       showNotice(label, text);
     }
@@ -645,7 +659,7 @@ export default function NgopiTelecomMailModal({
     }
   }, [visible, loadTelecomData]);
 
-  // Real-time Socket listener for incoming @ngopi.top emails
+  // Real-time Socket listener for incoming @ngopi.top emails & unread count updates
   useEffect(() => {
     const socket = socketService.socket;
     if (!socket) return;
@@ -653,14 +667,135 @@ export default function NgopiTelecomMailModal({
       if (!newMail || !newMail.id) return;
       setMails((prev) => {
         if (prev.some((m) => m.id === newMail.id)) return prev;
-        return [newMail, ...prev];
+        return [{ ...newMail, is_read: Boolean(newMail.is_read) }, ...prev];
       });
     };
+    const handleUnreadSync = () => {
+      if (visible) {
+        loadTelecomData();
+      }
+    };
     socket.on('telecom_new_mail', handleNewMail);
+    socket.on('telecom_unread_count', handleUnreadSync);
     return () => {
       socket.off('telecom_new_mail', handleNewMail);
+      socket.off('telecom_unread_count', handleUnreadSync);
     };
-  }, [visible]);
+  }, [visible, loadTelecomData]);
+
+  const persistMailsLocal = async (nextMails: MailItem[]) => {
+    try {
+      const serialized = JSON.stringify(nextMails.slice(0, 200));
+      if (Platform.OS === 'web' && typeof localStorage !== 'undefined') {
+        localStorage.setItem(LOCAL_MAILS_KEY, serialized);
+      } else {
+        await SecureStore.setItemAsync(LOCAL_MAILS_KEY, serialized);
+      }
+    } catch {}
+  };
+
+  const handleOpenMail = async (item: MailItem) => {
+    const isInboxItem = mailSubTab === 'inbox';
+    const wasUnread = isInboxItem && !item.is_read && !item.read_at;
+    const nowIso = new Date().toISOString();
+
+    setSelectedMail(
+      wasUnread ? { ...item, is_read: true, read_at: nowIso } : { ...item }
+    );
+
+    if (!wasUnread) return;
+
+    const prevMails = mails;
+    const updatedMails = mails.map((m) =>
+      m.id === item.id ? { ...m, is_read: true, read_at: nowIso } : m
+    );
+    setMails(updatedMails);
+    persistMailsLocal(updatedMails);
+
+    try {
+      const token = await getToken();
+      if (token) {
+        await axios.post(
+          `${API_URL}/telecom/mail/${encodeURIComponent(item.id)}/read`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    } catch {
+      // Rollback optimistic read state if server request failed
+      setMails(prevMails);
+      persistMailsLocal(prevMails);
+      setSelectedMail(item);
+      showNotice('Gagal Memperbarui Status', 'Status pesan gagal diperbarui di server. Coba lagi sebentar, ya.');
+    }
+  };
+
+  const handleToggleMailReadStatus = async (item: MailItem, markAsRead: boolean) => {
+    const prevMails = mails;
+    const prevSelected = selectedMail;
+    const nowIso = new Date().toISOString();
+    const updatedMails = mails.map((m) =>
+      m.id === item.id
+        ? { ...m, is_read: markAsRead, read_at: markAsRead ? nowIso : null }
+        : m
+    );
+    setMails(updatedMails);
+    persistMailsLocal(updatedMails);
+    if (selectedMail && selectedMail.id === item.id) {
+      setSelectedMail({ ...selectedMail, is_read: markAsRead, read_at: markAsRead ? nowIso : null });
+    }
+
+    try {
+      const token = await getToken();
+      if (token) {
+        const endpoint = markAsRead ? 'read' : 'unread';
+        await axios.post(
+          `${API_URL}/telecom/mail/${encodeURIComponent(item.id)}/${endpoint}`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+    } catch {
+      setMails(prevMails);
+      persistMailsLocal(prevMails);
+      setSelectedMail(prevSelected);
+      showNotice('Gagal Memperbarui Status', 'Tidak bisa mengubah status pesan saat ini. Silakan coba lagi.');
+    }
+  };
+
+  const handleBulkMarkReadStatus = async (markAsRead: boolean) => {
+    if (selectedMailIds.length === 0) return;
+    const prevMails = mails;
+    const idSet = new Set(selectedMailIds);
+    const nowIso = new Date().toISOString();
+    const updatedMails = mails.map((m) =>
+      idSet.has(m.id) ? { ...m, is_read: markAsRead, read_at: markAsRead ? nowIso : null } : m
+    );
+    setMails(updatedMails);
+    persistMailsLocal(updatedMails);
+
+    try {
+      const token = await getToken();
+      if (token) {
+        await axios.post(
+          `${API_URL}/telecom/mail/bulk-read-status`,
+          { mail_ids: selectedMailIds, is_read: markAsRead },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      setSelectedMailIds([]);
+    } catch {
+      setMails(prevMails);
+      persistMailsLocal(prevMails);
+      showNotice('Gagal Memperbarui Massal', 'Gagal memperbarui status beberapa pesan. Silakan coba lagi.');
+    }
+  };
+
+  const toggleSelectMailId = (mailId: string) => {
+    setSelectedMailIds((prev) =>
+      prev.includes(mailId) ? prev.filter((id) => id !== mailId) : [...prev, mailId]
+    );
+  };
 
   // Dialpad lookup
   const dialedMember = useMemo(() => {
@@ -1067,7 +1202,7 @@ export default function NgopiTelecomMailModal({
       }
       showNotice(
         '💎 Mode Fitur Premium Diperbarui',
-        `• Ganti Nomor Cantik: ${nextNum ? 'BERBAYAR (Premium)' : 'GRATIS (Uji Coba)'}\n• Custom Email @ngopi.top: ${nextMail ? 'BERBAYAR (Premium)' : 'GRATIS (Uji Coba)'}`
+        `• Ganti Nomor Pilihan: ${nextNum ? 'BERBAYAR (Premium)' : 'GRATIS (Uji Coba)'}\n• Custom Email @ngopi.top: ${nextMail ? 'BERBAYAR (Premium)' : 'GRATIS (Uji Coba)'}`
       );
     } catch {}
   };
@@ -1090,7 +1225,7 @@ export default function NgopiTelecomMailModal({
   };
 
   const handleOrderUpgradeToFounder = () => {
-    const numPart = desiredNumber.trim() ? `• Nomor Cantik Pilihan: #${desiredNumber.trim()}\n` : '';
+    const numPart = desiredNumber.trim() ? `• Nomor Pilihan: #${desiredNumber.trim()}\n` : '';
     const emailPart = desiredEmailPrefix.trim()
       ? `• Email Cantik Pilihan: ${desiredEmailPrefix.trim().replace(/@ngopi\.top$/i, '')}@ngopi.top\n`
       : '';
@@ -1400,18 +1535,30 @@ export default function NgopiTelecomMailModal({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.overlay}>
-        <View style={styles.card}>
+      <KeyboardAvoidingView
+        style={[styles.overlay, isMobileViewport && { padding: 0 }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <View
+          style={[
+            styles.card,
+            isMobileViewport
+              ? { maxWidth: '100%', width: '100%', height: '100%', maxHeight: '100%', borderRadius: 0, borderWidth: 0 }
+              : isDesktopTwoPane
+              ? { maxWidth: 960, height: Math.min(760, Math.round(windowHeight * 0.9)), maxHeight: '92%' }
+              : { maxWidth: 720, maxHeight: '90%' },
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="call" size={20} color="#10b981" />
-                <Text style={styles.headerTitle}>Nomor HP & Email Ngopi</Text>
+                <Ionicons name="cafe" size={20} color={coffee.accent} />
+                <Text style={styles.headerTitle}>☕ Identitas Ngopi</Text>
               </View>
-              <Text style={styles.headerSub}>Identitas Telekomunikasi & Surat Elektronik Resmi ngopi.top</Text>
+              <Text style={styles.headerSub}>Nomor dan Email untuk Terhubung</Text>
             </View>
-            <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={styles.closeBtn} onPress={onClose} accessibilityLabel="Tutup Identitas Ngopi">
               <Ionicons name="close" size={22} color={coffee.text} />
             </TouchableOpacity>
           </View>
@@ -1419,13 +1566,20 @@ export default function NgopiTelecomMailModal({
           {/* Identity Banner */}
           <View style={styles.identityBanner}>
             <View style={styles.identityCol}>
-              <Text style={styles.identityLabel}>NOMOR NGOPI ANDA</Text>
+              <Text style={styles.identityLabel}>NOMOR NGOPI KAMU</Text>
               <View style={styles.identityValRow}>
                 <Text style={styles.identityNumber}>
-                  {myNumber} {myNumber === '0' ? '👑 (Founder)' : Number(myNumber) <= 100 ? '⭐ (VIP)' : ''}
+                  {myNumber}
                 </Text>
-                <TouchableOpacity onPress={() => copyText(myNumber, 'Nomor Ngopi')} style={styles.copyMiniBtn}>
-                  <Ionicons name="copy-outline" size={14} color={coffee.accent} />
+                <TouchableOpacity
+                  onPress={() => copyText(myNumber, 'Nomor Ngopi Kamu', 'number')}
+                  style={styles.copyMiniBtn}
+                  accessibilityLabel="Salin Nomor Ngopi"
+                >
+                  <Ionicons name={copiedKey === 'number' ? 'checkmark' : 'copy-outline'} size={14} color={coffee.accent} />
+                  {copiedKey === 'number' && (
+                    <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '700', marginLeft: 3 }}>Disalin</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1433,13 +1587,20 @@ export default function NgopiTelecomMailModal({
             <View style={styles.identityDivider} />
 
             <View style={[styles.identityCol, { flex: 1.3 }]}>
-              <Text style={styles.identityLabel}>AKUN EMAIL RESMI</Text>
+              <Text style={styles.identityLabel}>EMAIL NGOPI KAMU</Text>
               <View style={styles.identityValRow}>
                 <Text style={styles.identityEmail} numberOfLines={1}>
                   {myEmail}
                 </Text>
-                <TouchableOpacity onPress={() => copyText(myEmail, 'Email Ngopi')} style={styles.copyMiniBtn}>
-                  <Ionicons name="copy-outline" size={14} color={coffee.accent} />
+                <TouchableOpacity
+                  onPress={() => copyText(myEmail, 'Email Ngopi Kamu', 'email')}
+                  style={styles.copyMiniBtn}
+                  accessibilityLabel="Salin Email Ngopi"
+                >
+                  <Ionicons name={copiedKey === 'email' ? 'checkmark' : 'copy-outline'} size={14} color={coffee.accent} />
+                  {copiedKey === 'email' && (
+                    <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '700', marginLeft: 3 }}>Disalin</Text>
+                  )}
                 </TouchableOpacity>
               </View>
             </View>
@@ -1451,17 +1612,19 @@ export default function NgopiTelecomMailModal({
               style={[styles.tabBtn, activeTab === 'dialpad' && styles.tabBtnActive]}
               onPress={() => setActiveTab('dialpad')}
             >
-              <Ionicons name="keypad" size={16} color={activeTab === 'dialpad' ? '#171411' : coffee.accent} />
-              <Text style={[styles.tabBtnText, activeTab === 'dialpad' && styles.tabBtnTextActive]}>Dialpad</Text>
+              <Ionicons name="call-outline" size={16} color={activeTab === 'dialpad' ? '#171411' : coffee.accent} />
+              <Text style={[styles.tabBtnText, activeTab === 'dialpad' && styles.tabBtnTextActive]} numberOfLines={1}>
+                Panggilan
+              </Text>
             </TouchableOpacity>
 
             <TouchableOpacity
               style={[styles.tabBtn, activeTab === 'custom_number' && styles.tabBtnActive]}
               onPress={() => setActiveTab('custom_number')}
             >
-              <Ionicons name="sparkles" size={16} color={activeTab === 'custom_number' ? '#171411' : coffee.accent} />
-              <Text style={[styles.tabBtnText, activeTab === 'custom_number' && styles.tabBtnTextActive]}>
-                Identitas Ngopi
+              <Ionicons name="sparkles-outline" size={16} color={activeTab === 'custom_number' ? '#171411' : coffee.accent} />
+              <Text style={[styles.tabBtnText, activeTab === 'custom_number' && styles.tabBtnTextActive]} numberOfLines={1}>
+                Pilih Nomor
               </Text>
             </TouchableOpacity>
 
@@ -1469,15 +1632,15 @@ export default function NgopiTelecomMailModal({
               style={[styles.tabBtn, activeTab === 'mail' && styles.tabBtnActive]}
               onPress={() => setActiveTab('mail')}
             >
-              <Ionicons name="mail" size={16} color={activeTab === 'mail' ? '#171411' : coffee.accent} />
-              <Text style={[styles.tabBtnText, activeTab === 'mail' && styles.tabBtnTextActive]}>
+              <Ionicons name="mail-outline" size={16} color={activeTab === 'mail' ? '#171411' : coffee.accent} />
+              <Text style={[styles.tabBtnText, activeTab === 'mail' && styles.tabBtnTextActive]} numberOfLines={1}>
                 Email {unreadInboxCount > 0 ? `(${unreadInboxCount})` : ''}
               </Text>
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} keyboardShouldPersistTaps="handled">
-            {/* TAB 1: DIALPAD TELEPON */}
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: isMobileViewport ? 12 : 16 }} keyboardShouldPersistTaps="handled">
+            {/* TAB 1: PANGGILAN (DIALPAD) */}
             {activeTab === 'dialpad' && (
               <View>
                 <View style={styles.dialDisplayBox}>
@@ -1485,7 +1648,7 @@ export default function NgopiTelecomMailModal({
                     style={styles.dialDisplayInput}
                     value={dialedInput}
                     onChangeText={setDialedInput}
-                    placeholder="Ketik nomor (misal: 0 atau 101)"
+                    placeholder="Ketik nomor Ngopi (misal: 0 atau 101)"
                     placeholderTextColor={coffee.muted}
                   />
                   {dialedInput.length > 0 && (
@@ -1509,8 +1672,7 @@ export default function NgopiTelecomMailModal({
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.matchedName}>
-                        {dialedMember.display_name || dialedMember.username}{' '}
-                        {dialedMember.ngopi_number === '0' ? '👑' : ''}
+                        {dialedMember.display_name || dialedMember.username}
                       </Text>
                       <Text style={styles.matchedMeta}>
                         Nomor: {dialedMember.ngopi_number} • {dialedMember.ngopi_email}
@@ -1519,24 +1681,20 @@ export default function NgopiTelecomMailModal({
                   </View>
                 ) : dialedInput.trim().length > 0 ? (
                   <Text style={styles.dialHintText}>
-                    {dialedInput.trim() === '*888#'
-                      ? '✨ Tekan tombol Telepon untuk cek info Nomor & Saldo Poin Kopi'
-                      : Number(dialedInput) >= 1 && Number(dialedInput) <= 100
-                      ? 'Nomor ini dialokasikan untuk kebutuhan resmi Ngopi.'
-                      : 'Nomor belum terdaftar — bisa Anda cek ketersediaannya di tab Identitas Ngopi!'}
+                    {Number(dialedInput) >= 1 && Number(dialedInput) <= 100
+                      ? 'Nomor ini digunakan untuk layanan resmi Ngopi.'
+                      : 'Nomor ini belum ditemukan. Coba periksa lagi, ya.'}
                   </Text>
                 ) : (
                   <Text style={styles.dialHintText}>
-                    Tips: Ketik <Text style={{ color: coffee.accent, fontWeight: '700' }}>0</Text> untuk menghubungi Tim Ngopi,{' '}
-                    <Text style={{ color: coffee.accent, fontWeight: '700' }}>101+</Text> untuk member, atau{' '}
-                    <Text style={{ color: coffee.accent, fontWeight: '700' }}>*888#</Text> untuk cek pulsa poin.
+                    Masukkan nomor Ngopi atau pilih kontak yang ingin kamu hubungi. Nomor <Text style={{ color: coffee.accent, fontWeight: '700' }}>0</Text> menghubungi layanan resmi Ngopi.
                   </Text>
                 )}
 
                 {/* Keypad Grid */}
                 <View style={styles.keypadGrid}>
                   {[
-                    { k: '1', sub: 'VIP' },
+                    { k: '1', sub: '' },
                     { k: '2', sub: 'ABC' },
                     { k: '3', sub: 'DEF' },
                     { k: '4', sub: 'GHI' },
@@ -1545,9 +1703,9 @@ export default function NgopiTelecomMailModal({
                     { k: '7', sub: 'PQRS' },
                     { k: '8', sub: 'TUV' },
                     { k: '9', sub: 'WXYZ' },
-                    { k: '*', sub: 'USSD' },
-                    { k: '0', sub: 'FOUNDER' },
-                    { k: '#', sub: 'ID' },
+                    { k: '*', sub: '' },
+                    { k: '0', sub: 'NGOPI' },
+                    { k: '#', sub: '' },
                   ].map((item) => (
                     <TouchableOpacity
                       key={item.k}
@@ -1598,30 +1756,30 @@ export default function NgopiTelecomMailModal({
               </View>
             )}
 
-            {/* TAB 2: IDENTITAS NGOPI (NOMOR PILIHAN & EMAIL PILIHAN) */}
+            {/* TAB 2: PILIH NOMOR (IDENTITAS NGOPI) */}
             {activeTab === 'custom_number' && (
               <View>
                 <View style={styles.rulesCard}>
-                  <Text style={styles.rulesTitle}>☕ Skema Identitas Otomatis & Upgrade Identitas Ngopi</Text>
+                  <Text style={styles.rulesTitle}>☕ Kenali Identitas Ngopi</Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#38bdf8' }}>Nomor & Email Otomatis</Text>: Setiap member baru maupun lama otomatis mendapatkan <Text style={{ fontWeight: '700' }}>Nomor Otomatis 10-Digit</Text> & <Text style={{ fontWeight: '700' }}>Email Otomatis</Text> (@ngopi.top).
+                    <Text style={{ fontWeight: '700', color: '#38bdf8' }}>Identitas Gratis:</Text> Begitu bergabung, kamu langsung mendapat Nomor Ngopi Otomatis dan Email Ngopi Otomatis. Tidak perlu mengatur apa-apa—langsung bisa dipakai.
                   </Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#FFD700' }}>Alokasi Resmi Ngopi</Text>: Nomor <Text style={{ fontWeight: '700' }}>0</Text>, <Text style={{ fontWeight: '700' }}>1–100</Text>, serta alamat operasional resmi dialokasikan untuk kebutuhan resmi Ngopi.
+                    <Text style={{ fontWeight: '700', color: '#fbbf24' }}>Identitas Operasional:</Text> Sebagian identitas (0 dan 1–100) digunakan untuk layanan dan operasional resmi Ngopi. Kalau nomor yang kamu cari tidak tersedia, kami akan bantu mencarikan pilihan lain.
                   </Text>
                   <Text style={styles.ruleItem}>
-                    • <Text style={{ fontWeight: '800', color: '#10b981' }}>Upgrade Identitas Ngopi</Text>: Ganti ke <Text style={{ fontWeight: '700' }}>Nomor Pilihan Mudah Diingat (101+)</Text> atau <Text style={{ fontWeight: '700' }}>Email Pilihan Sesuai Nama/Brand (@ngopi.top)</Text> dengan paket di bawah.
+                    <Text style={{ fontWeight: '700', color: '#10b981' }}>Mau pakai nomor pilihan sendiri?</Text> Kamu bisa memilih kombinasi nomor atau nama email yang lebih mudah dikenali. Cek dulu ketersediaannya, lalu pilih yang paling cocok.
                   </Text>
                 </View>
 
                 {/* DAFTAR HARGA PAKET IDENTITAS NGOPI */}
-                <View style={[styles.rulesCard, { borderColor: '#f59e0b', backgroundColor: 'rgba(245, 158, 11, 0.09)' }]}>
-                  <Text style={[styles.rulesTitle, { color: '#fbbf24' }]}>💎 Daftar Paket Identitas Ngopi</Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Email Pilihan Personal</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 25.000</Text></Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Pilihan Reguler</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 35.000</Text></Text>
-                  <Text style={styles.ruleItem}>• 🔥 <Text style={{ fontWeight: '900', color: '#FFD700' }}>PAKET BUNDLING IDENTITAS (Nomor + Email Pilihan)</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 10, color: '#9ca3af' }}>(Hemat Rp 11.000 - Terlaris)</Text></Text>
-                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '800', color: '#fff' }}>Paket Nomor Pilihan Spesial (3 Angka / Kembar)</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '900', color: '#10b981' }}>Rp 250.000 – Rp 1.000.000</Text></Text>
-                  <Text style={styles.ruleItem}>• 👑 <Text style={{ fontWeight: '800', color: '#f97316' }}>Identitas Khusus / Brand & VIP</Text>: <Text style={{ fontWeight: '900', color: '#FFD700' }}>Untuk permintaan identitas khusus, hubungi Tim Ngopi.</Text></Text>
+                <View style={[styles.rulesCard, { borderColor: 'rgba(245, 158, 11, 0.45)', backgroundColor: 'rgba(245, 158, 11, 0.06)' }]}>
+                  <Text style={[styles.rulesTitle, { color: '#fbbf24' }]}>✨ Pilih Identitas Premium</Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '700', color: '#fff' }}>Email Pilihan</Text> (<Text style={{ color: '#fbbf24' }}>nama@ngopi.top</Text>): <Text style={{ fontWeight: '700', color: '#10b981' }}>Rp 25.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '700', color: '#fff' }}>Nomor Pilihan</Text> (4–6 Angka, misal <Text style={{ color: '#fbbf24' }}>1945, 2026</Text>): <Text style={{ fontWeight: '700', color: '#10b981' }}>Rp 35.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '700', color: '#FFD700' }}>Paket Bundling (Nomor + Email Pilihan)</Text>: <Text style={{ fontWeight: '700', color: '#FFD700' }}>Rp 49.000</Text> <Text style={{ fontSize: 11, color: '#9ca3af' }}>(Hemat Rp 11.000)</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '700', color: '#fff' }}>Nomor Khusus (3 Angka / Kembar)</Text> (<Text style={{ color: '#fbbf24' }}>101–999, 777, 888</Text>): <Text style={{ fontWeight: '700', color: '#10b981' }}>Rp 250.000 – Rp 1.000.000</Text></Text>
+                  <Text style={styles.ruleItem}>• <Text style={{ fontWeight: '700', color: '#f97316' }}>Identitas Khusus / Brand</Text>: <Text style={{ fontWeight: '700', color: '#FFD700' }}>Hubungi Tim Ngopi</Text></Text>
                 </View>
 
                 {/* INFO TUJUAN TRANSFER & KONFIRMASI PEMBAYARAN KE FOUNDER (#0) & WA */}
@@ -1712,7 +1870,7 @@ export default function NgopiTelecomMailModal({
                         gap: 6,
                       }}
                       onPress={() => {
-                        const numPart = desiredNumber.trim() ? `Nomor Cantik #${desiredNumber.trim()}` : '';
+                        const numPart = desiredNumber.trim() ? `Nomor Pilihan #${desiredNumber.trim()}` : '';
                         const mailPart = desiredEmailPrefix.trim()
                           ? `Email ${desiredEmailPrefix.trim().replace(/@ngopi\.top$/i, '')}@ngopi.top`
                           : '';
@@ -1785,7 +1943,7 @@ export default function NgopiTelecomMailModal({
                     maxLength={12}
                   />
                   <TouchableOpacity style={styles.checkBtn} onPress={() => validateAndCheckNumber()}>
-                    <Text style={styles.checkBtnText}>Cek Nomor</Text>
+                    <Text style={styles.checkBtnText}>Cek Ketersediaan</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1815,7 +1973,7 @@ export default function NgopiTelecomMailModal({
 
                 {suggestedNumbers.length > 0 && (
                   <View style={{ marginTop: 12 }}>
-                    <Text style={styles.subHintLabel}>Rekomendasi Nomor Cantik yang Masih Kosong:</Text>
+                    <Text style={styles.subHintLabel}>Rekomendasi Nomor Pilihan yang Tersedia:</Text>
                     <View style={styles.suggestionChipsRow}>
                       {suggestedNumbers.map((num) => (
                         <TouchableOpacity
@@ -2159,7 +2317,7 @@ export default function NgopiTelecomMailModal({
                         onPress={() => handleTogglePremiumMode('number')}
                       >
                         <Text style={{ color: requirePaidCustomNumber ? '#171411' : '#fbbf24', fontSize: 11, fontWeight: '800', textAlign: 'center' }}>
-                          Nomor Cantik: {requirePaidCustomNumber ? '💎 BERBAYAR' : '🎁 GRATIS'}
+                          Nomor Pilihan: {requirePaidCustomNumber ? '💎 BERBAYAR' : '🎁 GRATIS'}
                         </Text>
                       </TouchableOpacity>
 
@@ -2213,13 +2371,14 @@ export default function NgopiTelecomMailModal({
                     style={[styles.mailSubBtn, mailSubTab === 'inbox' && styles.mailSubBtnActive]}
                     onPress={() => {
                       setSelectedMail(null);
+                      setSelectedMailIds([]);
                       setMailSubTab('inbox');
                       loadTelecomData();
                     }}
                   >
                     <Ionicons name="mail-unread-outline" size={15} color={mailSubTab === 'inbox' ? coffee.accent : coffee.secondary} />
-                    <Text style={[styles.mailSubText, mailSubTab === 'inbox' && styles.mailSubTextActive]}>
-                      Kotak Masuk ({inboxMails.length})
+                    <Text style={[styles.mailSubText, mailSubTab === 'inbox' && styles.mailSubTextActive]} numberOfLines={1}>
+                      {unreadInboxCount > 0 ? `Masuk (${unreadInboxCount})` : 'Masuk'}
                     </Text>
                   </TouchableOpacity>
 
@@ -2227,13 +2386,14 @@ export default function NgopiTelecomMailModal({
                     style={[styles.mailSubBtn, mailSubTab === 'sent' && styles.mailSubBtnActive]}
                     onPress={() => {
                       setSelectedMail(null);
+                      setSelectedMailIds([]);
                       setMailSubTab('sent');
                       loadTelecomData();
                     }}
                   >
                     <Ionicons name="paper-plane-outline" size={15} color={mailSubTab === 'sent' ? coffee.accent : coffee.secondary} />
-                    <Text style={[styles.mailSubText, mailSubTab === 'sent' && styles.mailSubTextActive]}>
-                      Terkirim ({sentMails.length})
+                    <Text style={[styles.mailSubText, mailSubTab === 'sent' && styles.mailSubTextActive]} numberOfLines={1}>
+                      Terkirim
                     </Text>
                   </TouchableOpacity>
 
@@ -2241,12 +2401,13 @@ export default function NgopiTelecomMailModal({
                     style={[styles.mailSubBtn, mailSubTab === 'compose' && styles.mailSubBtnActive]}
                     onPress={() => {
                       setSelectedMail(null);
+                      setSelectedMailIds([]);
                       setMailSubTab('compose');
                     }}
                   >
                     <Ionicons name="create-outline" size={15} color={mailSubTab === 'compose' ? coffee.accent : coffee.secondary} />
-                    <Text style={[styles.mailSubText, mailSubTab === 'compose' && styles.mailSubTextActive]}>
-                      + Tulis Email
+                    <Text style={[styles.mailSubText, mailSubTab === 'compose' && styles.mailSubTextActive]} numberOfLines={1}>
+                      Tulis Pesan
                     </Text>
                   </TouchableOpacity>
 
@@ -2259,12 +2420,95 @@ export default function NgopiTelecomMailModal({
                   </TouchableOpacity>
                 </View>
 
-                {selectedMail ? (
+                {/* Filter & Bulk Action Bar for Inbox */}
+                {mailSubTab === 'inbox' && (!selectedMail || isDesktopTwoPane) && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <TouchableOpacity
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: inboxFilter === 'all' ? coffee.accent : coffee.border,
+                          backgroundColor: inboxFilter === 'all' ? 'rgba(217, 119, 6, 0.2)' : coffee.surface,
+                        }}
+                        onPress={() => setInboxFilter('all')}
+                      >
+                        <Text style={{ color: inboxFilter === 'all' ? coffee.accent : coffee.secondary, fontSize: 12, fontWeight: '700' }}>
+                          Semua ({inboxMails.length})
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 16,
+                          borderWidth: 1,
+                          borderColor: inboxFilter === 'unread' ? coffee.accent : coffee.border,
+                          backgroundColor: inboxFilter === 'unread' ? 'rgba(217, 119, 6, 0.2)' : coffee.surface,
+                        }}
+                        onPress={() => setInboxFilter('unread')}
+                      >
+                        <Text style={{ color: inboxFilter === 'unread' ? coffee.accent : coffee.secondary, fontSize: 12, fontWeight: '700' }}>
+                          Belum Dibaca ({unreadInboxCount})
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {selectedMailIds.length > 0 && (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#10b981', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                          onPress={() => handleBulkMarkReadStatus(true)}
+                        >
+                          <Text style={{ color: '#171411', fontSize: 11, fontWeight: '800' }}>
+                            Tandai sudah dibaca ({selectedMailIds.length})
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={{ backgroundColor: coffee.surface, borderWidth: 1, borderColor: coffee.accent, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                          onPress={() => handleBulkMarkReadStatus(false)}
+                        >
+                          <Text style={{ color: coffee.accent, fontSize: 11, fontWeight: '800' }}>
+                            Tandai belum dibaca
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
+                )}
+
+                {selectedMail && !isDesktopTwoPane ? (
                   <View style={styles.mailDetailCard}>
-                    <TouchableOpacity style={styles.backToInboxBtn} onPress={() => setSelectedMail(null)}>
-                      <Ionicons name="arrow-back" size={16} color={coffee.accent} />
-                      <Text style={{ color: coffee.accent, fontWeight: '700', fontSize: 13 }}>Kembali ke Daftar Email</Text>
-                    </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
+                      <TouchableOpacity style={[styles.backToInboxBtn, { marginBottom: 0 }]} onPress={() => setSelectedMail(null)}>
+                        <Ionicons name="arrow-back" size={16} color={coffee.accent} />
+                        <Text style={{ color: coffee.accent, fontWeight: '700', fontSize: 13 }}>Kembali ke Masuk</Text>
+                      </TouchableOpacity>
+
+                      {mailSubTab === 'inbox' && (
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: coffee.border,
+                            backgroundColor: '#120d0a',
+                          }}
+                          onPress={() => handleToggleMailReadStatus(selectedMail, !selectedMail.is_read)}
+                        >
+                          <Ionicons name={selectedMail.is_read ? 'mail-unread-outline' : 'checkmark-done-outline'} size={14} color={coffee.accent} />
+                          <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '700' }}>
+                            {selectedMail.is_read ? 'Tandai belum dibaca' : 'Tandai sudah dibaca'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
 
                     <Text style={styles.mailDetailSubject}>{selectedMail.subject}</Text>
                     <View style={styles.mailDetailMetaBox}>
@@ -2559,82 +2803,246 @@ export default function NgopiTelecomMailModal({
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View>
-                    {loadingMail ? (
+                  (() => {
+                    const visibleList =
+                      mailSubTab === 'inbox'
+                        ? inboxFilter === 'unread'
+                          ? inboxMails.filter((m) => !m.is_read && !m.read_at)
+                          : inboxMails
+                        : sentMails;
+
+                    const listPane = loadingMail ? (
                       <ActivityIndicator color={coffee.accent} style={{ marginVertical: 24 }} />
-                    ) : (mailSubTab === 'inbox' ? inboxMails : sentMails).length === 0 ? (
+                    ) : visibleList.length === 0 ? (
                       <View style={styles.emptyMailBox}>
                         <Ionicons name="mail-open-outline" size={38} color={coffee.muted} />
                         <Text style={styles.emptyMailText}>
-                          {mailSubTab === 'inbox' ? 'Belum ada email masuk.' : 'Belum ada email terkirim.'}
+                          {mailSubTab === 'inbox'
+                            ? inboxFilter === 'unread'
+                              ? 'Semua pesan masuk sudah dibaca.'
+                              : 'Belum ada pesan masuk.'
+                            : 'Belum ada pesan terkirim.'}
                         </Text>
                       </View>
                     ) : (
-                      (mailSubTab === 'inbox' ? inboxMails : sentMails).map((item) => (
-                        <TouchableOpacity
-                          key={item.id}
-                          style={[styles.mailRow, !item.is_read && mailSubTab === 'inbox' && styles.mailRowUnread]}
-                          onPress={() => {
-                            item.is_read = true;
-                            setSelectedMail({ ...item, is_read: true });
-                            getToken().then((token) => {
-                              if (token) {
-                                axios
-                                  .post(
-                                    `${API_URL}/telecom/mail/${encodeURIComponent(item.id)}/read`,
-                                    {},
-                                    { headers: { Authorization: `Bearer ${token}` } }
-                                  )
-                                  .catch(() => {});
-                              }
-                            });
-                          }}
-                        >
-                          <View style={styles.mailRowHeader}>
-                            <Text style={styles.mailRowSender} numberOfLines={1}>
-                              {mailSubTab === 'inbox'
-                                ? `${item.from_display_name} (${item.from_email})`
-                                : `Ke: ${item.to_email}`}
-                            </Text>
-                            <Text style={styles.mailRowTime}>
-                              {new Date(item.created_at).toLocaleDateString('id-ID', {
-                                day: '2-digit',
-                                month: 'short',
-                              })}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                            <Text style={[styles.mailRowSubject, { flex: 1 }]} numberOfLines={1}>
-                              {item.subject}
-                            </Text>
-                            {Array.isArray(item.attachments) && item.attachments.length > 0 && (
-                              <View
-                                style={{
-                                  backgroundColor: 'rgba(16, 185, 129, 0.16)',
-                                  borderRadius: 6,
-                                  paddingHorizontal: 6,
-                                  paddingVertical: 2,
-                                }}
+                      visibleList.map((item) => {
+                        const isUnread = mailSubTab === 'inbox' && !item.is_read && !item.read_at;
+                        const isSelected = selectedMailIds.includes(item.id);
+                        const isActiveDetail = selectedMail?.id === item.id;
+                        return (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.mailRow,
+                              isUnread && styles.mailRowUnread,
+                              isActiveDetail && { borderColor: coffee.accent, borderWidth: 1.5 },
+                            ]}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                              {mailSubTab === 'inbox' && (
+                                <TouchableOpacity
+                                  onPress={() => toggleSelectMailId(item.id)}
+                                  style={{ paddingTop: 2 }}
+                                  accessibilityLabel={isSelected ? 'Batal pilih pesan' : 'Pilih pesan'}
+                                >
+                                  <Ionicons
+                                    name={isSelected ? 'checkbox' : 'square-outline'}
+                                    size={18}
+                                    color={isSelected ? coffee.accent : coffee.muted}
+                                  />
+                                </TouchableOpacity>
+                              )}
+
+                              <TouchableOpacity
+                                style={{ flex: 1 }}
+                                onPress={() => handleOpenMail(item)}
+                                activeOpacity={0.8}
                               >
-                                <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '800' }}>
-                                  📎 {item.attachments.length} file
-                                </Text>
+                                <View style={styles.mailRowHeader}>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                                    {isUnread && (
+                                      <View
+                                        style={{
+                                          width: 8,
+                                          height: 8,
+                                          borderRadius: 4,
+                                          backgroundColor: '#f59e0b',
+                                        }}
+                                      />
+                                    )}
+                                    <Text
+                                      style={[
+                                        styles.mailRowSender,
+                                        { fontWeight: isUnread ? '800' : '500', color: isUnread ? '#fff' : coffee.accent, flex: 1 },
+                                      ]}
+                                      numberOfLines={1}
+                                    >
+                                      {mailSubTab === 'inbox'
+                                        ? `${item.from_display_name} (${item.from_email})`
+                                        : `Ke: ${item.to_email}`}
+                                    </Text>
+                                  </View>
+
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                    {isUnread && (
+                                      <View
+                                        style={{
+                                          backgroundColor: 'rgba(245, 158, 11, 0.22)',
+                                          borderRadius: 6,
+                                          paddingHorizontal: 6,
+                                          paddingVertical: 1,
+                                        }}
+                                      >
+                                        <Text style={{ color: '#fbbf24', fontSize: 10, fontWeight: '800' }}>Baru</Text>
+                                      </View>
+                                    )}
+                                    <Text style={styles.mailRowTime}>
+                                      {new Date(item.created_at).toLocaleDateString('id-ID', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                      })}
+                                    </Text>
+                                  </View>
+                                </View>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, marginTop: 2 }}>
+                                  <Text
+                                    style={[
+                                      styles.mailRowSubject,
+                                      { flex: 1, fontWeight: isUnread ? '800' : '500', color: isUnread ? '#fff' : coffee.text },
+                                    ]}
+                                    numberOfLines={1}
+                                  >
+                                    {item.subject}
+                                  </Text>
+                                  {Array.isArray(item.attachments) && item.attachments.length > 0 && (
+                                    <View
+                                      style={{
+                                        backgroundColor: 'rgba(16, 185, 129, 0.16)',
+                                        borderRadius: 6,
+                                        paddingHorizontal: 6,
+                                        paddingVertical: 2,
+                                      }}
+                                    >
+                                      <Text style={{ color: '#10b981', fontSize: 10, fontWeight: '800' }}>
+                                        📎 {item.attachments.length} file
+                                      </Text>
+                                    </View>
+                                  )}
+                                </View>
+
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 3 }}>
+                                  <Text style={[styles.mailRowPreview, { flex: 1 }]} numberOfLines={2}>
+                                    {item.body}
+                                  </Text>
+                                  {mailSubTab === 'inbox' && (
+                                    <TouchableOpacity
+                                      onPress={() => handleToggleMailReadStatus(item, isUnread)}
+                                      style={{
+                                        paddingHorizontal: 8,
+                                        paddingVertical: 4,
+                                        borderRadius: 6,
+                                        borderWidth: 1,
+                                        borderColor: coffee.border,
+                                        backgroundColor: '#120d0a',
+                                      }}
+                                    >
+                                      <Text style={{ color: coffee.secondary, fontSize: 10, fontWeight: '700' }}>
+                                        {isUnread ? 'Tandai sudah dibaca' : 'Tandai belum dibaca'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
+                      })
+                    );
+
+                    if (isDesktopTwoPane) {
+                      return (
+                        <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start' }}>
+                          <View style={{ flex: 0.95 }}>{listPane}</View>
+                          <View style={{ flex: 1.25 }}>
+                            {selectedMail ? (
+                              <View style={styles.mailDetailCard}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 8 }}>
+                                  <Text style={[styles.mailDetailSubject, { marginBottom: 0, flex: 1 }]}>{selectedMail.subject}</Text>
+                                  {mailSubTab === 'inbox' && (
+                                    <TouchableOpacity
+                                      style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'center',
+                                        gap: 5,
+                                        paddingHorizontal: 10,
+                                        paddingVertical: 6,
+                                        borderRadius: 8,
+                                        borderWidth: 1,
+                                        borderColor: coffee.border,
+                                        backgroundColor: '#120d0a',
+                                      }}
+                                      onPress={() => handleToggleMailReadStatus(selectedMail, !selectedMail.is_read)}
+                                    >
+                                      <Ionicons
+                                        name={selectedMail.is_read ? 'mail-unread-outline' : 'checkmark-done-outline'}
+                                        size={14}
+                                        color={coffee.accent}
+                                      />
+                                      <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '700' }}>
+                                        {selectedMail.is_read ? 'Tandai belum dibaca' : 'Tandai sudah dibaca'}
+                                      </Text>
+                                    </TouchableOpacity>
+                                  )}
+                                </View>
+                                <View style={styles.mailDetailMetaBox}>
+                                  <Text style={styles.mailDetailMeta}>
+                                    Dari: <Text style={{ color: coffee.text, fontWeight: '700' }}>{selectedMail.from_display_name}</Text> ({selectedMail.from_email} • Nomor #{selectedMail.from_number})
+                                  </Text>
+                                  <Text style={styles.mailDetailMeta}>
+                                    Kepada: {selectedMail.to_email} (Nomor #{selectedMail.to_number})
+                                  </Text>
+                                  <Text style={styles.mailDetailMeta}>
+                                    Waktu: {new Date(selectedMail.created_at).toLocaleString('id-ID')}
+                                  </Text>
+                                </View>
+                                <Text style={styles.mailDetailBody}>{selectedMail.body}</Text>
+                                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                                  <TouchableOpacity
+                                    style={styles.replyMailBtn}
+                                    onPress={() => {
+                                      setComposeTo(selectedMail.from_email);
+                                      setComposeSubject(
+                                        selectedMail.subject.startsWith('Re:') ? selectedMail.subject : `Re: ${selectedMail.subject}`
+                                      );
+                                      setSelectedMail(null);
+                                      setMailSubTab('compose');
+                                    }}
+                                  >
+                                    <Ionicons name="arrow-undo" size={16} color="#171411" />
+                                    <Text style={styles.replyMailBtnText}>Balas Pesan</Text>
+                                  </TouchableOpacity>
+                                </View>
+                              </View>
+                            ) : (
+                              <View style={[styles.emptyMailBox, { borderWidth: 1, borderColor: coffee.border, borderRadius: 12, backgroundColor: '#120d0a' }]}>
+                                <Ionicons name="mail-outline" size={34} color={coffee.muted} />
+                                <Text style={styles.emptyMailText}>Pilih salah satu pesan di sebelah kiri untuk membacanya.</Text>
                               </View>
                             )}
                           </View>
-                          <Text style={styles.mailRowPreview} numberOfLines={2}>
-                            {item.body}
-                          </Text>
-                        </TouchableOpacity>
-                      ))
-                    )}
-                  </View>
+                        </View>
+                      );
+                    }
+
+                    return <View>{listPane}</View>;
+                  })()
                 )}
               </View>
             )}
           </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

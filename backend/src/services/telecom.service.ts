@@ -26,6 +26,7 @@ export interface NgopiMailMessage {
   body: string;
   attachments?: MailAttachment[];
   is_read: boolean;
+  read_at?: string | null;
   is_starred?: boolean;
   created_at: string;
 }
@@ -931,6 +932,13 @@ export class TelecomService {
     return null;
   }
 
+  private sanitizePlainText(input: string): string {
+    return String(input || '')
+      .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      .trim();
+  }
+
   private ensureWelcomeMail(user: { id: string; username: string; display_name?: string | null }, ngopiNumber: string, ngopiEmail: string): void {
     const hasWelcome = this.mails.some((m) => m.to_user_id === user.id && m.id.startsWith('welcome-'));
     if (hasWelcome) return;
@@ -938,17 +946,18 @@ export class TelecomService {
     const welcomeMail: NgopiMailMessage = {
       id: `welcome-${user.id}`,
       from_user_id: 'founder-0',
-      from_username: 'warung',
-      from_display_name: 'Founder Ngopi (#0)',
+      from_username: 'ngopi',
+      from_display_name: 'Tim Ngopi (#0)',
       from_email: 'warung@ngopi.top',
       from_number: '0',
       to_user_id: user.id,
       to_username: user.username,
       to_email: ngopiEmail,
       to_number: ngopiNumber,
-      subject: `Selamat Datang di Ngopi Mail & Nomor Virtual #${ngopiNumber}! ☕`,
-      body: `Halo ${user.display_name || user.username}!\n\nAkun Anda telah mendapatkan Nomor HP Virtual & Email bawaan (acak):\n• Nomor Virtual Bawaan: ${ngopiNumber}\n• Email Bawaan: ${ngopiEmail}\n\nIngin mengganti ke Nomor Cantik yang mudah dihafal (misal 101, 777, 1945) dan Email Cantik sesuai nama Anda (${user.username.toLowerCase()}@ngopi.top)?\nSilakan buka tab "Nomor & Email Cantik" untuk memilih paket upgrade Premium!\n\nSalam hangat,\nFounder Ngopi (#0 - warung@ngopi.top)`,
+      subject: `Selamat Datang di Identitas Ngopi #${ngopiNumber}! ☕`,
+      body: `Halo ${user.display_name || user.username}!\n\nBegitu bergabung, kamu langsung mendapat Nomor Ngopi Otomatis (${ngopiNumber}) dan Email Ngopi (${ngopiEmail}). Tidak perlu mengatur apa-apa—langsung bisa dipakai.\n\nMau pakai nomor pilihan sendiri atau nama email yang lebih mudah dikenali? Kamu bisa cek ketersediaannya di tab "Pilih Nomor"!\n\nSalam hangat,\nTim Ngopi (#0 • warung@ngopi.top)`,
       is_read: false,
+      read_at: null,
       created_at: new Date().toISOString(),
     };
 
@@ -956,25 +965,69 @@ export class TelecomService {
     this.saveToDisk();
   }
 
+  public isInboxOwnerOfMail(
+    mail: NgopiMailMessage,
+    user: { id: string; username?: string | null; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string
+  ): boolean {
+    if (mail.to_user_id === user.id) return true;
+    if (mail.to_email.toLowerCase() === ngopiEmail.toLowerCase()) return true;
+    if (mail.to_number === ngopiNumber) return true;
+    const isFounder = this.isFounderUser(user) || ngopiNumber === '0' || ngopiEmail.toLowerCase() === 'warung@ngopi.top';
+    const founderEmails = new Set(['warung@ngopi.top', 'founder@ngopi.top', 'ngopi@ngopi.top', 'admin@ngopi.top', '0@ngopi.top']);
+    if (isFounder && (mail.to_number === '0' || founderEmails.has(mail.to_email.toLowerCase()))) {
+      return true;
+    }
+    return false;
+  }
+
   public getInboxForUser(
     user: { id: string; username: string; display_name?: string | null; role?: string | null; bmc_id?: number | null },
     ngopiNumber: string,
-    ngopiEmail: string
+    ngopiEmail: string,
+    filter: 'all' | 'unread' = 'all'
   ): NgopiMailMessage[] {
     this.ensureWelcomeMail(user, ngopiNumber, ngopiEmail);
-    const isFounder = this.isFounderUser(user) || ngopiNumber === '0' || ngopiEmail.toLowerCase() === 'warung@ngopi.top';
-    const founderEmails = new Set(['warung@ngopi.top', 'founder@ngopi.top', 'ngopi@ngopi.top', 'admin@ngopi.top', '0@ngopi.top']);
     return this.mails
       .filter((m) => {
-        if (m.to_user_id === user.id || m.to_email.toLowerCase() === ngopiEmail.toLowerCase() || m.to_number === ngopiNumber) {
-          return true;
+        if (!this.isInboxOwnerOfMail(m, user, ngopiNumber, ngopiEmail)) return false;
+        if (filter === 'unread') {
+          return !m.is_read && !m.read_at;
         }
-        if (isFounder && (m.to_number === '0' || founderEmails.has(m.to_email.toLowerCase()))) {
-          return true;
-        }
-        return false;
+        return true;
       })
+      .map((m) => ({
+        ...m,
+        is_read: Boolean(m.is_read || m.read_at),
+        read_at: m.read_at ?? null,
+      }))
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  }
+
+  public getUnreadCountForUser(
+    user: { id: string; username: string; display_name?: string | null; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string
+  ): number {
+    return this.getInboxForUser(user, ngopiNumber, ngopiEmail, 'unread').length;
+  }
+
+  public getMailDetailForUser(
+    user: { id: string; username: string; display_name?: string | null; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string,
+    mailId: string
+  ): NgopiMailMessage | null {
+    const found = this.mails.find((m) => m.id === mailId);
+    if (!found) return null;
+    const isOwner = this.isInboxOwnerOfMail(found, user, ngopiNumber, ngopiEmail) || found.from_user_id === user.id;
+    if (!isOwner) return null;
+    return {
+      ...found,
+      is_read: Boolean(found.is_read || found.read_at),
+      read_at: found.read_at ?? null,
+    };
   }
 
   public getSentForUser(userId: string): NgopiMailMessage[] {
@@ -991,8 +1044,8 @@ export class TelecomService {
     rawAttachments?: MailAttachment[]
   ): Promise<{ success: boolean; mail?: NgopiMailMessage; error?: string }> {
     const cleanTo = String(toIdentifier || '').trim();
-    const cleanSubject = String(subject || '').trim() || '(Tanpa Subjek)';
-    const cleanBody = String(body || '').trim();
+    const cleanSubject = this.sanitizePlainText(subject) || '(Tanpa Subjek)';
+    const cleanBody = this.sanitizePlainText(body);
 
     const sanitizedAttachments: MailAttachment[] = Array.isArray(rawAttachments)
       ? rawAttachments
@@ -1018,7 +1071,7 @@ export class TelecomService {
     if (!recipient) {
       return {
         success: false,
-        error: `Tujuan "${cleanTo}" tidak ditemukan. Masukkan alamat @ngopi.top atau Nomor Ngopi yang terdaftar.`,
+        error: `Tujuan "${cleanTo}" tidak ditemukan. Coba periksa kembali alamat atau Nomor Ngopi tujuan.`,
       };
     }
 
@@ -1041,6 +1094,7 @@ export class TelecomService {
       body: cleanBody || `(Melampirkan ${sanitizedAttachments.length} berkas)`,
       attachments: sanitizedAttachments.length > 0 ? sanitizedAttachments : undefined,
       is_read: false,
+      read_at: null,
       created_at: new Date().toISOString(),
     };
 
@@ -1050,12 +1104,85 @@ export class TelecomService {
     return { success: true, mail: newMail };
   }
 
-  public markMailRead(userId: string, mailId: string): boolean {
-    const found = this.mails.find((m) => m.id === mailId && m.to_user_id === userId);
-    if (!found) return false;
-    found.is_read = true;
-    this.saveToDisk();
-    return true;
+  public markMailRead(
+    user: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string,
+    mailId: string
+  ): { success: boolean; changed: boolean; mail?: NgopiMailMessage; unread_count: number } {
+    const found = this.mails.find((m) => m.id === mailId && this.isInboxOwnerOfMail(m, user, ngopiNumber, ngopiEmail));
+    if (!found) {
+      return { success: false, changed: false, unread_count: this.getUnreadCountForUser(user, ngopiNumber, ngopiEmail) };
+    }
+    const alreadyRead = Boolean(found.is_read || found.read_at);
+    if (!alreadyRead) {
+      found.is_read = true;
+      found.read_at = new Date().toISOString();
+      this.saveToDisk();
+    }
+    return {
+      success: true,
+      changed: !alreadyRead,
+      mail: { ...found, is_read: true, read_at: found.read_at || new Date().toISOString() },
+      unread_count: this.getUnreadCountForUser(user, ngopiNumber, ngopiEmail),
+    };
+  }
+
+  public markMailUnread(
+    user: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string,
+    mailId: string
+  ): { success: boolean; changed: boolean; mail?: NgopiMailMessage; unread_count: number } {
+    const found = this.mails.find((m) => m.id === mailId && this.isInboxOwnerOfMail(m, user, ngopiNumber, ngopiEmail));
+    if (!found) {
+      return { success: false, changed: false, unread_count: this.getUnreadCountForUser(user, ngopiNumber, ngopiEmail) };
+    }
+    const wasRead = Boolean(found.is_read || found.read_at);
+    if (wasRead) {
+      found.is_read = false;
+      found.read_at = null;
+      this.saveToDisk();
+    }
+    return {
+      success: true,
+      changed: wasRead,
+      mail: { ...found, is_read: false, read_at: null },
+      unread_count: this.getUnreadCountForUser(user, ngopiNumber, ngopiEmail),
+    };
+  }
+
+  public bulkUpdateMailReadStatus(
+    user: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    ngopiNumber: string,
+    ngopiEmail: string,
+    mailIds: string[],
+    isRead: boolean
+  ): { success: boolean; updated_count: number; unread_count: number } {
+    const idSet = new Set(Array.isArray(mailIds) ? mailIds.map((id) => String(id)) : []);
+    let updatedCount = 0;
+    const nowIso = new Date().toISOString();
+
+    for (const m of this.mails) {
+      if (!idSet.has(m.id)) continue;
+      if (!this.isInboxOwnerOfMail(m, user, ngopiNumber, ngopiEmail)) continue;
+      const currentlyRead = Boolean(m.is_read || m.read_at);
+      if (currentlyRead !== isRead) {
+        m.is_read = isRead;
+        m.read_at = isRead ? nowIso : null;
+        updatedCount += 1;
+      }
+    }
+
+    if (updatedCount > 0) {
+      this.saveToDisk();
+    }
+
+    return {
+      success: true,
+      updated_count: updatedCount,
+      unread_count: this.getUnreadCountForUser(user, ngopiNumber, ngopiEmail),
+    };
   }
 
   public deleteMail(userId: string, mailId: string): boolean {

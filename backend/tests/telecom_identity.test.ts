@@ -229,6 +229,81 @@ async function runTests() {
     assert.ok(recs.emails.length > 0);
   });
 
+  // 16. Email Read/Unread lifecycle, unread count, filter, bulk action, ownership isolation & XSS
+  await check('16. Email read/unread lifecycle, unread count, filter, bulk update, ownership isolation & XSS', async () => {
+    const sitiNum = telecomService.getNumberForUser(mockUsers[3]);
+    const sitiEmail = telecomService.formatEmail(mockUsers[3].username, mockUsers[3].id);
+    const budiNum = telecomService.getNumberForUser(mockUsers[2]);
+    const budiEmail = telecomService.formatEmail(mockUsers[2].username, mockUsers[2].id);
+
+    // Initialize inboxes & check initial unread count (welcome mail)
+    const initialSitiUnread = telecomService.getUnreadCountForUser(mockUsers[3], sitiNum, sitiEmail);
+    const initialBudiUnread = telecomService.getUnreadCountForUser(mockUsers[2], budiNum, budiEmail);
+
+    // Send 2 new mails from Budi -> Siti (one containing XSS attempt)
+    const send1 = await telecomService.sendMail(
+      mockUsers[2],
+      sitiEmail,
+      'Halo <script>alert(1)</script> Kopi',
+      '<b>Pesan</b> <script>alert("xss")</script> pertama untuk Siti'
+    );
+    assert.strictEqual(send1.success, true);
+    assert.strictEqual(send1.mail?.is_read, false);
+    assert.strictEqual(send1.mail?.read_at, null);
+    assert.ok(!send1.mail?.subject.includes('<script>'));
+    assert.ok(!send1.mail?.body.includes('<script>'));
+
+    const send2 = await telecomService.sendMail(mockUsers[2], sitiEmail, 'Kopi Kedua', 'Ajak ngopi sore');
+    assert.strictEqual(send2.success, true);
+
+    // Sent mail must NOT increase sender's (Budi's) unread count
+    assert.strictEqual(telecomService.getUnreadCountForUser(mockUsers[2], budiNum, budiEmail), initialBudiUnread);
+    // Siti's unread count must increase by 2
+    assert.strictEqual(telecomService.getUnreadCountForUser(mockUsers[3], sitiNum, sitiEmail), initialSitiUnread + 2);
+
+    // Filter unread vs all
+    const unreadOnly = telecomService.getInboxForUser(mockUsers[3], sitiNum, sitiEmail, 'unread');
+    assert.ok(unreadOnly.some((m) => m.id === send1.mail!.id));
+
+    // Budi CANNOT mark Siti's mail as read or view Siti's mail detail if not sender? (Budi IS sender of send1, so test another user u-warung)
+    const warungNum = telecomService.getNumberForUser(mockUsers[1]);
+    const warungEmail = telecomService.formatEmail(mockUsers[1].username, mockUsers[1].id);
+    const unauthorizedDetail = telecomService.getMailDetailForUser(mockUsers[1], warungNum, warungEmail, send1.mail!.id);
+    assert.strictEqual(unauthorizedDetail, null);
+    const unauthorizedRead = telecomService.markMailRead(mockUsers[1], warungNum, warungEmail, send1.mail!.id);
+    assert.strictEqual(unauthorizedRead.success, false);
+
+    // Siti opens send1 -> unread count decreases by 1
+    const r1 = telecomService.markMailRead(mockUsers[3], sitiNum, sitiEmail, send1.mail!.id);
+    assert.strictEqual(r1.success, true);
+    assert.strictEqual(r1.changed, true);
+    assert.ok(r1.mail?.read_at);
+    assert.strictEqual(r1.unread_count, initialSitiUnread + 1);
+
+    // Re-opening already-read send1 does NOT decrease unread count again
+    const r1Again = telecomService.markMailRead(mockUsers[3], sitiNum, sitiEmail, send1.mail!.id);
+    assert.strictEqual(r1Again.changed, false);
+    assert.strictEqual(r1Again.unread_count, initialSitiUnread + 1);
+
+    // Mark unread -> unread count increases by 1
+    const u1 = telecomService.markMailUnread(mockUsers[3], sitiNum, sitiEmail, send1.mail!.id);
+    assert.strictEqual(u1.success, true);
+    assert.strictEqual(u1.changed, true);
+    assert.strictEqual(u1.mail?.read_at, null);
+    assert.strictEqual(u1.unread_count, initialSitiUnread + 2);
+
+    // Bulk mark both as read
+    const bulkRead = telecomService.bulkUpdateMailReadStatus(
+      mockUsers[3],
+      sitiNum,
+      sitiEmail,
+      [send1.mail!.id, send2.mail!.id],
+      true
+    );
+    assert.strictEqual(bulkRead.updated_count, 2);
+    assert.strictEqual(bulkRead.unread_count, initialSitiUnread);
+  });
+
   console.log(`\n🎉 ALL ${passed} TESTS PASSED SUCCESSFULLY!`);
   process.exit(0);
 }

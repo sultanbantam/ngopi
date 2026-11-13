@@ -3,7 +3,7 @@
  * Fondasi Offline untuk Akses Tanpa Internet & HT (Handy Talky)
  */
 
-const CACHE_NAME = 'ngopi-v3';
+const CACHE_NAME = 'ngopi-v4';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
 const URLS_TO_CACHE = [
