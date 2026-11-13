@@ -85,9 +85,15 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
   immutable: true,
   etag: true,
   lastModified: true,
-  setHeaders: (res) => {
+  setHeaders: (res, filePath) => {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    const ext = path.extname(filePath).toLowerCase();
+    const inlineMediaExts = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp', '.mp4', '.mov', '.webm', '.mp3', '.m4a', '.wav', '.ogg', '.aac']);
+    if (!inlineMediaExts.has(ext)) {
+      res.setHeader('Content-Disposition', `attachment; filename="${path.basename(filePath).replace(/"/g, '')}"`);
+    }
   },
 }));
 
