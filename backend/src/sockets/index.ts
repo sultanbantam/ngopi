@@ -121,24 +121,28 @@ export const setupSocket = (io: Server) => {
     }
 
     try {
-      let decoded: SocketTokenPayload;
-      try {
-        decoded = jwt.verify(token, JWT_SECRET) as SocketTokenPayload;
-      } catch (innerErr: any) {
-        if (innerErr?.name === 'TokenExpiredError') {
-          decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }) as SocketTokenPayload;
-        } else {
-          throw innerErr;
-        }
+      const verifyOptions: jwt.VerifyOptions = {};
+      if (process.env.JWT_ISSUER) verifyOptions.issuer = process.env.JWT_ISSUER;
+      if (process.env.JWT_AUDIENCE) verifyOptions.audience = process.env.JWT_AUDIENCE;
+
+      const decoded = jwt.verify(token, JWT_SECRET, verifyOptions) as SocketTokenPayload;
+      if (!decoded || typeof decoded !== 'object' || typeof decoded.id !== 'string' || !decoded.id.trim()) {
+        return next(new Error('Authentication error: Invalid token payload'));
       }
       if (decoded.token_type && decoded.token_type !== 'access') {
         return next(new Error('Authentication error: Invalid token type'));
       }
 
-      // Attach user info to socket
-      (socket as any).user = decoded;
+      // Attach verified user info to socket
+      (socket as any).user = {
+        ...decoded,
+        id: decoded.id.trim(),
+      };
       next();
-    } catch (err) {
+    } catch (err: any) {
+      if (err?.name === 'TokenExpiredError') {
+        return next(new Error('Authentication error: Token expired'));
+      }
       next(new Error('Authentication error: Invalid token'));
     }
   });

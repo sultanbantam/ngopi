@@ -104,23 +104,22 @@ class AgentServiceClass {
         if (!this.isAutonomousLoopActive) return;
         this.lastLoopCheckTime = new Date().toISOString();
 
-        // Check active merchant partners
+        // Check active non-showcase merchant partners
         const partners = await MerchantService.listPartners();
-        if (partners && partners.length > 0) {
-          const target = partners[0];
-          if (!target) return;
+        const nonShowcaseTarget = partners?.find((p) => !p.is_showcase);
+        if (nonShowcaseTarget) {
           // Check stock condition
-          const inv = await this.checkInventory(target.id);
+          const inv = await this.checkInventory(nonShowcaseTarget.id);
           if (inv.requires_restock) {
             const lastPoLog = this.autonomousLogs.find((l) => l.trigger.includes('Supply Chain'));
             const lastPoTime = lastPoLog ? new Date(lastPoLog.timestamp).getTime() : 0;
             // Restock alert interval: at most once every 6 hours
             if (Date.now() - lastPoTime > 6 * 3600 * 1000) {
-              console.log(`[ngopAI Daemon] Auto-triggering supply chain check for ${target.cafe_name}...`);
+              console.log(`[ngopAI Daemon] Auto-triggering supply chain check for ${nonShowcaseTarget.cafe_name}...`);
               await this.executeAgent({
                 role: 'merchant',
                 trigger: 'supply_chain_autopilot',
-                cafeId: target.id,
+                cafeId: nonShowcaseTarget.id,
               });
             }
           }
@@ -129,13 +128,16 @@ class AgentServiceClass {
         console.error('[ngopAI Daemon Error]', err);
       }
     }, 60000);
+    if (this.backgroundIntervalId && typeof this.backgroundIntervalId.unref === 'function') {
+      this.backgroundIntervalId.unref();
+    }
   }
 
   // =========================================================================
   // TOOL 1: get_merchant_analytics
   // =========================================================================
-  public async getMerchantAnalytics(cafeId: string = 'm_warkop_sahabat') {
-    const dashboard = await MerchantService.getDashboard(cafeId);
+  public async getMerchantAnalytics(cafeId: string = '') {
+    const dashboard = cafeId ? await MerchantService.getDashboard(cafeId) : null;
     const totalCheckins = dashboard?.stats?.totalCheckins || 48;
     const todayCheckins = dashboard?.stats?.todayCheckins || 6;
     const hourlyAverage = 14;
@@ -143,8 +145,8 @@ class AgentServiceClass {
     const dropPercentage = Math.round(((hourlyAverage - currentHourCheckins) / hourlyAverage) * 100);
 
     return {
-      cafe_id: cafeId,
-      cafe_name: dashboard?.profile?.cafe_name || 'Warkop Seduh Sahabat',
+      cafe_id: cafeId || 'unassigned',
+      cafe_name: dashboard?.profile?.cafe_name || 'Ngopi Partner Cafe',
       today_checkins: todayCheckins,
       total_checkins: totalCheckins,
       unique_visitors: dashboard?.stats?.uniqueVisitors || 32,
@@ -160,9 +162,9 @@ class AgentServiceClass {
   // =========================================================================
   // TOOL 2: manage_partnership
   // =========================================================================
-  public async managePartnership(cafeId: string = 'm_warkop_sahabat', action: string = 'generate_mou') {
-    const dashboard = await MerchantService.getDashboard(cafeId);
-    const cafeName = dashboard?.profile?.cafe_name || 'Warkop Seduh Sahabat';
+  public async managePartnership(cafeId: string = '', action: string = 'generate_mou') {
+    const dashboard = cafeId ? await MerchantService.getDashboard(cafeId) : null;
+    const cafeName = dashboard?.profile?.cafe_name || 'Ngopi Partner Cafe';
 
     if (action === 'create_qr') {
       const qrToken = dashboard?.profile?.qr_code_token || `NGOPI_${cafeId.toUpperCase()}`;
@@ -205,7 +207,7 @@ class AgentServiceClass {
   // =========================================================================
   // TOOL 3: broadcast_ht_radio
   // =========================================================================
-  public async broadcastHtRadio(cafeId: string = 'm_warkop_sahabat', message: string) {
+  public async broadcastHtRadio(cafeId: string = '', message: string) {
     try {
       htManagerService.prepareTransmission({
         userId: 'ngopai_system_agent',
@@ -284,17 +286,21 @@ class AgentServiceClass {
   // =========================================================================
   // TOOL 6: create_promo
   // =========================================================================
-  public async createPromo(cafeId: string = 'm_warkop_sahabat', discountPercentage: number = 20) {
+  public async createPromo(cafeId: string = '', discountPercentage: number = 20) {
     const promoTitle = `Flash Promo Happy Hour Diskon ${discountPercentage}%`;
     const promoDesc = `Dapatkan potongan harga ${discountPercentage}% untuk semua menu kopi seduh selama 2 jam ke depan! Ditawarkan otomatis oleh Virtual Manager ngopAI.`;
 
-    const res = await MerchantService.addPromo(cafeId, {
-      title: promoTitle,
-      description: promoDesc,
-      discount: `Diskon ${discountPercentage}%`,
-      valid_until: new Date(Date.now() + 2 * 3600000).toISOString(),
-      image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
-    });
+    const showcaseIds = new Set(['m_warkop_sahabat', 'm_kenangan_senja', 'm_barista_corner']);
+    const res =
+      cafeId && !showcaseIds.has(cafeId)
+        ? await MerchantService.addPromo(cafeId, {
+            title: promoTitle,
+            description: promoDesc,
+            discount: `Diskon ${discountPercentage}%`,
+            valid_until: new Date(Date.now() + 2 * 3600000).toISOString(),
+            image_url: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=600&q=80',
+          })
+        : null;
 
     return {
       success: true,
@@ -415,7 +421,7 @@ class AgentServiceClass {
   // =========================================================================
   // TOOL 7: check_inventory (NEW - updateskills.md)
   // =========================================================================
-  public async checkInventory(cafeId: string = 'm_warkop_sahabat') {
+  public async checkInventory(cafeId: string = '') {
     const inventory = [
       {
         material: 'coffee_beans',
@@ -524,7 +530,7 @@ class AgentServiceClass {
   // TOOL 9: draft_purchase_order (NEW - updateskills.md)
   // =========================================================================
   public async draftPurchaseOrder(
-    cafeId: string = 'm_warkop_sahabat',
+    cafeId: string = '',
     supplierId: string,
     items: Array<{ material: string; quantity: number }>
   ) {
@@ -586,7 +592,7 @@ class AgentServiceClass {
     userId?: string;
   }): Promise<AgentExecutionResult> {
     const startTime = Date.now();
-    const cafeId = params.cafeId || 'm_warkop_sahabat';
+    const cafeId = params.cafeId || '';
     const steps: AgentStep[] = [];
 
     const addStep = (type: AgentStep['type'], content: string, tool?: string, p?: any, res?: any) => {
@@ -833,21 +839,19 @@ class AgentServiceClass {
 
       addStep(
         'thought',
-        'Mencari data warkop dan cafe partner terdekat yang memiliki promo diskon aktif dan area turnamen gapleh.'
+        'Mencari data warkop dan cafe partner terdekat yang memiliki promo diskon aktif dan area turnamen gapleh (read-only).'
       );
 
-      const analytics = await this.getMerchantAnalytics('m_warkop_sahabat');
-      addStep('action', 'Mengeksekusi get_merchant_analytics untuk mengecek ketersediaan promo & status cafe.', 'get_merchant_analytics', { cafe_id: 'm_warkop_sahabat' }, analytics);
+      const partners = await MerchantService.listPartners();
+      const featuredCafe = partners[0];
+      const cafeName = featuredCafe?.cafe_name || 'Ngopi Partner Cafe';
+      const cafeAddress = featuredCafe?.address || 'Area Komunitas Ngopi';
+      const activePromoCount = featuredCafe?.promos?.length || 0;
+      addStep('action', 'Membaca daftar cafe partner publik & promo aktif (read-only).', 'list_public_partners', { count: partners.length }, { cafe_name: cafeName, active_promos: activePromoCount });
 
-      addStep('observation', `Ditemukan cafe terdekat: "${analytics.cafe_name}" dengan ${analytics.active_promos} promo aktif.`);
+      addStep('observation', `Ditemukan cafe terdekat: "${cafeName}" dengan ${activePromoCount} promo aktif.`);
 
-      const promo = await this.createPromo('m_warkop_sahabat', 20);
-      createdArtifacts.promo = promo;
-      addStep('action', 'Otomatis mengklaimkan voucher diskon 20% untuk pengguna.', 'create_promo', { cafe_id: 'm_warkop_sahabat', discount_percentage: 20 }, promo);
-
-      addStep('observation', 'Voucher diskon 20% berhasil diklaim.');
-
-      const finalMsg = `Rekomendasi Barista: Silakan mampir ke "${analytics.cafe_name}" (Jl. Veteran No. 12). ngopAI sudah otomatis mengklaimkan voucher Diskon 20% untuk kamu! Meja gapleh dan wifi kencang tersedia.`;
+      const finalMsg = `Rekomendasi Barista: Silakan mampir ke "${cafeName}" (${cafeAddress}) dan cek promo aktif yang tersedia di halaman Partner Ngopi!`;
       addStep('final_answer', finalMsg);
       summary = finalMsg;
     }
@@ -864,7 +868,7 @@ class AgentServiceClass {
       );
 
       const userPts = 1250;
-      addStep('action', 'Membaca ledger poin pengguna dari smart loyalty system.', 'check_points_balance', { user_id: params.userId || 'usr_guest' }, { balance: userPts });
+      addStep('action', 'Membaca ledger poin pengguna dari smart loyalty system.', 'check_points_balance', { user_id: params.userId || '' }, { balance: userPts });
 
       addStep('observation', `Saldo terkonfirmasi: ${userPts} Poin Ngopi aktif.`);
 

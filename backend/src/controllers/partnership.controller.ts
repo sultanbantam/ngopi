@@ -1,51 +1,6 @@
 import { Request, Response } from 'express';
 import { PartnershipService } from '../services/partnership.service';
-import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'supersecret_fallback';
-
-const extractUser = (req: Request): { id: string; username: string } | null => {
-  const reqUser = (req as any).user;
-  if (reqUser?.id) {
-    return {
-      id: String(reqUser.id),
-      username: String(reqUser.username || 'Pengunjung'),
-    };
-  }
-
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const token = authHeader.slice(7);
-      const decoded: any = jwt.verify(token, JWT_SECRET);
-      if (decoded?.id) {
-        return {
-          id: String(decoded.id),
-          username: String(decoded.username || 'Pengunjung'),
-        };
-      }
-    } catch (_) {
-      try {
-        const decoded: any = jwt.decode(token);
-        if (decoded?.id) {
-          return {
-            id: String(decoded.id),
-            username: String(decoded.username || 'Pengunjung'),
-          };
-        }
-      } catch {}
-    }
-  }
-
-  const fallbackId = (req.headers['x-user-id'] as string) || (req.body?.userId as string) || (req.query?.userId as string);
-  const fallbackUsername = (req.headers['x-user-name'] as string) || (req.body?.username as string) || (req.query?.username as string);
-
-  if (fallbackId && fallbackId !== 'guest_user') {
-    return { id: String(fallbackId), username: String(fallbackUsername || fallbackId) };
-  }
-
-  return null;
-};
+import { AuthRequest } from '../middleware/auth.middleware';
 
 export class PartnershipController {
   /**
@@ -53,15 +8,15 @@ export class PartnershipController {
    */
   public static async getStatus(req: Request, res: Response): Promise<void> {
     try {
-      const user = extractUser(req);
-      if (!user) {
+      const authUser = (req as AuthRequest).user;
+      if (!authUser?.id) {
         res.status(401).json({ success: false, error: 'Silakan login terlebih dahulu untuk mengakses menu Kemitraan.' });
         return;
       }
 
-      const agreement = await PartnershipService.getAgreementByUserId(user.id);
+      const agreement = await PartnershipService.getAgreementByUserId(authUser.id);
       if (!agreement) {
-        res.status(200).json({ success: true, has_agreement: false, username: user.username });
+        res.status(200).json({ success: true, has_agreement: false, username: authUser.username });
         return;
       }
 
@@ -82,13 +37,13 @@ export class PartnershipController {
    */
   public static async submit(req: Request, res: Response): Promise<void> {
     try {
-      const user = extractUser(req);
-      if (!user) {
+      const authUser = (req as AuthRequest).user;
+      if (!authUser?.id) {
         res.status(401).json({ success: false, error: 'Sesi login tidak valid. Silakan login terlebih dahulu.' });
         return;
       }
 
-      const { owner_name, cafe_name, address, phone, commercial_model } = req.body;
+      const { owner_name, cafe_name, address, phone, commercial_model } = req.body || {};
 
       if (!cafe_name || !String(cafe_name).trim()) {
         res.status(400).json({ success: false, error: 'Nama Cafe wajib diisi.' });
@@ -104,9 +59,9 @@ export class PartnershipController {
       }
 
       const result = await PartnershipService.submitAgreement({
-        userId: user.id,
-        username: user.username,
-        owner_name: String(owner_name || user.username).trim(),
+        userId: authUser.id,
+        username: authUser.username || 'Pengunjung',
+        owner_name: String(owner_name || authUser.username || 'Pengunjung').trim(),
         cafe_name: String(cafe_name).trim(),
         address: String(address).trim(),
         phone: String(phone).trim(),
@@ -129,14 +84,14 @@ export class PartnershipController {
    */
   public static async verifySign(req: Request, res: Response): Promise<void> {
     try {
-      const user = extractUser(req);
-      if (!user) {
+      const authUser = (req as AuthRequest).user;
+      if (!authUser?.id) {
         res.status(401).json({ success: false, error: 'Sesi login tidak valid. Silakan login terlebih dahulu.' });
         return;
       }
 
-      const result = await PartnershipService.verifyAndSignAgreement(user.id);
-      res.status(200).json(result);
+      const result = await PartnershipService.verifyAndSignAgreement(authUser.id);
+      res.status(result.statusCode || (result.success ? 200 : 400)).json(result);
     } catch (e: any) {
       console.error('[PartnershipController] verifySign error:', e);
       res.status(500).json({ success: false, error: e?.message || 'Gagal menandatangani MoU kemitraan.' });

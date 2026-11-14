@@ -227,11 +227,14 @@ Dengan menekan tombol "Setuju & Tandatangani" pada pop-up verifikasi yang muncul
 
   public static async verifyAndSignAgreement(userId: string): Promise<{
     success: boolean;
-    agreement: MerchantAgreementData;
-    qr_token: string;
-    qr_image_url: string;
+    statusCode?: number;
+    error?: string;
+    retryable?: boolean;
+    agreement?: MerchantAgreementData;
+    qr_token?: string;
+    qr_image_url?: string;
     warung_group_id?: string;
-    message: string;
+    message?: string;
   }> {
     let existing = await this.getAgreementByUserId(userId);
     if (!existing) {
@@ -264,28 +267,23 @@ Dengan menekan tombol "Setuju & Tandatangani" pada pop-up verifikasi yang muncul
 
     const qrImageUrl = `https://api.ngopi.top/uploads/qrcodes/${qrFileName}`;
 
-    // 2. Update user role in User table
-    try {
-      await prisma.user.update({
-        where: { id: userId },
-        data: { role: 'merchant' },
-      });
-    } catch (e) {
-      console.warn('[PartnershipService] User role update error:', e);
-    }
+    // 2. Do NOT auto-promote User.role to 'merchant' on agreement signing (Stage B1A).
+    // Role promotion is reserved strictly for explicit admin/superadmin approval.
 
-    // 3. Create or update MerchantProfile
-    try {
-      await MerchantService.registerOrUpdateProfile(userId, {
-        cafe_name: existing.cafe_name,
-        address: existing.address,
-        phone: existing.phone,
-        qr_code_token: qrToken,
-        is_verified: true,
-        reward_points: 50,
-      });
-    } catch (e) {
-      console.warn('[PartnershipService] MerchantProfile sync error:', e);
+    // 3. Create or update pending MerchantProfile (is_verified = false, review_status = 'pending')
+    const appRes = await MerchantService.submitApplication(userId, {
+      cafe_name: existing.cafe_name,
+      address: existing.address,
+      phone: existing.phone,
+      reward_points: 50,
+    });
+    if (!appRes.success && !appRes.duplicatePending && !appRes.alreadyApproved) {
+      return {
+        success: false,
+        statusCode: appRes.statusCode || 400,
+        error: appRes.error || 'Gagal mengajukan profil merchant untuk kemitraan.',
+        retryable: true,
+      };
     }
 
     // 4. Create Warung Kopi digital public group

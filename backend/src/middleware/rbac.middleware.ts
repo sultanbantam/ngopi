@@ -58,3 +58,48 @@ export const requireStaff = requireRole('agent_cs', 'admin', 'superadmin');
 export const requireAdmin = requireRole('admin', 'superadmin');
 export const requireSuperadmin = requireRole('superadmin');
 export const isPrivilegedRole = (role?: string | null) => hasRole(role, ['merchant', 'agent_cs', 'admin', 'superadmin']);
+
+/**
+ * Database-backed authorization middleware (Stage A2).
+ * Always resolves the current User record from PostgreSQL and ignores stale JWT role claims.
+ */
+export const requireDbRole = (...allowedRoles: Role[]) => async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const authReq = req as Request & { user?: { id?: string; username?: string; role?: string } };
+  if (!authReq.user?.id) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
+
+  try {
+    const dbUser = await prisma.user.findUnique({
+      where: { id: authReq.user.id },
+      select: { id: true, username: true, role: true },
+    });
+
+    if (!dbUser) {
+      res.status(401).json({ error: 'Unauthorized. User account not found.' });
+      return;
+    }
+
+    const dbRole = normalizeRole(dbUser.role);
+    authReq.user.role = dbRole;
+    if (dbUser.username) {
+      authReq.user.username = dbUser.username;
+    }
+
+    if (allowedRoles.length > 0 && !hasRole(dbRole, allowedRoles)) {
+      res.status(403).json({ error: 'Forbidden. Insufficient role.' });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    console.error('Database RBAC role check error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const requireDbUser = requireDbRole();
+export const requireDbMerchant = requireDbRole('merchant', 'admin', 'superadmin');
+export const requireDbAdmin = requireDbRole('admin', 'superadmin');
+export const requireDbSuperadmin = requireDbRole('superadmin');

@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { AgentService } from '../services/agent.service';
+import { MerchantService } from '../services/merchant.service';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { hasRole, normalizeRole } from '../middleware/rbac.middleware';
 import { prisma } from '../utils/prisma';
@@ -12,9 +13,89 @@ const ALLOWED_TRIGGERS = new Set([
   'supply_chain_autopilot',
   'user_concierge_mixtape',
   'user_concierge_cafe',
+  'user_concierge_points',
+]);
+
+const MERCHANT_ONLY_TRIGGERS = new Set([
+  'low_traffic',
+  'ambience_autopilot',
+  'mou_automation',
+  'supply_chain_autopilot',
 ]);
 
 const MAX_PROMPT_LENGTH = 2000;
+
+async function resolveAuthorizedMerchantCafeId(
+  authUserId: string,
+  effectiveRole: string,
+  requestedCafeId?: string
+): Promise<{ ok: true; cafeId?: string } | { ok: false; status: number; error: string }> {
+  const isAdmin = hasRole(effectiveRole, ['admin', 'superadmin']);
+
+  if (requestedCafeId) {
+    const targetCafe = await prisma.merchantProfile.findUnique({
+      where: { id: requestedCafeId },
+      select: {
+        id: true,
+        user_id: true,
+        is_showcase: true,
+        is_verified: true,
+        review_status: true,
+        deleted_at: true,
+      },
+    });
+
+    if (!targetCafe || targetCafe.deleted_at) {
+      return { ok: false, status: 404, error: 'Profil kafe tidak ditemukan.' };
+    }
+    if (targetCafe.is_showcase) {
+      return { ok: false, status: 403, error: 'Forbidden: profil showcase read-only tidak dapat dijalankan dalam mode merchant.' };
+    }
+    if (!isAdmin && targetCafe.user_id !== authUserId) {
+      return { ok: false, status: 403, error: 'Forbidden: bukan pemilik profil kafe tersebut.' };
+    }
+    if (!MerchantService.isApprovedMerchantProfile(targetCafe)) {
+      return { ok: false, status: 403, error: 'Forbidden: profil merchant belum disetujui.' };
+    }
+
+    return { ok: true, cafeId: targetCafe.id };
+  }
+
+  if (isAdmin) {
+    const ownProfile = await prisma.merchantProfile.findUnique({
+      where: { user_id: authUserId },
+      select: {
+        id: true,
+        is_showcase: true,
+        is_verified: true,
+        review_status: true,
+        deleted_at: true,
+      },
+    });
+    if (ownProfile && !ownProfile.deleted_at && !ownProfile.is_showcase && MerchantService.isApprovedMerchantProfile(ownProfile)) {
+      return { ok: true, cafeId: ownProfile.id };
+    }
+    return { ok: true, cafeId: undefined };
+  }
+
+  const ownedProfile = await prisma.merchantProfile.findUnique({
+    where: { user_id: authUserId },
+    select: {
+      id: true,
+      user_id: true,
+      is_showcase: true,
+      is_verified: true,
+      review_status: true,
+      deleted_at: true,
+    },
+  });
+
+  if (!ownedProfile || ownedProfile.deleted_at || ownedProfile.is_showcase || !MerchantService.isApprovedMerchantProfile(ownedProfile)) {
+    return { ok: false, status: 403, error: 'Forbidden: profil merchant terverifikasi tidak ditemukan.' };
+  }
+
+  return { ok: true, cafeId: ownedProfile.id };
+}
 
 export class AgentController {
   /**
@@ -30,17 +111,11 @@ export class AgentController {
       }
 
       const { role, trigger, customPrompt, cafeId, userId } = req.body || {};
+      const effectiveUserRole = normalizeRole(authUser.role);
 
       // Prevent cross-user IDOR / identity spoofing
-      if (userId !== undefined && String(userId) !== authUser.id && !hasRole(authUser.role, ['admin', 'superadmin'])) {
+      if (userId !== undefined && String(userId) !== authUser.id && !hasRole(effectiveUserRole, ['admin', 'superadmin'])) {
         res.status(403).json({ success: false, error: 'Forbidden: tidak boleh menjalankan agen atas nama akun lain.' });
-        return;
-      }
-
-      const requestedRole = role === 'merchant' ? 'merchant' : 'user';
-      const effectiveUserRole = normalizeRole(authUser.role);
-      if (requestedRole === 'merchant' && !hasRole(effectiveUserRole, ['merchant', 'admin', 'superadmin'])) {
-        res.status(403).json({ success: false, error: 'Forbidden: mode merchant hanya untuk akun merchant/admin.' });
         return;
       }
 
@@ -55,27 +130,35 @@ export class AgentController {
         return;
       }
 
+      const wantsMerchantMode = role === 'merchant' || (role !== 'user' && MERCHANT_ONLY_TRIGGERS.has(cleanTrigger));
+      if (role === 'user' && MERCHANT_ONLY_TRIGGERS.has(cleanTrigger)) {
+        res.status(403).json({ success: false, error: 'Forbidden: trigger merchant tidak diizinkan pada mode user.' });
+        return;
+      }
+
+      const requestedRole: 'merchant' | 'user' = wantsMerchantMode ? 'merchant' : 'user';
+      if (requestedRole === 'merchant' && !hasRole(effectiveUserRole, ['merchant', 'admin', 'superadmin'])) {
+        res.status(403).json({ success: false, error: 'Forbidden: mode merchant hanya untuk akun merchant/admin.' });
+        return;
+      }
+
       const cleanCafeId = typeof cafeId === 'string' && cafeId.trim() ? cafeId.trim() : undefined;
-      if (requestedRole === 'merchant' && cleanCafeId && cleanCafeId !== 'm_warkop_sahabat' && !hasRole(effectiveUserRole, ['admin', 'superadmin'])) {
-        try {
-          const ownedCafe = await prisma.merchantProfile?.findUnique?.({
-            where: { id: cleanCafeId },
-            select: { user_id: true },
-          });
-          if (ownedCafe && ownedCafe.user_id !== authUser.id) {
-            res.status(403).json({ success: false, error: 'Forbidden: bukan pemilik profil kafe tersebut.' });
-            return;
-          }
-        } catch {
-          // Safe fallback when DB is unavailable in unit tests
+      let resolvedCafeId: string | undefined;
+
+      if (requestedRole === 'merchant') {
+        const cafeCheck = await resolveAuthorizedMerchantCafeId(authUser.id, effectiveUserRole, cleanCafeId);
+        if (!cafeCheck.ok) {
+          res.status(cafeCheck.status).json({ success: false, error: cafeCheck.error });
+          return;
         }
+        resolvedCafeId = cafeCheck.cafeId;
       }
 
       const result = await AgentService.executeAgent({
         role: requestedRole,
         trigger: cleanTrigger as any,
         customPrompt: typeof customPrompt === 'string' ? customPrompt.trim() : undefined,
-        cafeId: cleanCafeId || 'm_warkop_sahabat',
+        cafeId: resolvedCafeId,
         userId: authUser.id,
       });
 
@@ -114,13 +197,17 @@ export class AgentController {
 
   /**
    * POST /api/ai/agent/toggle
-   * Toggle autonomous background execution ON/OFF (merchant/admin only)
+   * Toggle global autonomous background execution ON/OFF (admin/superadmin only)
    */
   public static async toggle(req: Request, res: Response): Promise<void> {
     try {
       const authUser = (req as AuthRequest).user;
       if (!authUser?.id) {
         res.status(401).json({ success: false, error: 'Unauthorized' });
+        return;
+      }
+      if (!hasRole(authUser.role, ['admin', 'superadmin'])) {
+        res.status(403).json({ success: false, error: 'Forbidden: pengaturan global agen hanya untuk admin atau superadmin.' });
         return;
       }
       const { enabled } = req.body || {};
@@ -158,17 +245,30 @@ export class AgentController {
         return;
       }
 
+      const effectiveUserRole = normalizeRole(authUser.role);
       const requestedRole = role === 'merchant' ? 'merchant' : 'user';
-      if (requestedRole === 'merchant' && !hasRole(authUser.role, ['merchant', 'admin', 'superadmin'])) {
+      if (requestedRole === 'merchant' && !hasRole(effectiveUserRole, ['merchant', 'admin', 'superadmin'])) {
         res.status(403).json({ success: false, error: 'Forbidden: mode merchant hanya untuk akun merchant/admin.' });
         return;
+      }
+
+      const cleanCafeId = typeof cafeId === 'string' && cafeId.trim() ? cafeId.trim() : undefined;
+      let resolvedCafeId: string | undefined;
+
+      if (requestedRole === 'merchant') {
+        const cafeCheck = await resolveAuthorizedMerchantCafeId(authUser.id, effectiveUserRole, cleanCafeId);
+        if (!cafeCheck.ok) {
+          res.status(cafeCheck.status).json({ success: false, error: cafeCheck.error });
+          return;
+        }
+        resolvedCafeId = cafeCheck.cafeId;
       }
 
       const result = await AgentService.executeAgent({
         role: requestedRole,
         trigger: 'custom',
         customPrompt: message.trim(),
-        cafeId: typeof cafeId === 'string' && cafeId.trim() ? cafeId.trim() : undefined,
+        cafeId: resolvedCafeId,
         userId: authUser.id,
       });
 

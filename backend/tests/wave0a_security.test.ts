@@ -4,6 +4,7 @@ import http from 'http';
 import fs from 'fs';
 import path from 'path';
 import jwt from 'jsonwebtoken';
+import { prisma } from '../src/utils/prisma';
 import { verifyMagicBytes, validateExtensionAndMime, resolveSafeChildPath } from '../src/utils/fileSecurity';
 
 process.env.MAX_UPLOAD_BYTES = String(1024 * 100); // 100 KB for test (must be set before importing upload.routes)
@@ -21,6 +22,22 @@ const VALID_PNG = Buffer.from(
 );
 
 async function runTests() {
+  const mockUsers = new Map<string, { id: string; username: string; role: string }>([
+    ['user-a-id', { id: 'user-a-id', username: 'usera', role: 'user' }],
+    ['user-b-id', { id: 'user-b-id', username: 'userb', role: 'user' }],
+    ['merchant-1-id', { id: 'merchant-1-id', username: 'warungcafe', role: 'merchant' }],
+    ['admin-1-id', { id: 'admin-1-id', username: 'adminuser', role: 'admin' }],
+  ]);
+
+  const origUserFindUnique = (prisma as any).user?.findUnique;
+  (prisma as any).user = {
+    ...(prisma as any).user,
+    findUnique: async (args: any) => {
+      const id = args?.where?.id;
+      return id ? mockUsers.get(id) || null : null;
+    },
+  };
+
   const { default: aiRoutes } = await import('../src/routes/ai.routes');
   const { default: uploadRoutes } = await import('../src/routes/upload.routes');
 
@@ -40,6 +57,7 @@ async function runTests() {
     const userAToken = makeToken('user-a-id', 'usera', 'user');
     const userBToken = makeToken('user-b-id', 'userb', 'user');
     const merchantToken = makeToken('merchant-1-id', 'warungcafe', 'merchant');
+    const adminToken = makeToken('admin-1-id', 'adminuser', 'admin');
 
     // 1. Unauthenticated AI requests -> 401
     for (const [method, endpoint, body] of [
@@ -108,8 +126,15 @@ async function runTests() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${merchantToken}` },
       body: JSON.stringify({ enabled: false }),
     });
-    assert.strictEqual(toggleMerchantRes.status, 200, 'Merchant toggling autonomous loop must succeed');
-    console.log('✅ [PASS] 3. Cross-user spoofing & role escalation blocked with 403; merchant toggle allowed');
+    assert.strictEqual(toggleMerchantRes.status, 403, 'Merchant toggling global autonomous loop must return 403 (admin/superadmin only)');
+
+    const toggleAdminRes = await fetch(`${baseUrl}/api/ai/agent/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({ enabled: false }),
+    });
+    assert.strictEqual(toggleAdminRes.status, 200, 'Admin toggling global autonomous loop must succeed');
+    console.log('✅ [PASS] 3. Cross-user spoofing, role escalation & non-admin toggle blocked with 403; admin toggle allowed');
 
     // 4. Invalid upload types (.html, .svg, .exe, .php)
     for (const [fname, mime] of [
@@ -270,6 +295,9 @@ async function runTests() {
       } catch {}
     }
     server.close();
+    if (origUserFindUnique) {
+      (prisma as any).user.findUnique = origUserFindUnique;
+    }
   }
 }
 

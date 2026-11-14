@@ -40,6 +40,8 @@ model User {
   htProfile           HTProfile?
   merchantProfile     MerchantProfile?
   merchantAgreement   MerchantAgreement?
+  merchantReviews     MerchantProfile[]     @relation("MerchantReviewer")
+  merchantAuditActions MerchantReviewAudit[] @relation("MerchantAuditActor")
 }
 
 model Message {
@@ -604,26 +606,63 @@ model UserGaplehStats {
 // MODUL MERCHANT & CAFE PARTNER (Ngopi for Business)
 // ==========================================
 
+enum MerchantReviewStatus {
+  pending
+  approved
+  rejected
+}
+
 model MerchantProfile {
-  id             String            @id @default(uuid())
-  user_id        String            @unique @map("user_id")
-  cafe_name      String            @map("cafe_name")
-  address        String?
-  description    String?
-  phone          String?
-  logo           String?
-  banner_url     String?           @map("banner_url")
-  qr_code_token  String            @unique @map("qr_code_token")
-  is_verified    Boolean           @default(true) @map("is_verified")
-  reward_points  Int               @default(50) @map("reward_points")
-  created_at     DateTime          @default(now()) @map("created_at")
-  updated_at     DateTime          @updatedAt @map("updated_at")
+  id                String               @id @default(uuid())
+  user_id           String?              @unique @map("user_id")
+  cafe_name         String               @map("cafe_name")
+  business_category String?              @map("business_category")
+  address           String?
+  description       String?
+  phone             String?
+  logo              String?
+  banner_url        String?              @map("banner_url")
+  supporting_docs   Json?                @map("supporting_docs")
+  qr_code_token     String               @unique @map("qr_code_token")
+  is_verified       Boolean              @default(false) @map("is_verified")
+  review_status     MerchantReviewStatus @default(pending) @map("review_status")
+  is_showcase       Boolean              @default(false) @map("is_showcase")
+  reward_points     Int                  @default(50) @map("reward_points")
+  submitted_at      DateTime             @default(now()) @map("submitted_at")
+  reviewed_by       String?              @map("reviewed_by")
+  reviewed_at       DateTime?            @map("reviewed_at")
+  rejection_reason  String?              @map("rejection_reason")
+  deleted_at        DateTime?            @map("deleted_at")
+  created_at        DateTime             @default(now()) @map("created_at")
+  updated_at        DateTime             @updatedAt @map("updated_at")
 
-  user           User              @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  promos         MerchantPromo[]
-  checkins       MerchantCheckin[]
+  user              User?                @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  reviewer          User?                @relation("MerchantReviewer", fields: [reviewed_by], references: [id], onDelete: SetNull)
+  promos            MerchantPromo[]
+  checkins          MerchantCheckin[]
+  reviewAudits      MerchantReviewAudit[]
 
+  @@index([review_status, is_showcase])
+  @@index([reviewed_by])
   @@map("merchant_profiles")
+}
+
+model MerchantReviewAudit {
+  id          String                @id @default(cuid())
+  merchant_id String                @map("merchant_id")
+  actor_id    String                @map("actor_id")
+  action      String
+  from_status MerchantReviewStatus? @map("from_status")
+  to_status   MerchantReviewStatus  @map("to_status")
+  reason      String?
+  created_at  DateTime              @default(now()) @map("created_at")
+
+  merchant    MerchantProfile       @relation(fields: [merchant_id], references: [id], onDelete: Restrict)
+  actor       User                  @relation("MerchantAuditActor", fields: [actor_id], references: [id], onDelete: Restrict)
+
+  @@index([merchant_id, created_at])
+  @@index([actor_id, created_at])
+  @@map("merchant_review_audits")
 }
 
 model MerchantPromo {

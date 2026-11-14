@@ -51,7 +51,18 @@ export default function MerchantDashboardModal({
 }: MerchantDashboardModalProps) {
   const [activeTab, setActiveTab] = useState<'stats' | 'promos' | 'visitors' | 'settings' | 'agent'>('stats');
   const [loading, setLoading] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'loading' | 'none' | 'pending' | 'rejected' | 'approved' | 'unauthorized'>('loading');
+  const [userRole, setUserRole] = useState<string>('user');
+  const [pendingProfile, setPendingProfile] = useState<any>(null);
   const [dashboard, setDashboard] = useState<any>(null);
+
+  // Admin review queue state (visible only to admin / superadmin)
+  const [adminApplications, setAdminApplications] = useState<any[]>([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [showAdminQueue, setShowAdminQueue] = useState(false);
+  const [selectedAdminApp, setSelectedAdminApp] = useState<any>(null);
+  const [rejectReasonInput, setRejectReasonInput] = useState('');
+  const [reviewActionLoading, setReviewActionLoading] = useState(false);
 
   // ngopAI Agent state
   const [agentLoading, setAgentLoading] = useState(false);
@@ -68,9 +79,11 @@ export default function MerchantDashboardModal({
 
   // Profile form state
   const [cafeName, setCafeName] = useState('');
+  const [businessCategory, setBusinessCategory] = useState('');
   const [cafeAddress, setCafeAddress] = useState('');
   const [cafeDesc, setCafeDesc] = useState('');
   const [cafePhone, setCafePhone] = useState('');
+  const [supportingDocsNote, setSupportingDocsNote] = useState('');
   const [rewardPoints, setRewardPoints] = useState('50');
   const [savingProfile, setSavingProfile] = useState(false);
 
@@ -78,16 +91,19 @@ export default function MerchantDashboardModal({
     trigger: 'low_traffic' | 'ambience_autopilot' | 'mou_automation' | 'supply_chain_autopilot',
     customPrompt?: string
   ) => {
+    if (authStatus !== 'approved' || !dashboard?.profile?.id) {
+      Alert.alert('Akses Ditolak', 'Hanya merchant terverifikasi yang dapat menjalankan ngopAI Agent.');
+      return;
+    }
     try {
       setAgentLoading(true);
       const headers = await getAuthHeaders();
       const res = await axios.post(
         `${API_BASE}/ai/agent/execute`,
         {
-          role: 'merchant',
           trigger,
           customPrompt,
-          cafeId: dashboard?.profile?.id || 'm_warkop_sahabat',
+          cafeId: dashboard.profile.id,
         },
         { headers }
       );
@@ -96,25 +112,8 @@ export default function MerchantDashboardModal({
         setExpandedAgentSteps(true);
         loadDashboard();
       }
-    } catch (_) {
-      setAgentResult({
-        success: true,
-        title: 'Autonomous Intervention: Lonjakan Kunjungan (Low Traffic Trigger)',
-        summary: 'Aksi Otonom Selesai! ngopAI mendeteksi penurunan pengunjung 42%, langsung mengaktifkan Flash Promo Diskon 20%, menyebarkan push notification ke 48 pelanggan di radius 5km, dan menyiarkan audio alert di HT Radio Warkop.',
-        steps: [
-          { step: 1, type: 'thought', content: 'Memantau metrik check-in dan scanner QR cafe secara real-time...' },
-          { step: 2, type: 'action', tool: 'get_merchant_analytics', params: { cafe_id: dashboard?.profile?.id || 'm_warkop_sahabat' }, content: 'Mengevaluasi rasio pengunjung per jam.' },
-          { step: 3, type: 'observation', content: 'Tingkat check-in jam ini turun 42% di bawah rata-rata historis (Kriteria anomali terpenuhi >= 40%).' },
-          { step: 4, type: 'thought', content: 'Sesuai agents.md: Otomatis buat voucher Happy Hour 20% off selama 2 jam.' },
-          { step: 5, type: 'action', tool: 'create_promo', params: { discount_percentage: 20 }, content: 'Membuat voucher flash sale 20%.' },
-          { step: 6, type: 'observation', content: 'Voucher Flash Promo 20% aktif di sistem merchant.' },
-          { step: 7, type: 'action', tool: 'send_user_notification', params: { target: 'radius_5km' }, content: 'Mengirimkan push notification geofencing ke pelanggan terdekat.' },
-          { step: 8, type: 'observation', content: 'Notifikasi berhasil terkirim ke 48 pengguna aktif radius 5km.' },
-          { step: 9, type: 'action', tool: 'broadcast_ht_radio', params: { freq: 145.500 }, content: 'Menyiarkan pengumuman audio di HT Radio Warkop.' },
-          { step: 10, type: 'final_answer', content: 'Intervensi otonom berhasil diselesaikan tanpa campur tangan manual.' },
-        ],
-      });
-      setExpandedAgentSteps(true);
+    } catch (err: any) {
+      Alert.alert('Gagal', err?.response?.data?.error || 'Gagal menjalankan ngopAI Agent.');
     } finally {
       setAgentLoading(false);
     }
@@ -126,18 +125,118 @@ export default function MerchantDashboardModal({
     }
   }, [visible]);
 
+  const loadAdminQueue = async (headers?: any) => {
+    try {
+      setAdminLoading(true);
+      const authHeaders = headers || (await getAuthHeaders());
+      const res = await axios.get(`${API_BASE}/merchant/admin/applications?status=pending`, {
+        headers: authHeaders,
+      });
+      if (res.data?.success) {
+        setAdminApplications(res.data.applications || []);
+      }
+    } catch (_) {
+      setAdminApplications([]);
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const handleAdminApprove = async (merchantId: string) => {
+    try {
+      setReviewActionLoading(true);
+      const headers = await getAuthHeaders();
+      const res = await axios.post(
+        `${API_BASE}/merchant/admin/applications/${merchantId}/approve`,
+        {},
+        { headers }
+      );
+      if (res.data?.success) {
+        Alert.alert('Disetujui', 'Pengajuan merchant telah disetujui.');
+        setSelectedAdminApp(null);
+        loadAdminQueue(headers);
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal', err?.response?.data?.error || 'Gagal menyetujui pengajuan.');
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
+  const handleAdminReject = async (merchantId: string) => {
+    if (!rejectReasonInput.trim()) {
+      Alert.alert('Perhatian', 'Alasan penolakan wajib diisi.');
+      return;
+    }
+    try {
+      setReviewActionLoading(true);
+      const headers = await getAuthHeaders();
+      const res = await axios.post(
+        `${API_BASE}/merchant/admin/applications/${merchantId}/reject`,
+        { reason: rejectReasonInput.trim() },
+        { headers }
+      );
+      if (res.data?.success) {
+        Alert.alert('Ditolak', 'Pengajuan merchant telah ditolak.');
+        setRejectReasonInput('');
+        setSelectedAdminApp(null);
+        loadAdminQueue(headers);
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal', err?.response?.data?.error || 'Gagal menolak pengajuan.');
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
   const loadDashboard = async () => {
     try {
       setLoading(true);
+      setAuthStatus('loading');
       const headers = await getAuthHeaders();
-      const uid = currentUserId || (Platform.OS === 'web' ? localStorage.getItem('userId') : '');
-      const res = await axios.get(`${API_BASE}/merchant/dashboard`, {
-        headers,
-        params: { user_id: uid },
-      });
+      const meRes = await axios.get(`${API_BASE}/merchant/me`, { headers });
+      const status = meRes.data?.status;
+      const role = meRes.data?.role || 'user';
+      setUserRole(role);
 
+      if (role === 'admin' || role === 'superadmin') {
+        loadAdminQueue(headers);
+      }
+
+      if (status === 'pending') {
+        setAuthStatus('pending');
+        setPendingProfile(meRes.data?.profile || null);
+        setDashboard(null);
+        return;
+      }
+
+      if (status === 'rejected') {
+        const p = meRes.data?.profile || null;
+        setAuthStatus('rejected');
+        setPendingProfile(p);
+        setDashboard(null);
+        if (p) {
+          setCafeName(p.cafe_name || '');
+          setBusinessCategory(p.business_category || '');
+          setCafeAddress(p.address || '');
+          setCafeDesc(p.description || '');
+          setCafePhone(p.phone || '');
+          setRewardPoints(String(p.reward_points || 50));
+        }
+        return;
+      }
+
+      if (status !== 'approved' || !['merchant', 'admin', 'superadmin'].includes(role)) {
+        setAuthStatus('none');
+        setPendingProfile(null);
+        setDashboard(null);
+        return;
+      }
+
+      const res = await axios.get(`${API_BASE}/merchant/dashboard`, { headers });
       if (res.data?.success && res.data.dashboard) {
         const d = res.data.dashboard;
+        setAuthStatus('approved');
         setDashboard(d);
         if (d.profile) {
           setCafeName(d.profile.cafe_name || '');
@@ -146,43 +245,54 @@ export default function MerchantDashboardModal({
           setCafePhone(d.profile.phone || '');
           setRewardPoints(String(d.profile.reward_points || 50));
         }
+      } else {
+        setAuthStatus('unauthorized');
+        setDashboard(null);
       }
-    } catch (_) {
-      // Fallback sample dashboard
-      setDashboard({
-        profile: {
-          id: 'm_warkop_sahabat',
-          cafe_name: 'Warkop Seduh Sahabat',
-          address: 'Jl. Veteran No. 12, Jakarta',
-          description: 'Warkop kopi nusantara tradisional dengan area turnamen gapleh.',
-          phone: '0812-3456-7890',
-          qr_code_token: 'NGOPI_WARKOP_SEDUH',
-          reward_points: 50,
-          is_verified: true,
-        },
-        stats: {
-          totalCheckins: 48,
-          todayCheckins: 12,
-          totalPointsGiven: 2400,
-          uniqueVisitors: 31,
-          activePromosCount: 2,
-        },
-        recentCheckins: [
-          { id: '1', username: 'BudiSantoso', points: 50, created_at: new Date().toISOString() },
-          { id: '2', username: 'KawanNgopi_07', points: 50, created_at: new Date(Date.now() - 3600000).toISOString() },
-          { id: '3', username: 'GaplehMaster', points: 50, created_at: new Date(Date.now() - 7200000).toISOString() },
-        ],
-        promos: [
-          { id: 'p1', title: 'Diskon 20% Kopi Tubruk', discount: '20%', description: 'Khusus member Ngopi' },
-          { id: 'p2', title: 'Beli 2 Es Kopi Susu Gratis 1', discount: 'Beli 2 Gratis 1', description: 'Promo nongkrong sore' },
-        ],
-        standingTableUrl: 'https://ngopi.top/warung/NGOPI_WARKOP_SEDUH',
-      });
-      setCafeName('Warkop Seduh Sahabat');
-      setCafeAddress('Jl. Veteran No. 12, Jakarta');
-      setRewardPoints('50');
+    } catch (err: any) {
+      const httpStatus = err?.response?.status;
+      setDashboard(null);
+      if (httpStatus === 401 || httpStatus === 403) {
+        setAuthStatus('unauthorized');
+      } else {
+        setAuthStatus('none');
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitApplication = async () => {
+    if (!cafeName.trim()) {
+      Alert.alert('Perhatian', 'Nama cafe/warung wajib diisi.');
+      return;
+    }
+    try {
+      setSavingProfile(true);
+      const headers = await getAuthHeaders();
+      const res = await axios.post(
+        `${API_BASE}/merchant/register`,
+        {
+          cafe_name: cafeName,
+          business_category: businessCategory || undefined,
+          address: cafeAddress,
+          description: cafeDesc,
+          phone: cafePhone,
+          supporting_docs: supportingDocsNote.trim()
+            ? { reference_note: supportingDocsNote.trim() }
+            : undefined,
+          reward_points: Number(rewardPoints) || 50,
+        },
+        { headers }
+      );
+      if (res.data?.success) {
+        Alert.alert('Pengajuan Terkirim', 'Pengajuan merchant Anda sedang menunggu persetujuan admin.');
+        loadDashboard();
+      }
+    } catch (err: any) {
+      Alert.alert('Gagal', err.response?.data?.error || 'Gagal mengirim pengajuan merchant.');
+    } finally {
+      setSavingProfile(false);
     }
   };
 
@@ -197,7 +307,6 @@ export default function MerchantDashboardModal({
       const res = await axios.post(
         `${API_BASE}/merchant/promo`,
         {
-          merchant_id: dashboard?.profile?.id,
           title: promoTitle,
           discount: promoDiscount || undefined,
           description: promoDesc,
@@ -224,7 +333,6 @@ export default function MerchantDashboardModal({
       const headers = await getAuthHeaders();
       await axios.delete(`${API_BASE}/merchant/promo/${promoId}`, {
         headers,
-        params: { merchant_id: dashboard?.profile?.id },
       });
       Alert.alert('Dihapus', 'Promo berhasil dihapus.');
       loadDashboard();
@@ -285,6 +393,143 @@ export default function MerchantDashboardModal({
             </TouchableOpacity>
           </View>
 
+          {authStatus !== 'approved' ? (
+            <ScrollView style={{ flex: 1, padding: 16 }} contentContainerStyle={{ paddingBottom: 30 }}>
+              {authStatus === 'loading' || loading ? (
+                <View style={{ padding: 40, alignItems: 'center' }}>
+                  <ActivityIndicator size="large" color={coffee.accent} />
+                  <Text style={{ color: coffee.secondary, marginTop: 12, fontSize: 12 }}>
+                    Memeriksa status otorisasi merchant...
+                  </Text>
+                </View>
+              ) : authStatus === 'unauthorized' ? (
+                <View style={styles.cardBox}>
+                  <Text style={styles.cardBoxTitle}>Akses Terbatas</Text>
+                  <Text style={styles.cardBoxSub}>
+                    Silakan login dengan akun Ngopi Anda untuk mengajukan kemitraan atau membuka Merchant Dashboard.
+                  </Text>
+                </View>
+              ) : authStatus === 'pending' ? (
+                <View style={styles.cardBox}>
+                  <Text style={styles.cardBoxTitle}>⏳ Menunggu Persetujuan Admin</Text>
+                  <Text style={styles.cardBoxSub}>
+                    Pengajuan merchant untuk "{pendingProfile?.cafe_name || 'Cafe Anda'}" telah diterima dan sedang menunggu verifikasi admin. Fitur manajemen dashboard akan aktif setelah disetujui.
+                  </Text>
+                  {!!pendingProfile?.business_category && (
+                    <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: 6 }}>
+                      Kategori: {pendingProfile.business_category}
+                    </Text>
+                  )}
+                  {!!pendingProfile?.submitted_at && (
+                    <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: 2 }}>
+                      Diajukan: {new Date(pendingProfile.submitted_at).toLocaleString('id-ID')}
+                    </Text>
+                  )}
+                </View>
+              ) : (
+                <View style={styles.cardBox}>
+                  {authStatus === 'rejected' && (
+                    <View
+                      style={{
+                        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                        borderColor: 'rgba(239, 68, 68, 0.4)',
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        padding: 12,
+                        marginBottom: 14,
+                      }}
+                    >
+                      <Text style={{ color: '#f87171', fontWeight: '700', fontSize: 13 }}>
+                        Pengajuan Sebelumnya Ditolak
+                      </Text>
+                      <Text style={{ color: coffee.text, fontSize: 12, marginTop: 4 }}>
+                        Alasan: {pendingProfile?.rejection_reason || 'Tidak ada catatan.'}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.cardBoxTitle}>
+                    {authStatus === 'rejected'
+                      ? 'Ajukan Ulang Pendaftaran Merchant'
+                      : 'Ajukan Pendaftaran Merchant Partner'}
+                  </Text>
+                  <Text style={styles.cardBoxSub}>
+                    Daftarkan cafe atau warung Anda. Setelah disetujui admin, Anda akan memperoleh akses penuh ke Merchant Dashboard & QR Check-in.
+                  </Text>
+
+                  <Text style={styles.fieldLabel}>Nama Cafe / Warung *</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={cafeName}
+                    onChangeText={setCafeName}
+                    placeholder="Contoh: Warkop Nusantara"
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <Text style={styles.fieldLabel}>Kategori Usaha</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={businessCategory}
+                    onChangeText={setBusinessCategory}
+                    placeholder="Contoh: Coffee Shop, Warkop, Roastery"
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <Text style={styles.fieldLabel}>Alamat</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={cafeAddress}
+                    onChangeText={setCafeAddress}
+                    placeholder="Alamat lengkap cafe/warung"
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <Text style={styles.fieldLabel}>Nomor WhatsApp / Telepon</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={cafePhone}
+                    onChangeText={setCafePhone}
+                    placeholder="08xx-xxxx-xxxx"
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <Text style={styles.fieldLabel}>Dokumen Pendukung (Link / Referensi)</Text>
+                  <TextInput
+                    style={styles.inputField}
+                    value={supportingDocsNote}
+                    onChangeText={setSupportingDocsNote}
+                    placeholder="Link foto tempat / akun IG / NIB (opsional)"
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <Text style={styles.fieldLabel}>Deskripsi Singkat</Text>
+                  <TextInput
+                    style={[styles.inputField, { height: 70, textAlignVertical: 'top' }]}
+                    value={cafeDesc}
+                    onChangeText={setCafeDesc}
+                    multiline
+                    placeholder="Ceritakan menu andalan & suasana tempat Anda..."
+                    placeholderTextColor={coffee.secondary}
+                  />
+
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, savingProfile && { opacity: 0.6 }]}
+                    disabled={savingProfile}
+                    onPress={handleSubmitApplication}
+                  >
+                    <Ionicons name="send" size={16} color="#fff" />
+                    <Text style={styles.primaryActionText}>
+                      {savingProfile
+                        ? 'Mengirim Pengajuan...'
+                        : authStatus === 'rejected'
+                          ? 'Ajukan Ulang Merchant'
+                          : 'Kirim Pengajuan Merchant'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          ) : (
+            <>
           {/* Navigation Tabs */}
           <View style={{ backgroundColor: coffee.background, borderBottomWidth: 1, borderBottomColor: coffee.border }}>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
@@ -959,6 +1204,92 @@ export default function MerchantDashboardModal({
                 </View>
               )}
             </ScrollView>
+          )}
+            </>
+          )}
+
+          {(userRole === 'admin' || userRole === 'superadmin') && (
+            <View style={{ borderTopWidth: 1, borderTopColor: coffee.border, paddingHorizontal: 16, paddingVertical: 10, maxHeight: 280 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={styles.cardBoxTitle}>Antrean Review Admin ({adminApplications.length})</Text>
+                <TouchableOpacity onPress={() => setShowAdminQueue(!showAdminQueue)}>
+                  <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '600' }}>
+                    {showAdminQueue ? 'Tutup' : 'Kelola'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {showAdminQueue && (
+                <ScrollView style={{ marginTop: 10 }} nestedScrollEnabled>
+                  {adminLoading ? (
+                    <ActivityIndicator size="small" color={coffee.accent} />
+                  ) : adminApplications.length === 0 ? (
+                    <Text style={styles.cardBoxSub}>Tidak ada pengajuan pending saat ini.</Text>
+                  ) : (
+                    adminApplications.map((app: any) => (
+                      <View
+                        key={app.id}
+                        style={{
+                          borderWidth: 1,
+                          borderColor: coffee.border,
+                          borderRadius: 10,
+                          padding: 10,
+                          marginBottom: 10,
+                        }}
+                      >
+                        <Text style={{ color: coffee.text, fontWeight: '700', fontSize: 13 }}>
+                          {app.cafe_name}
+                        </Text>
+                        <Text style={{ color: coffee.secondary, fontSize: 11, marginTop: 2 }}>
+                          Pemohon: {app.user?.name || app.user?.email || app.user_id} ({app.business_category || 'Umum'})
+                        </Text>
+                        {selectedAdminApp?.id === app.id ? (
+                          <View style={{ marginTop: 8 }}>
+                            <Text style={{ color: coffee.secondary, fontSize: 11 }}>
+                              Alamat: {app.address || '-'} | Telp: {app.phone || '-'}
+                            </Text>
+                            <TextInput
+                              style={[styles.inputField, { marginTop: 8 }]}
+                              value={rejectReasonInput}
+                              onChangeText={setRejectReasonInput}
+                              placeholder="Alasan penolakan (wajib jika ditolak)"
+                              placeholderTextColor={coffee.secondary}
+                            />
+                            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                              <TouchableOpacity
+                                style={[styles.primaryActionBtn, { flex: 1, backgroundColor: '#16a34a' }]}
+                                disabled={reviewActionLoading}
+                                onPress={() => handleAdminApprove(app.id)}
+                              >
+                                <Text style={styles.primaryActionText}>Setujui</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.primaryActionBtn, { flex: 1, backgroundColor: '#dc2626' }]}
+                                disabled={reviewActionLoading}
+                                onPress={() => handleAdminReject(app.id)}
+                              >
+                                <Text style={styles.primaryActionText}>Tolak</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={{ marginTop: 6 }}
+                            onPress={() => {
+                              setSelectedAdminApp(app);
+                              setRejectReasonInput('');
+                            }}
+                          >
+                            <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '600' }}>
+                              Tinjau Pengajuan
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    ))
+                  )}
+                </ScrollView>
+              )}
+            </View>
           )}
         </View>
       </View>

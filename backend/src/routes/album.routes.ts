@@ -5,39 +5,11 @@ import axios from 'axios';
 import { AlbumService } from '../services/album.service';
 import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
-import jwt from 'jsonwebtoken';
+import { verifyJWT, AuthRequest } from '../middleware/auth.middleware';
+import { requireDbUser } from '../middleware/rbac.middleware';
+import { prisma } from '../utils/prisma';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'bamboochat-super-secret-key-change-in-production-min32chars';
-
-// Helper to extract user from Authorization header or body
-const extractUser = (req: Request): { id: string; username: string; display_name: string } | null => {
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1] || '';
-    try {
-      const decoded: any = jwt.verify(token, JWT_SECRET);
-      if (decoded && (decoded.id || decoded.userId)) {
-        return {
-          id: decoded.id || decoded.userId,
-          username: decoded.username || decoded.name || 'WargaWarkop',
-          display_name: decoded.display_name || decoded.displayName || decoded.username || 'Warga Warkop',
-        };
-      }
-    } catch {}
-  }
-
-  // Fallback to body/query if provided
-  if (req.body?.userId || req.body?.username) {
-    return {
-      id: req.body.userId || req.body.username,
-      username: req.body.username || req.body.userId,
-      display_name: req.body.displayName || req.body.username || 'Warga Warkop',
-    };
-  }
-
-  return null;
-};
 
 // GET /api/albums/stream?url=...&trackId=... - Audio stream proxy & local cache server
 router.get('/stream', async (req: Request, res: Response): Promise<void> => {
@@ -150,23 +122,34 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/albums - Create album with points deduction
-router.post('/', (req: Request, res: Response) => {
+// POST /api/albums - Create album with points deduction (authenticated + DB-backed user)
+router.post('/', verifyJWT, requireDbUser, async (req: Request, res: Response) => {
   try {
-    const user = extractUser(req);
-    if (!user) {
+    const authUser = (req as AuthRequest).user;
+    if (!authUser?.id) {
       return res.status(401).json({
         success: false,
         error: 'Sesi login tidak valid. Silakan login terlebih dahulu untuk membuat album kompilasi.',
       });
     }
 
+    const dbUser = await prisma.user.findUnique({
+      where: { id: authUser.id },
+      select: { id: true, username: true, display_name: true },
+    });
+    if (!dbUser) {
+      return res.status(401).json({
+        success: false,
+        error: 'Akun pengguna tidak ditemukan.',
+      });
+    }
+
     const { title, description, coverEmoji, capacity, tracks } = req.body;
 
     const result = AlbumService.createAlbum({
-      userId: user.id,
-      username: user.username,
-      displayName: user.display_name,
+      userId: dbUser.id,
+      username: dbUser.username || authUser.username,
+      displayName: dbUser.display_name || dbUser.username || authUser.username,
       title,
       description,
       coverEmoji,
@@ -184,14 +167,15 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-// POST /api/albums/:id/play - Record album play & award royalties
-router.post('/:id/play', (req: Request, res: Response) => {
+// POST /api/albums/:id/play - Record album play & award royalties (authenticated + DB-backed user)
+router.post('/:id/play', verifyJWT, requireDbUser, (req: Request, res: Response) => {
   try {
-    const user = extractUser(req);
-    const listenerId = user?.id || (req.body?.listenerId ? String(req.body.listenerId) : undefined);
-    const listenerUsername = user?.username || (req.body?.listenerUsername ? String(req.body.listenerUsername) : undefined);
+    const authUser = (req as AuthRequest).user;
+    if (!authUser?.id) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
+    }
 
-    const listener = listenerId ? { userId: listenerId, username: listenerUsername } : undefined;
+    const listener = { userId: authUser.id, username: authUser.username };
     const playCount = AlbumService.recordAlbumPlay(String(req.params.id || ''), listener);
     res.status(200).json({ success: true, playCount });
   } catch (e: any) {

@@ -23,7 +23,7 @@ interface StoredMerchantData {
 const DEFAULT_PROFILES: MerchantProfile[] = [
   {
     id: 'm_warkop_sahabat',
-    user_id: 'usr_partner_1',
+    user_id: null,
     cafe_name: 'Warkop Seduh Sahabat',
     address: 'Jl. Veteran No. 12, Jakarta Pusat',
     description: 'Warkop kopi nusantara tradisional dengan racikan kopi tubruk, jahe hangat, dan gorengan renyah.',
@@ -32,13 +32,15 @@ const DEFAULT_PROFILES: MerchantProfile[] = [
     banner_url: 'https://images.unsplash.com/photo-1447933601403-0c6688de566e?auto=format&fit=crop&w=1200&q=80',
     qr_code_token: 'NGOPI_WARKOP_SEDUH',
     is_verified: true,
+    review_status: 'approved',
+    is_showcase: true,
     reward_points: 50,
     created_at: new Date('2026-01-01').toISOString(),
     updated_at: new Date('2026-01-01').toISOString(),
   },
   {
     id: 'm_kenangan_senja',
-    user_id: 'usr_partner_2',
+    user_id: null,
     cafe_name: 'Kopi Kenangan Senja',
     address: 'Jl. Gandaria Tengah II No. 5, Jakarta Selatan',
     description: 'Tempat ngopi santai bernuansa kayu jati tempo dulu dengan koneksi WiFi cepat dan area turnamen gapleh.',
@@ -47,13 +49,15 @@ const DEFAULT_PROFILES: MerchantProfile[] = [
     banner_url: 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=1200&q=80',
     qr_code_token: 'NGOPI_KENANGAN_SENJA',
     is_verified: true,
+    review_status: 'approved',
+    is_showcase: true,
     reward_points: 50,
     created_at: new Date('2026-01-02').toISOString(),
     updated_at: new Date('2026-01-02').toISOString(),
   },
   {
     id: 'm_barista_corner',
-    user_id: 'usr_partner_3',
+    user_id: null,
     cafe_name: 'Barista Corner Roastery',
     address: 'Jl. Dago Asri No. 8, Bandung',
     description: 'Specialty coffee roastery dengan biji kopi arabika pilihan dari Aceh Gayo dan Toraja.',
@@ -62,6 +66,8 @@ const DEFAULT_PROFILES: MerchantProfile[] = [
     banner_url: 'https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1200&q=80',
     qr_code_token: 'NGOPI_BARISTA_CORNER',
     is_verified: true,
+    review_status: 'approved',
+    is_showcase: true,
     reward_points: 50,
     created_at: new Date('2026-01-03').toISOString(),
     updated_at: new Date('2026-01-03').toISOString(),
@@ -105,11 +111,50 @@ const DEFAULT_PROMOS: MerchantPromo[] = [
 ];
 
 export class MerchantService {
+  /**
+   * Centralized merchant management eligibility check (Stage B1A).
+   * Requires non-showcase, verified, and explicitly approved profile.
+   */
+  public static isApprovedMerchantProfile(
+    profile?: Pick<MerchantProfile, 'is_verified' | 'review_status' | 'is_showcase'> | null
+  ): boolean {
+    if (!profile) return false;
+    if (profile.is_showcase === true) return false;
+    if (profile.is_verified !== true) return false;
+    if (profile.review_status !== 'approved') return false;
+    return true;
+  }
+
+  private static readonly SHOWCASE_IDS = new Set([
+    'm_warkop_sahabat',
+    'm_kenangan_senja',
+    'm_barista_corner',
+  ]);
+
+  private static normalizeLoadedProfile(p: MerchantProfile): MerchantProfile {
+    if (this.SHOWCASE_IDS.has(p.id) || p.is_showcase) {
+      return {
+        ...p,
+        user_id: null,
+        is_showcase: true,
+        is_verified: true,
+        review_status: 'approved',
+      };
+    }
+    return p;
+  }
+
   private static loadData(): StoredMerchantData {
     try {
       if (fs.existsSync(DATA_FILE)) {
         const content = fs.readFileSync(DATA_FILE, 'utf-8');
-        return JSON.parse(content);
+        const parsed: StoredMerchantData = JSON.parse(content);
+        return {
+          ...parsed,
+          profiles: Array.isArray(parsed.profiles)
+            ? parsed.profiles.map((p) => this.normalizeLoadedProfile(p))
+            : [...DEFAULT_PROFILES],
+        };
       }
     } catch (e) {
       console.warn('Failed to load merchant data file:', e);
@@ -233,7 +278,254 @@ export class MerchantService {
   }
 
   /**
-   * Register or update merchant profile
+   * Public-only cafe lookup: returns ONLY showcase profiles or verified+approved non-deleted profiles.
+   * Never returns pending or rejected applications.
+   */
+  public static async getPublicCafeByTokenOrId(tokenOrId: string): Promise<(MerchantProfile & { promos: MerchantPromo[] }) | null> {
+    const profile = await this.getProfileByTokenOrId(tokenOrId);
+    if (!profile || profile.deleted_at) {
+      return null;
+    }
+    if (profile.is_showcase === true) {
+      return profile;
+    }
+    if (this.isApprovedMerchantProfile(profile)) {
+      return profile;
+    }
+    return null;
+  }
+
+  /**
+   * Validate and sanitize supporting_docs metadata into safe JSON object or null.
+   */
+  public static sanitizeSupportingDocs(
+    raw: unknown
+  ): { valid: true; value: Record<string, string> | null } | { valid: false; error: string } {
+    if (raw === undefined || raw === null || raw === '') {
+      return { valid: true, value: null };
+    }
+
+    const unsafePattern = /(javascript:|data:|vbscript:|<\s*script)/i;
+
+    if (typeof raw === 'string') {
+      const trimmed = raw.trim();
+      if (!trimmed) return { valid: true, value: null };
+      if (trimmed.length > 2000 || unsafePattern.test(trimmed)) {
+        return { valid: false, error: 'Dokumen pendukung mengandung konten tidak valid atau terlalu panjang.' };
+      }
+      return { valid: true, value: { reference_note: trimmed } };
+    }
+
+    if (typeof raw !== 'object' || Array.isArray(raw)) {
+      return { valid: false, error: 'Format dokumen pendukung harus berupa objek metadata atau teks.' };
+    }
+
+    const entries = Object.entries(raw as Record<string, unknown>);
+    if (entries.length > 8) {
+      return { valid: false, error: 'Terlalu banyak field pada dokumen pendukung.' };
+    }
+
+    const allowedKeys = new Set(['reference_note', 'nib', 'document_url', 'instagram']);
+    const sanitized: Record<string, string> = {};
+
+    for (const [key, val] of entries) {
+      if (!allowedKeys.has(key)) {
+        return { valid: false, error: `Field dokumen pendukung tidak diizinkan: ${key}` };
+      }
+      if (val === undefined || val === null || val === '') continue;
+      if (typeof val !== 'string') {
+        return { valid: false, error: `Nilai dokumen pendukung untuk ${key} harus berupa teks.` };
+      }
+      const trimmedVal = val.trim();
+      if (!trimmedVal) continue;
+      if (trimmedVal.length > 1000 || unsafePattern.test(trimmedVal)) {
+        return { valid: false, error: `Nilai dokumen pendukung untuk ${key} tidak aman atau terlalu panjang.` };
+      }
+      if (key === 'document_url' && !/^https?:\/\//i.test(trimmedVal)) {
+        return { valid: false, error: 'URL dokumen pendukung harus menggunakan protokol http:// atau https://.' };
+      }
+      sanitized[key] = trimmedVal;
+    }
+
+    const serialized = JSON.stringify(sanitized);
+    if (serialized.length > 4096) {
+      return { valid: false, error: 'Ukuran metadata dokumen pendukung melebihi batas.' };
+    }
+
+    return { valid: true, value: Object.keys(sanitized).length > 0 ? sanitized : null };
+  }
+
+  /**
+   * Submit a merchant registration application (Stage B1B / B1D).
+   * - Validates required business fields.
+   * - Rejects duplicate active pending applications (409) and already approved profiles (409).
+   * - Rejects showcase profiles (403).
+   * - Permits reapplication when rejected, preserving prior audit rows and recording 'resubmitted'.
+   * - Always sets is_verified = false and NEVER promotes User.role.
+   */
+  public static async submitApplication(
+    userId: string,
+    payload: {
+      cafe_name: string;
+      business_category?: string;
+      address?: string;
+      description?: string;
+      phone?: string;
+      logo?: string;
+      banner_url?: string;
+      supporting_docs?: any;
+      reward_points?: number;
+    }
+  ): Promise<{
+    success: boolean;
+    status?: 'pending' | 'approved';
+    statusCode?: number;
+    duplicatePending?: boolean;
+    alreadyApproved?: boolean;
+    profile?: MerchantProfile;
+    error?: string;
+  }> {
+    if (!payload.cafe_name || !payload.cafe_name.trim()) {
+      return { success: false, statusCode: 400, error: 'Nama cafe/warung tidak boleh kosong.' };
+    }
+
+    const docCheck = this.sanitizeSupportingDocs(payload.supporting_docs);
+    if (!docCheck.valid) {
+      return { success: false, statusCode: 400, error: docCheck.error };
+    }
+    const sanitizedDocs = docCheck.value;
+
+    const tokenSlug = payload.cafe_name
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, '_')
+      .slice(0, 16);
+    const generatedToken = `NGOPI_${tokenSlug}_${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const rewardPoints = payload.reward_points && payload.reward_points > 0 ? payload.reward_points : 50;
+    const now = new Date();
+
+    try {
+      const txResult = await prisma.$transaction(async (tx: any) => {
+        const existing = await tx.merchantProfile.findUnique({ where: { user_id: userId } });
+
+        if (existing?.is_showcase) {
+          return {
+            success: false as const,
+            statusCode: 403,
+            error: 'Profil showcase tidak dapat diubah atau diajukan ulang.',
+          };
+        }
+
+        if (this.isApprovedMerchantProfile(existing)) {
+          return {
+            success: false as const,
+            alreadyApproved: true,
+            statusCode: 409,
+            status: 'approved' as const,
+            error: 'Akun Anda sudah berstatus merchant terverifikasi.',
+          };
+        }
+
+        if (existing && existing.review_status === 'pending') {
+          return {
+            success: false as const,
+            duplicatePending: true,
+            statusCode: 409,
+            status: 'pending' as const,
+            error: 'Pengajuan merchant Anda sedang dalam proses tinjauan.',
+          };
+        }
+
+        if (existing && existing.review_status === 'rejected') {
+          const updated = await tx.merchantProfile.update({
+            where: { id: existing.id },
+            data: {
+              cafe_name: payload.cafe_name.trim(),
+              business_category: payload.business_category !== undefined ? payload.business_category : existing.business_category,
+              address: payload.address !== undefined ? payload.address : existing.address,
+              description: payload.description !== undefined ? payload.description : existing.description,
+              phone: payload.phone !== undefined ? payload.phone : existing.phone,
+              logo: payload.logo !== undefined ? payload.logo : existing.logo,
+              banner_url: payload.banner_url !== undefined ? payload.banner_url : existing.banner_url,
+              supporting_docs: payload.supporting_docs !== undefined ? sanitizedDocs : existing.supporting_docs,
+              reward_points: rewardPoints,
+              is_verified: false,
+              review_status: 'pending',
+              is_showcase: false,
+              rejection_reason: null,
+              reviewed_by: null,
+              reviewed_at: null,
+              submitted_at: now,
+            },
+          });
+
+          await tx.merchantReviewAudit.create({
+            data: {
+              merchant_id: updated.id,
+              actor_id: userId,
+              action: 'resubmitted',
+              from_status: 'rejected',
+              to_status: 'pending',
+              reason: null,
+            },
+          });
+
+          return { success: true as const, profile: updated };
+        }
+
+        const finalToken = existing?.qr_code_token || generatedToken;
+        const created = await tx.merchantProfile.create({
+          data: {
+            user_id: userId,
+            cafe_name: payload.cafe_name.trim(),
+            business_category: payload.business_category || null,
+            address: payload.address || null,
+            description: payload.description || null,
+            phone: payload.phone || null,
+            logo: payload.logo || null,
+            banner_url: payload.banner_url || null,
+            supporting_docs: sanitizedDocs,
+            qr_code_token: finalToken,
+            reward_points: rewardPoints,
+            is_verified: false,
+            review_status: 'pending',
+            is_showcase: false,
+            submitted_at: now,
+          },
+        });
+
+        await tx.merchantReviewAudit.create({
+          data: {
+            merchant_id: created.id,
+            actor_id: userId,
+            action: 'submitted',
+            from_status: null,
+            to_status: 'pending',
+            reason: null,
+          },
+        });
+
+        return { success: true as const, profile: created };
+      });
+
+      if (!txResult.success) {
+        return txResult;
+      }
+
+      const qrUrl = await this.generateQRDataUrl(txResult.profile.qr_code_token);
+      return {
+        success: true,
+        status: 'pending',
+        statusCode: 200,
+        profile: { ...txResult.profile, qr_code_data_url: qrUrl },
+      };
+    } catch (_) {
+      return { success: false, statusCode: 500, error: 'Gagal menyimpan pengajuan merchant ke database.' };
+    }
+  }
+
+  /**
+   * Update verified merchant profile (requires prior approval; never promotes User.role)
    */
   public static async registerOrUpdateProfile(
     userId: string,
@@ -262,22 +554,14 @@ export class MerchantService {
     // Try DB first
     try {
       const existing = await prisma.merchantProfile.findUnique({ where: { user_id: userId } });
-      const finalToken = existing?.qr_code_token || generatedToken;
-      const profile = await prisma.merchantProfile.upsert({
+      if (!this.isApprovedMerchantProfile(existing)) {
+        return { success: false, error: 'Profil merchant belum disetujui admin.' };
+      }
+
+      const finalToken = existing.qr_code_token || generatedToken;
+      const profile = await prisma.merchantProfile.update({
         where: { user_id: userId },
-        create: {
-          user_id: userId,
-          cafe_name: payload.cafe_name.trim(),
-          address: payload.address || null,
-          description: payload.description || null,
-          phone: payload.phone || null,
-          logo: payload.logo || null,
-          banner_url: payload.banner_url || null,
-          qr_code_token: finalToken,
-          reward_points: rewardPoints,
-          is_verified: true,
-        },
-        update: {
+        data: {
           cafe_name: payload.cafe_name.trim(),
           address: payload.address !== undefined ? payload.address : undefined,
           description: payload.description !== undefined ? payload.description : undefined,
@@ -288,56 +572,11 @@ export class MerchantService {
         },
       });
 
-      // Update user role to merchant
-      await prisma.user.update({
-        where: { id: userId },
-        data: { role: 'merchant' },
-      }).catch(() => {});
-
       const qrUrl = await this.generateQRDataUrl(profile.qr_code_token);
       return { success: true, profile: { ...profile, qr_code_data_url: qrUrl } };
-    } catch (_) {}
-
-    // File-based fallback
-    const data = this.loadData();
-    const existingIndex = data.profiles.findIndex((p) => p.user_id === userId);
-    let updatedProfile: MerchantProfile;
-
-    if (existingIndex >= 0) {
-      updatedProfile = {
-        ...data.profiles[existingIndex],
-        cafe_name: payload.cafe_name.trim(),
-        address: payload.address ?? data.profiles[existingIndex].address,
-        description: payload.description ?? data.profiles[existingIndex].description,
-        phone: payload.phone ?? data.profiles[existingIndex].phone,
-        logo: payload.logo ?? data.profiles[existingIndex].logo,
-        banner_url: payload.banner_url ?? data.profiles[existingIndex].banner_url,
-        reward_points: rewardPoints,
-        updated_at: new Date().toISOString(),
-      };
-      data.profiles[existingIndex] = updatedProfile;
-    } else {
-      updatedProfile = {
-        id: `m_${crypto.randomUUID().slice(0, 8)}`,
-        user_id: userId,
-        cafe_name: payload.cafe_name.trim(),
-        address: payload.address || null,
-        description: payload.description || null,
-        phone: payload.phone || null,
-        logo: payload.logo || null,
-        banner_url: payload.banner_url || null,
-        qr_code_token: generatedToken,
-        is_verified: true,
-        reward_points: rewardPoints,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-      data.profiles.push(updatedProfile);
+    } catch (_) {
+      return { success: false, error: 'Gagal memperbarui profil merchant.' };
     }
-
-    this.saveData(data);
-    const qrUrl = await this.generateQRDataUrl(updatedProfile.qr_code_token);
-    return { success: true, profile: { ...updatedProfile, qr_code_data_url: qrUrl } };
   }
 
   /**
@@ -366,10 +605,15 @@ export class MerchantService {
     }
 
     const merchant = await this.getProfileByTokenOrId(qrToken);
-    if (!merchant) {
+    const isCheckinEligible = Boolean(
+      merchant &&
+        merchant.is_verified === true &&
+        (merchant.is_showcase === true || merchant.review_status === 'approved')
+    );
+    if (!merchant || !isCheckinEligible) {
       return {
         success: false,
-        error: 'Kode QR Cafe tidak ditemukan atau sudah tidak berlaku. Pastikan kamu memindai QR resmi Cafe Partner Ngopi.',
+        error: 'Kode QR Cafe tidak ditemukan atau belum terverifikasi. Pastikan kamu memindai QR resmi Cafe Partner Ngopi.',
       };
     }
 
@@ -475,23 +719,15 @@ export class MerchantService {
   }
 
   /**
-   * Get merchant dashboard statistics and live data
+   * Build dashboard payload for an approved, non-showcase merchant profile
    */
-  public static async getDashboard(userIdOrMerchantId: string): Promise<MerchantDashboardData | null> {
-    let profile = await this.getProfileByUserId(userIdOrMerchantId);
-    if (!profile) {
-      profile = await this.getProfileByTokenOrId(userIdOrMerchantId);
-    }
-    if (!profile) {
-      return null;
-    }
-
+  private static async buildDashboardPayload(profile: MerchantProfile): Promise<MerchantDashboardData> {
     const qrUrl = profile.qr_code_data_url || (await this.generateQRDataUrl(profile.qr_code_token));
     const standingTableUrl = `https://ngopi.top/warung/${profile.qr_code_token}`;
 
     const data = this.loadData();
-    const allMerchantCheckins = data.checkins.filter((c) => c.merchant_id === profile!.id);
-    const promos = data.promos.filter((p) => p.merchant_id === profile!.id);
+    const allMerchantCheckins = data.checkins.filter((c) => c.merchant_id === profile.id);
+    const promos = data.promos.filter((p) => p.merchant_id === profile.id);
 
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -519,6 +755,29 @@ export class MerchantService {
       qrCodeDataUrl: qrUrl,
       standingTableUrl,
     };
+  }
+
+  /**
+   * Get merchant dashboard statistics strictly by authenticated owner userId.
+   * Never falls back to cafe ID, QR token, or showcase profiles.
+   */
+  public static async getDashboard(userId: string): Promise<MerchantDashboardData | null> {
+    const profile = await this.getProfileByUserId(userId);
+    if (!this.isApprovedMerchantProfile(profile)) {
+      return null;
+    }
+    return this.buildDashboardPayload(profile!);
+  }
+
+  /**
+   * Admin-only dashboard lookup by explicit merchantProfile.id (rejects showcase profiles)
+   */
+  public static async getDashboardByMerchantId(merchantId: string): Promise<MerchantDashboardData | null> {
+    const profile = await this.getProfileByTokenOrId(merchantId);
+    if (!this.isApprovedMerchantProfile(profile)) {
+      return null;
+    }
+    return this.buildDashboardPayload(profile!);
   }
 
   /**
@@ -593,5 +852,240 @@ export class MerchantService {
       });
     } catch (_) {}
     return { success: true };
+  }
+
+  /**
+   * Get authenticated user's own merchant application status and audit trail.
+   */
+  public static async getApplicationStatus(userId: string): Promise<{
+    hasApplication: boolean;
+    status: 'none' | 'pending' | 'approved' | 'rejected';
+    profile: MerchantProfile | null;
+    audits: any[];
+  }> {
+    const profile = await this.getProfileByUserId(userId);
+    if (!profile) {
+      return { hasApplication: false, status: 'none', profile: null, audits: [] };
+    }
+
+    let audits: any[] = [];
+    try {
+      audits = await prisma.merchantReviewAudit.findMany({
+        where: { merchant_id: profile.id },
+        orderBy: { created_at: 'desc' },
+      });
+    } catch (_) {
+      audits = [];
+    }
+
+    const status = this.isApprovedMerchantProfile(profile)
+      ? 'approved'
+      : profile.review_status === 'rejected'
+        ? 'rejected'
+        : 'pending';
+
+    return {
+      hasApplication: true,
+      status,
+      profile,
+      audits,
+    };
+  }
+
+  /**
+   * Admin-only: List merchant applications (excludes showcase profiles).
+   */
+  public static async listApplicationsForAdmin(status?: string): Promise<any[]> {
+    const where: any = { is_showcase: false };
+    if (status && ['pending', 'approved', 'rejected'].includes(status)) {
+      where.review_status = status;
+    }
+
+    return prisma.merchantProfile.findMany({
+      where,
+      include: {
+        user: {
+          select: { id: true, name: true, username: true, email: true, role: true },
+        },
+        reviewAudits: {
+          orderBy: { created_at: 'desc' },
+        },
+      },
+      orderBy: [{ submitted_at: 'desc' }, { created_at: 'desc' }],
+    });
+  }
+
+  /**
+   * Admin-only: Get single merchant application detail + audit history.
+   */
+  public static async getApplicationDetailForAdmin(merchantId: string): Promise<any | null> {
+    return prisma.merchantProfile.findUnique({
+      where: { id: merchantId },
+      include: {
+        user: {
+          select: { id: true, name: true, username: true, email: true, role: true },
+        },
+        reviewAudits: {
+          orderBy: { created_at: 'desc' },
+        },
+      },
+    });
+  }
+
+  /**
+   * Admin-only: Atomically approve a pending merchant application.
+   * - Rejects showcase profiles, non-pending applications, and self-approval.
+   * - Promotes User.role to 'merchant' ONLY when current role === 'user' (preserves admin/superadmin).
+   * - Records MerchantReviewAudit entry.
+   */
+  public static async approveApplication(
+    merchantId: string,
+    adminUserId: string
+  ): Promise<{ success: boolean; statusCode: number; profile?: any; audit?: any; error?: string }> {
+    try {
+      return await prisma.$transaction(async (tx: any) => {
+        const profile = await tx.merchantProfile.findUnique({ where: { id: merchantId } });
+        if (!profile) {
+          return { success: false, statusCode: 404, error: 'Pengajuan merchant tidak ditemukan.' };
+        }
+        if (profile.is_showcase) {
+          return { success: false, statusCode: 403, error: 'Profil showcase read-only tidak dapat disetujui.' };
+        }
+        if (!profile.user_id) {
+          return { success: false, statusCode: 400, error: 'Pengajuan merchant tidak memiliki pemilik user yang valid.' };
+        }
+        if (profile.user_id === adminUserId) {
+          return { success: false, statusCode: 403, error: 'Admin tidak diperbolehkan menyetujui pengajuan miliknya sendiri.' };
+        }
+        if (profile.review_status !== 'pending') {
+          return { success: false, statusCode: 409, error: 'Hanya pengajuan berstatus pending yang dapat disetujui.' };
+        }
+
+        const applicant = await tx.user.findUnique({
+          where: { id: profile.user_id },
+          select: { id: true, role: true },
+        });
+        if (!applicant) {
+          return { success: false, statusCode: 404, error: 'Akun pemohon tidak ditemukan.' };
+        }
+
+        const now = new Date();
+        const claimed = await tx.merchantProfile.updateMany({
+          where: {
+            id: profile.id,
+            review_status: 'pending',
+            is_showcase: false,
+          },
+          data: {
+            review_status: 'approved',
+            is_verified: true,
+            is_showcase: false,
+            reviewed_by: adminUserId,
+            reviewed_at: now,
+            rejection_reason: null,
+          },
+        });
+        if (!claimed || claimed.count !== 1) {
+          return { success: false, statusCode: 409, error: 'Pengajuan sudah diproses oleh admin lain.' };
+        }
+
+        const updatedProfile = await tx.merchantProfile.findUnique({ where: { id: profile.id } });
+
+        const normalizedRole = String(applicant.role || '').trim().toLowerCase();
+        if (normalizedRole === 'user') {
+          await tx.user.update({
+            where: { id: applicant.id },
+            data: { role: 'merchant' },
+          });
+        }
+
+        const audit = await tx.merchantReviewAudit.create({
+          data: {
+            merchant_id: profile.id,
+            actor_id: adminUserId,
+            action: 'approved',
+            from_status: 'pending',
+            to_status: 'approved',
+            reason: null,
+          },
+        });
+
+        return { success: true, statusCode: 200, profile: updatedProfile, audit };
+      });
+    } catch (_) {
+      return { success: false, statusCode: 500, error: 'Gagal menyetujui pengajuan merchant.' };
+    }
+  }
+
+  /**
+   * Admin-only: Atomically reject a pending merchant application with mandatory reason.
+   * - Rejects empty reason, showcase profiles, non-pending applications, and self-rejection.
+   * - Keeps is_verified = false and never promotes User.role.
+   * - Records MerchantReviewAudit entry.
+   */
+  public static async rejectApplication(
+    merchantId: string,
+    adminUserId: string,
+    reason: string
+  ): Promise<{ success: boolean; statusCode: number; profile?: any; audit?: any; error?: string }> {
+    const trimmedReason = typeof reason === 'string' ? reason.trim() : '';
+    if (!trimmedReason) {
+      return { success: false, statusCode: 400, error: 'Alasan penolakan wajib diisi.' };
+    }
+
+    try {
+      return await prisma.$transaction(async (tx: any) => {
+        const profile = await tx.merchantProfile.findUnique({ where: { id: merchantId } });
+        if (!profile) {
+          return { success: false, statusCode: 404, error: 'Pengajuan merchant tidak ditemukan.' };
+        }
+        if (profile.is_showcase) {
+          return { success: false, statusCode: 403, error: 'Profil showcase read-only tidak dapat ditolak.' };
+        }
+        if (profile.user_id && profile.user_id === adminUserId) {
+          return { success: false, statusCode: 403, error: 'Admin tidak diperbolehkan menolak pengajuan miliknya sendiri.' };
+        }
+        if (profile.review_status !== 'pending') {
+          return { success: false, statusCode: 409, error: 'Hanya pengajuan berstatus pending yang dapat ditolak.' };
+        }
+
+        const now = new Date();
+        const claimed = await tx.merchantProfile.updateMany({
+          where: {
+            id: profile.id,
+            review_status: 'pending',
+            is_showcase: false,
+          },
+          data: {
+            review_status: 'rejected',
+            is_verified: false,
+            is_showcase: false,
+            reviewed_by: adminUserId,
+            reviewed_at: now,
+            rejection_reason: trimmedReason,
+          },
+        });
+        if (!claimed || claimed.count !== 1) {
+          return { success: false, statusCode: 409, error: 'Pengajuan sudah diproses oleh admin lain.' };
+        }
+
+        const updatedProfile = await tx.merchantProfile.findUnique({ where: { id: profile.id } });
+
+        const audit = await tx.merchantReviewAudit.create({
+          data: {
+            merchant_id: profile.id,
+            actor_id: adminUserId,
+            action: 'rejected',
+            from_status: 'pending',
+            to_status: 'rejected',
+            reason: trimmedReason,
+          },
+        });
+
+        return { success: true, statusCode: 200, profile: updatedProfile, audit };
+      });
+    } catch (_) {
+      return { success: false, statusCode: 500, error: 'Gagal menolak pengajuan merchant.' };
+    }
   }
 }
