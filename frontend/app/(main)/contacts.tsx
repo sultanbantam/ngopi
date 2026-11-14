@@ -657,6 +657,22 @@ export default function ContactsScreen() {
           <Ionicons name="help-circle-outline" size={18} color={coffee.text} />
           <Text style={styles.helpCenterButtonText}>Pusat Bantuan</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.gameLobbyButton, { borderColor: coffee.accent, backgroundColor: coffee.surface }]}
+          onPress={() => router.push('/(main)/ngopinomic' as any)}
+        >
+          <Ionicons name="wallet-outline" size={18} color={coffee.accent} />
+          <Text style={[styles.gameLobbyButtonText, { color: coffee.accent }]}>NGOPINOMIC</Text>
+        </TouchableOpacity>
+        {(currentRole === 'admin' || currentRole === 'superadmin') && (
+          <TouchableOpacity
+            style={styles.adminButton}
+            onPress={() => router.push('/(main)/admin/ngopinomic' as any)}
+          >
+            <Ionicons name="settings-outline" size={18} color={coffee.accent} />
+            <Text style={styles.adminButtonText}>Admin NGOPINOMIC</Text>
+          </TouchableOpacity>
+        )}
         {(currentRole === 'admin' || currentRole === 'agent') && (
           <TouchableOpacity style={styles.adminButton} onPress={openAdminDashboard}>
             <Ionicons name="shield-checkmark-outline" size={18} color={coffee.accent} />
