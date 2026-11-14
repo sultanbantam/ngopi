@@ -917,3 +917,293 @@ model NgopiMailRecipient {
   @@map("ngopi_mail_recipients")
 }
 
+// ==========================================
+// NGOPINOMIC — IDENTITY, ECONOMY, LEDGER & ECOSYSTEM
+// ==========================================
+
+model UserIdentity {
+  id          String   @id @default(uuid())
+  user_id     String   @unique @map("user_id")
+  ngopi_id    String   @unique @map("ngopi_id")
+  basic_email String   @unique @map("basic_email")
+  tier        String   @default("basic") // "basic" | "premium"
+  status      String   @default("active") // "active" | "frozen"
+  created_at  DateTime @default(now()) @map("created_at")
+  updated_at  DateTime @updatedAt @map("updated_at")
+
+  @@map("ngopinomic_user_identities")
+}
+
+model PremiumIdentityInventory {
+  id                  String    @id @default(uuid())
+  category            String    // "premium_id" | "premium_email"
+  display_value       String    @map("display_value")
+  normalized_value    String    @map("normalized_value")
+  rarity_tier         String    @default("Regular") @map("rarity_tier") // "Regular" | "Silver" | "Gold" | "Platinum" | "Signature"
+  price_idr           Int       @map("price_idr")
+  price_points        Int?      @map("price_points")
+  status              String    @default("Available") // "Available" | "Reserved" | "Sold" | "Active" | "Frozen" | "Returned"
+  owner_user_id       String?   @map("owner_user_id")
+  reserved_by_user_id String?   @map("reserved_by_user_id")
+  reserved_until      DateTime? @map("reserved_until")
+  sold_at             DateTime? @map("sold_at")
+  activated_at        DateTime? @map("activated_at")
+  created_at          DateTime  @default(now()) @map("created_at")
+  updated_at          DateTime  @updatedAt @map("updated_at")
+
+  @@unique([category, normalized_value])
+  @@index([status, category])
+  @@index([owner_user_id])
+  @@map("ngopinomic_premium_identities")
+}
+
+model EmailIdentity {
+  id            String   @id @default(uuid())
+  user_id       String   @map("user_id")
+  email_address String   @unique @map("email_address")
+  inventory_id  String?  @map("inventory_id")
+  is_primary    Boolean  @default(false) @map("is_primary")
+  status        String   @default("active") // "active" | "frozen" | "returned"
+  created_at    DateTime @default(now()) @map("created_at")
+  updated_at    DateTime @updatedAt @map("updated_at")
+
+  @@index([user_id])
+  @@map("ngopinomic_email_identities")
+}
+
+model PointsAccount {
+  id                String              @id @default(uuid())
+  user_id           String              @unique @map("user_id")
+  balance           Int                 @default(0)
+  lifetime_earned   Int                 @default(0) @map("lifetime_earned")
+  lifetime_redeemed Int                 @default(0) @map("lifetime_redeemed")
+  created_at        DateTime            @default(now()) @map("created_at")
+  updated_at        DateTime            @updatedAt @map("updated_at")
+  transactions      PointsTransaction[]
+
+  @@map("ngopinomic_points_accounts")
+}
+
+model PointsTransaction {
+  id              String        @id @default(uuid())
+  account_id      String        @map("account_id")
+  user_id         String        @map("user_id")
+  tx_type         String        @map("tx_type") // "earn" | "redeem" | "reversal" | "expire"
+  activity_code   String        @map("activity_code")
+  amount          Int           // positive for earn, negative for redeem/reversal
+  balance_after   Int           @map("balance_after")
+  reference_code  String        @unique @map("reference_code")
+  idempotency_key String        @unique @map("idempotency_key")
+  reversal_of_id  String?       @map("reversal_of_id")
+  description     String
+  metadata        Json?
+  created_at      DateTime      @default(now()) @map("created_at")
+  account         PointsAccount @relation(fields: [account_id], references: [id])
+
+  @@index([user_id, created_at])
+  @@map("ngopinomic_points_transactions")
+}
+
+model AffiliateProfile {
+  id                   String   @id @default(uuid())
+  user_id              String   @unique @map("user_id")
+  referral_code        String   @unique @map("referral_code")
+  payout_preference    String   @default("rupiah") @map("payout_preference") // "rupiah" | "points"
+  is_ambassador        Boolean  @default(false) @map("is_ambassador")
+  is_campaign_promoter Boolean  @default(false) @map("is_campaign_promoter")
+  promoter_rate_bps    Int      @default(500) @map("promoter_rate_bps") // 500..1000 (5%..10%)
+  created_at           DateTime @default(now()) @map("created_at")
+  updated_at           DateTime @updatedAt @map("updated_at")
+
+  @@map("ngopinomic_affiliate_profiles")
+}
+
+model ReferralRelationship {
+  id                 String   @id @default(uuid())
+  referred_user_id   String   @unique @map("referred_user_id")
+  referrer_user_id   String   @map("referrer_user_id")
+  level2_referrer_id String?  @map("level2_referrer_id")
+  referral_code_used String   @map("referral_code_used")
+  status             String   @default("verified") // "pending" | "verified" | "rejected"
+  created_at         DateTime @default(now()) @map("created_at")
+
+  @@index([referrer_user_id])
+  @@index([level2_referrer_id])
+  @@map("ngopinomic_referral_relationships")
+}
+
+model CommissionRule {
+  id                  String   @id @default(uuid())
+  code                String   @unique
+  direct_rate_bps     Int      @default(2000) @map("direct_rate_bps") // 20.00%
+  level2_rate_bps     Int      @default(500) @map("level2_rate_bps") // 5.00%
+  ambassador_max_bps  Int      @default(500) @map("ambassador_max_bps") // up to 5.00%
+  promoter_min_bps    Int      @default(500) @map("promoter_min_bps") // 5.00%
+  promoter_max_bps    Int      @default(1000) @map("promoter_max_bps") // 10.00%
+  max_total_cap_bps   Int      @default(3500) @map("max_total_cap_bps") // 35.00%
+  tax_rate_bps        Int      @default(1100) @map("tax_rate_bps") // 11.00%
+  payment_fee_bps     Int      @default(200) @map("payment_fee_bps") // 2.00%
+  infra_alloc_bps     Int      @default(300) @map("infra_alloc_bps") // 3.00%
+  refund_reserve_bps  Int      @default(400) @map("refund_reserve_bps") // 4.00%
+  other_ops_bps       Int      @default(1000) @map("other_ops_bps") // 10.00%
+  settlement_days     Int      @default(7) @map("settlement_days")
+  bmc_utility_enabled Boolean  @default(false) @map("bmc_utility_enabled")
+  is_active           Boolean  @default(true) @map("is_active")
+  updated_by          String?  @map("updated_by")
+  created_at          DateTime @default(now()) @map("created_at")
+  updated_at          DateTime @updatedAt @map("updated_at")
+
+  @@map("ngopinomic_commission_rules")
+}
+
+model CommissionTransaction {
+  id                    String   @id @default(uuid())
+  beneficiary_user_id   String   @map("beneficiary_user_id")
+  source_user_id        String   @map("source_user_id")
+  source_tx_ref         String   @map("source_tx_ref")
+  commission_type       String   @map("commission_type") // "direct" | "level2" | "ambassador" | "promoter"
+  gross_amount_idr      Int      @map("gross_amount_idr")
+  deductions_json       Json     @map("deductions_json")
+  net_distributable_idr Int      @map("net_distributable_idr")
+  rate_bps              Int      @map("rate_bps")
+  commission_amount_idr Int      @map("commission_amount_idr")
+  payout_preference     String   @default("rupiah") @map("payout_preference")
+  status                String   @default("pending") // "pending" | "settled" | "reversed"
+  reversal_of_id        String?  @map("reversal_of_id")
+  reference_code        String   @unique @map("reference_code")
+  idempotency_key       String   @unique @map("idempotency_key")
+  created_at            DateTime @default(now()) @map("created_at")
+  updated_at            DateTime @updatedAt @map("updated_at")
+
+  @@index([beneficiary_user_id, created_at])
+  @@index([source_tx_ref])
+  @@map("ngopinomic_commission_transactions")
+}
+
+model WalletAccount {
+  id                String        @id @default(uuid())
+  user_id           String        @map("user_id")
+  instrument        String        // "IDR" | "POINTS" | "BMC"
+  available_balance Int           @default(0) @map("available_balance")
+  pending_balance   Int           @default(0) @map("pending_balance")
+  created_at        DateTime      @default(now()) @map("created_at")
+  updated_at        DateTime      @updatedAt @map("updated_at")
+  entries           LedgerEntry[]
+
+  @@unique([user_id, instrument])
+  @@map("ngopinomic_wallet_accounts")
+}
+
+model LedgerTransaction {
+  id              String        @id @default(uuid())
+  reference_code  String        @unique @map("reference_code")
+  idempotency_key String        @unique @map("idempotency_key")
+  tx_type         String        @map("tx_type") // "identity_purchase" | "commission_accrual" | "commission_settlement" | "refund_reversal" | "points_earn" | "points_redeem"
+  instrument      String        // "IDR" | "POINTS" | "BMC"
+  status          String        @default("posted") // "posted" | "reversed"
+  reversal_of_id  String?       @map("reversal_of_id")
+  description     String
+  metadata        Json?
+  created_at      DateTime      @default(now()) @map("created_at")
+  entries         LedgerEntry[]
+
+  @@index([tx_type, created_at])
+  @@map("ngopinomic_ledger_transactions")
+}
+
+model LedgerEntry {
+  id            String            @id @default(uuid())
+  ledger_tx_id  String            @map("ledger_tx_id")
+  account_id    String            @map("account_id")
+  direction     String            // "debit" | "credit"
+  amount        Int
+  balance_after Int               @map("balance_after")
+  created_at    DateTime          @default(now()) @map("created_at")
+  transaction   LedgerTransaction @relation(fields: [ledger_tx_id], references: [id])
+  account       WalletAccount     @relation(fields: [account_id], references: [id])
+
+  @@index([account_id, created_at])
+  @@map("ngopinomic_ledger_entries")
+}
+
+model BmcTransaction {
+  id              String   @id @default(uuid())
+  user_id         String   @map("user_id")
+  utility_code    String   @map("utility_code")
+  amount_bmc      Float    @map("amount_bmc")
+  mode            String   @default("configuration_only") // "configuration_only" | "simulated" | "live"
+  status          String   @default("recorded") // "recorded" | "blocked_config_only" | "reversed"
+  reference_code  String   @unique @map("reference_code")
+  idempotency_key String   @unique @map("idempotency_key")
+  metadata        Json?
+  created_at      DateTime @default(now()) @map("created_at")
+
+  @@index([user_id, created_at])
+  @@map("ngopinomic_bmc_transactions")
+}
+
+model CommunityMembership {
+  id                 String   @id @default(uuid())
+  user_id            String   @unique @map("user_id")
+  membership_tier    String   @default("komunitas") @map("membership_tier") // "komunitas" | "koperasi_calon" | "koperasi_aktif"
+  cooperative_status String   @default("not_enrolled") @map("cooperative_status") // "not_enrolled" | "pending_review" | "active"
+  joined_at          DateTime @default(now()) @map("joined_at")
+  updated_at         DateTime @updatedAt @map("updated_at")
+
+  @@map("ngopinomic_community_memberships")
+}
+
+model EcosystemApplication {
+  id             String        @id @default(uuid())
+  app_code       String        @unique @map("app_code") // e.g. "boomboom", "bamboochain_marketplace", "bamboochain_academy"
+  name           String
+  category       String        // "transport_logistics" | "marketplace" | "education" | "communication"
+  allowed_scopes String[]      @map("allowed_scopes")
+  is_active      Boolean       @default(true) @map("is_active")
+  created_at     DateTime      @default(now()) @map("created_at")
+  consents       UserConsent[]
+
+  @@map("ngopinomic_ecosystem_apps")
+}
+
+model UserConsent {
+  id             String               @id @default(uuid())
+  user_id        String               @map("user_id")
+  app_id         String               @map("app_id")
+  granted_scopes String[]             @map("granted_scopes")
+  granted_at     DateTime             @default(now()) @map("granted_at")
+  revoked_at     DateTime?            @map("revoked_at")
+  app            EcosystemApplication @relation(fields: [app_id], references: [id])
+
+  @@unique([user_id, app_id])
+  @@map("ngopinomic_user_consents")
+}
+
+model FraudEvent {
+  id         String   @id @default(uuid())
+  user_id    String?  @map("user_id")
+  event_type String   @map("event_type")
+  severity   String   @default("medium") // "low" | "medium" | "high"
+  details    Json?
+  resolved   Boolean  @default(false)
+  created_at DateTime @default(now()) @map("created_at")
+
+  @@index([user_id, created_at])
+  @@map("ngopinomic_fraud_events")
+}
+
+model AdminAuditLog {
+  id             String   @id @default(uuid())
+  actor_user_id  String   @map("actor_user_id")
+  action         String
+  target_entity  String   @map("target_entity")
+  target_id      String?  @map("target_id")
+  previous_value Json?    @map("previous_value")
+  new_value      Json?    @map("new_value")
+  reason         String
+  created_at     DateTime @default(now()) @map("created_at")
+
+  @@index([actor_user_id, created_at])
+  @@map("ngopinomic_admin_audit_logs")
+}
+

@@ -35,6 +35,7 @@ import merchantRoutes from './routes/merchant.routes';
 import partnershipRoutes from './routes/partnership.routes';
 import chessProRoutes from './routes/chessPro.routes';
 import telecomRoutes from './routes/telecom.routes';
+import ngopinomicRoutes from './routes/ngopinomic.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -130,6 +131,7 @@ app.use('/api/merchant', merchantRoutes);
 app.use('/api/partnership', partnershipRoutes);
 app.use('/api/chess/pro', chessProRoutes);
 app.use('/api/telecom', telecomRoutes);
+app.use('/api/ngopinomic', ngopinomicRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {
