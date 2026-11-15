@@ -1207,3 +1207,22 @@ model AdminAuditLog {
   @@map("ngopinomic_admin_audit_logs")
 }
 
+model DigitalMouAgreement {
+  id               String   @id @default(uuid())
+  user_id          String   @map("user_id")
+  ngopi_id         String   @map("ngopi_id")
+  full_name        String   @map("full_name")
+  partnership_role String   @map("partnership_role")
+  mou_version      String   @default("v1.0-2026") @map("mou_version")
+  mou_number       String   @unique @map("mou_number")
+  signature_text   String   @map("signature_text")
+  signature_hash   String   @map("signature_hash")
+  status           String   @default("signed")
+  signed_at        DateTime @default(now()) @map("signed_at")
+  created_at       DateTime @default(now()) @map("created_at")
+
+  @@index([user_id, signed_at])
+  @@map("ngopinomic_digital_mous")
+}
+
+

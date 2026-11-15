@@ -1,9 +1,37 @@
 import { prisma as defaultPrisma } from '../../utils/prisma';
+import { telecomService } from '../telecom.service';
 import {
   generateReferenceCode,
   postLedgerTransaction,
   reverseLedgerTransaction,
 } from './ngopinomicLedger.service';
+
+const RESERVED_PROFILE_SLUGS = new Set([
+  'login',
+  'register',
+  'contacts',
+  'warkop',
+  'bambupedia',
+  'chat',
+  'admin',
+  'help-center',
+  'privacy',
+  'terms',
+  'test-payment',
+  'index',
+  'api',
+]);
+
+export function profileSlug(name: string): string {
+  const slug =
+    String(name || '')
+      .normalize('NFKC')
+      .trim()
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+      .replace(/^-+|-+$/g, '') || 'pengguna';
+  return RESERVED_PROFILE_SLUGS.has(slug) ? `${slug}-profil` : slug;
+}
 
 export interface CommissionRuleConfig {
   id?: string;
@@ -200,34 +228,57 @@ export async function getActiveCommissionRule(db: any = defaultPrisma): Promise<
 
 export async function ensureUserIdentity(
   db: any = defaultPrisma,
-  user: { id: string; username: string; bmc_id?: number }
+  user: { id: string; username: string; display_name?: string | null; bmc_id?: number | null }
 ) {
-  const existing = await db.userIdentity.findUnique({ where: { user_id: user.id } });
-  if (existing) return existing;
+  const telecomNumber = telecomService.getNumberForUser(user);
+  const telecomEmail = telecomService.formatEmail(user.username || user.id, user.id);
+  const canonicalCode = profileSlug(user.display_name || user.username || user.id);
 
-  const cleanUsername = (user.username || `user_${user.id.slice(0, 6)}`)
-    .toLowerCase()
-    .replace(/[^a-z0-9._-]/g, '');
-  const ngopiId = `ngp_${cleanUsername}_${user.bmc_id ?? user.id.slice(0, 4)}`;
-  const basicEmail = `${cleanUsername}@ngopi.top`;
+  let identity = await db.userIdentity.findUnique({ where: { user_id: user.id } });
+  if (!identity) {
+    identity = await db.userIdentity.create({
+      data: {
+        user_id: user.id,
+        ngopi_id: telecomNumber,
+        basic_email: telecomEmail,
+        tier: 'basic',
+        status: 'active',
+      },
+    });
+  } else if (identity.ngopi_id !== telecomNumber || identity.basic_email !== telecomEmail) {
+    try {
+      identity = await db.userIdentity.update({
+        where: { user_id: user.id },
+        data: {
+          ngopi_id: telecomNumber,
+          basic_email: telecomEmail,
+        },
+      });
+    } catch {
+      // Keep existing row if unique collision occurs in synthetic test data
+    }
+  }
 
-  const created = await db.userIdentity.create({
-    data: {
-      user_id: user.id,
-      ngopi_id: ngopiId,
-      basic_email: basicEmail,
-      tier: 'basic',
-      status: 'active',
-    },
-  });
-
-  // Ensure default affiliate profile, points account & community membership exist
+  // Ensure default affiliate profile is synced with Profile Link slug
   const existingAffiliate = await db.affiliateProfile.findUnique({ where: { user_id: user.id } });
   if (!existingAffiliate) {
-    const code = `${cleanUsername.slice(0, 6).toUpperCase()}${user.id.slice(0, 4).toUpperCase()}`;
+    const taken = await db.affiliateProfile.findUnique({ where: { referral_code: canonicalCode } });
+    const code = taken ? `${canonicalCode}-${user.id.slice(0, 4).toLowerCase()}` : canonicalCode;
     await db.affiliateProfile.create({
       data: { user_id: user.id, referral_code: code, payout_preference: 'rupiah' },
     });
+  } else if (existingAffiliate.referral_code !== canonicalCode) {
+    try {
+      const taken = await db.affiliateProfile.findUnique({ where: { referral_code: canonicalCode } });
+      if (!taken || taken.user_id === user.id) {
+        await db.affiliateProfile.update({
+          where: { user_id: user.id },
+          data: { referral_code: canonicalCode },
+        });
+      }
+    } catch {
+      // Ignore if slug already claimed by another user
+    }
   }
 
   const existingPoints = await db.pointsAccount.findUnique({ where: { user_id: user.id } });
@@ -240,7 +291,7 @@ export async function ensureUserIdentity(
     await db.communityMembership.create({ data: { user_id: user.id, membership_tier: 'komunitas' } });
   }
 
-  return created;
+  return identity;
 }
 
 export const DAILY_POINTS_EARN_CAP = 500;
@@ -434,8 +485,12 @@ export async function registerReferral(
   db: any = defaultPrisma,
   params: { referredUserId: string; referralCode: string }
 ) {
-  const code = params.referralCode.trim().toUpperCase();
-  const referrerProfile = await db.affiliateProfile.findUnique({ where: { referral_code: code } });
+  const raw = params.referralCode.trim();
+  const referrerProfile =
+    (await db.affiliateProfile.findUnique({ where: { referral_code: raw } })) ||
+    (await db.affiliateProfile.findUnique({ where: { referral_code: raw.toLowerCase() } })) ||
+    (await db.affiliateProfile.findUnique({ where: { referral_code: raw.toUpperCase() } }));
+  const code = referrerProfile?.referral_code || raw;
   if (!referrerProfile) {
     throw new Error('Kode undangan tidak ditemukan.');
   }

@@ -443,6 +443,62 @@ export class PointsEconomyService {
     return { pointsAdded: 20, newBalance: up.balance };
   }
 
+  /**
+   * Sinkronisasi kredit poin dari NGOPINOMIC (mis. Check-in harian +10) ke Ekonomi Ngopi & BMC Token.
+   */
+  public syncExternalCredit(
+    userId: string,
+    amount: number,
+    description: string,
+    referenceId?: string
+  ): { newBalance: number } {
+    const up = this.getOrCreateUserPoints(userId);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { newBalance: up.balance };
+    }
+    const pts = Math.floor(amount);
+    up.balance += pts;
+    up.lifetime += pts;
+    up.updated_at = Date.now();
+    this.recordTransaction(userId, pts, 'daily_streak', referenceId || null, description);
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager) {
+        PointsManager.setPoints(userId, up.balance, true, true);
+      }
+    } catch (_) {}
+    this.saveToDisk();
+    return { newBalance: up.balance };
+  }
+
+  /**
+   * Sinkronisasi pengurangan poin dari NGOPINOMIC (mis. penukaran identitas) ke Ekonomi Ngopi & BMC Token.
+   */
+  public syncExternalSpend(
+    userId: string,
+    amount: number,
+    description: string,
+    referenceId?: string
+  ): { newBalance: number } {
+    const up = this.getOrCreateUserPoints(userId);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return { newBalance: up.balance };
+    }
+    const pts = Math.floor(amount);
+    up.balance = Math.max(0, up.balance - pts);
+    up.spent += pts;
+    up.updated_at = Date.now();
+    this.recordTransaction(userId, -pts, 'feature_purchase', referenceId || null, description);
+    try {
+      const { PointsManager } = require('../utils/pointsManager');
+      if (PointsManager) {
+        PointsManager.setPoints(userId, up.balance, true, true);
+      }
+    } catch (_) {}
+    this.saveToDisk();
+    return { newBalance: up.balance };
+  }
+
   // --- 7.3 & 7.4 PEMBELIAN FITUR PREMIUM DENGAN POIN NGOPI ---
   public purchaseFeatureWithPoints(
     userId: string,

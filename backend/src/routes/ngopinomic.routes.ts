@@ -1,12 +1,16 @@
+import crypto from 'crypto';
 import { Router, Request, Response } from 'express';
 import rateLimit from 'express-rate-limit';
 import { verifyJWT, AuthRequest } from '../middleware/auth.middleware';
 import { requireDbRole } from '../middleware/rbac.middleware';
 import { prisma } from '../utils/prisma';
+import { pointsEconomyService } from '../services/points.service';
+import { telecomService } from '../services/telecom.service';
 import {
   earnPoints,
   ensureUserIdentity,
   getActiveCommissionRule,
+  profileSlug,
   registerReferral,
 } from '../services/ngopinomic/ngopinomicEconomy.service';
 import {
@@ -88,6 +92,9 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     const identity = await prisma.$transaction(async (tx: any) => ensureUserIdentity(tx, user));
+    pointsEconomyService.syncWithPointsManager(user.id, user.username);
+    const econPoints = pointsEconomyService.getOrCreateUserPoints(user.id);
+
     const [pointsAccount, affiliateProfile, walletIdr, community, premiumEmails, commissions, pointsHistory, bmcStatus] =
       await Promise.all([
         prisma.pointsAccount.findUnique({ where: { user_id: user.id } }),
@@ -108,6 +115,38 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
         getBmcGatewayStatus(prisma, user.id),
       ]);
 
+    const ngopiBalance = pointsAccount?.balance ?? 0;
+    const unifiedBalance = Math.max(ngopiBalance, econPoints.balance);
+    if (pointsAccount && econPoints.balance > ngopiBalance) {
+      await prisma.pointsAccount.update({
+        where: { user_id: user.id },
+        data: { balance: econPoints.balance },
+      });
+    } else if (ngopiBalance > econPoints.balance) {
+      pointsEconomyService.syncExternalCredit(
+        user.id,
+        ngopiBalance - econPoints.balance,
+        'Sinkronisasi saldo NGOPINOMIC <-> Ekonomi Ngopi'
+      );
+    }
+
+    const telecomNumber = telecomService.getNumberForUser(user);
+    const telecomEmail = telecomService.formatEmail(user.username, user.id);
+    const canonicalCode = affiliateProfile?.referral_code || profileSlug(user.display_name || user.username);
+    const profileLink = `https://ngopi.top/${encodeURIComponent(canonicalCode)}`;
+
+    let latestMou: any = null;
+    try {
+      if ((prisma as any).digitalMouAgreement) {
+        latestMou = await (prisma as any).digitalMouAgreement.findFirst({
+          where: { user_id: user.id },
+          orderBy: { signed_at: 'desc' },
+        });
+      }
+    } catch {
+      latestMou = null;
+    }
+
     const referralCount = await prisma.referralRelationship.count({
       where: { referrer_user_id: user.id },
     });
@@ -119,16 +158,25 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
         subtitle:
           'Gunakan identitas Ngopi untuk terhubung dengan berbagai layanan dalam ekosistem BaMbooChain. Kumpulkan Poin Ngopi, undang teman, nikmati manfaat, dan dapatkan komisi dari transaksi yang memenuhi ketentuan.',
       },
-      my_identity: identity,
+      my_identity: {
+        ...identity,
+        ngopi_number: telecomNumber,
+        ngopi_email: telecomEmail,
+        synced_with_identitas_ngopi: true,
+      },
       my_emails: [
-        { email_address: identity.basic_email, is_primary: true, type: 'basic' },
-        ...premiumEmails.map((e: any) => ({ email_address: e.email_address, is_primary: e.is_primary, type: 'premium' })),
+        { email_address: telecomEmail, is_primary: true, type: 'basic' },
+        ...premiumEmails
+          .filter((e: any) => e.email_address !== telecomEmail)
+          .map((e: any) => ({ email_address: e.email_address, is_primary: e.is_primary, type: 'premium' })),
       ],
       my_points: {
         label: 'Poin Ngopi',
-        balance: pointsAccount?.balance ?? 0,
-        lifetime_earned: pointsAccount?.lifetime_earned ?? 0,
-        lifetime_redeemed: pointsAccount?.lifetime_redeemed ?? 0,
+        balance: unifiedBalance,
+        lifetime_earned: Math.max(pointsAccount?.lifetime_earned ?? 0, econPoints.lifetime),
+        lifetime_redeemed: Math.max(pointsAccount?.lifetime_redeemed ?? 0, econPoints.spent),
+        streak_days: econPoints.streak_days || 0,
+        synced_with_economy: true,
       },
       my_commissions: {
         label: 'Komisi Saya',
@@ -145,11 +193,14 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
       },
       my_referral: {
         label: 'Undang Teman',
-        referral_code: affiliateProfile?.referral_code || '',
-        referral_link: `https://ngopi.top/register?ref=${affiliateProfile?.referral_code || ''}`,
+        referral_code: canonicalCode,
+        profile_link: profileLink,
+        referral_link: `https://ngopi.top/register?ref=${encodeURIComponent(canonicalCode)}`,
         total_invited: referralCount,
+        synced_with_profile_link: true,
       },
       my_community: community,
+      my_mou: latestMou,
       transaction_history: pointsHistory,
     });
   } catch (err: any) {
@@ -262,21 +313,49 @@ router.post('/points/claim', async (req: AuthRequest, res: Response): Promise<vo
       return;
     }
 
+    // Check-in harian menggunakan aturan tunggal Ekonomi Ngopi & BMC Token (Siklus 07.00-07.00 WIB, streak 1..20 poin)
+    pointsEconomyService.syncWithPointsManager(user.id, user.username);
+    const streakResult = pointsEconomyService.claimDailyStreak(user.id);
     const today = new Date().toISOString().slice(0, 10);
     const idempotencyKey = `checkin:${user.id}:${today}`;
+
+    if (!streakResult.awarded) {
+      const existingTx = await prisma.pointsTransaction.findUnique({
+        where: { idempotency_key: idempotencyKey },
+      });
+      res.status(200).json({
+        success: true,
+        idempotent: true,
+        awarded: false,
+        streak: streakResult.streak,
+        pointsAdded: 0,
+        newBalance: streakResult.newBalance,
+        message: streakResult.message,
+        transaction: existingTx,
+      });
+      return;
+    }
 
     const result = await prisma.$transaction(async (tx: any) =>
       earnPoints(tx, {
         userId: user.id,
         activityCode: 'daily_checkin',
-        amount: 10,
+        amount: streakResult.pointsAdded,
         idempotencyKey,
-        description: `Check-in harian NGOPINOMIC (${today})`,
-        metadata: { date: today },
+        description: streakResult.message,
+        metadata: { date: today, streak: streakResult.streak, source: 'ekonomi_ngopi_streak' },
       })
     );
 
-    res.status(200).json({ success: true, ...result });
+    res.status(200).json({
+      success: true,
+      ...result,
+      awarded: true,
+      streak: streakResult.streak,
+      pointsAdded: streakResult.pointsAdded,
+      newBalance: streakResult.newBalance,
+      message: streakResult.message,
+    });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Gagal mengklaim poin.' });
   }
@@ -507,6 +586,96 @@ router.post('/admin/inventory/:id/return', requireDbRole('admin', 'superadmin'),
     res.status(200).json({ success: true, inventory: updated });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Gagal mengembalikan inventaris.' });
+  }
+});
+
+// GET /api/ngopinomic/mou — Draft MoU Digital Kemitraan Ekosistem & riwayat MoU user
+router.get('/mou', async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await getDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const signedMous = (prisma as any).digitalMouAgreement
+      ? await (prisma as any).digitalMouAgreement.findMany({
+          where: { user_id: user.id },
+          orderBy: { signed_at: 'desc' },
+        })
+      : [];
+
+    res.status(200).json({
+      success: true,
+      version: 'v1.0-2026',
+      title: 'MoU Digital Kemitraan Ekosistem ngopi.top & BaMbooChain',
+      clauses: [
+        '1. Ruang Lingkup Kerja Sama: Mitra berperan aktif membangun komunitas, memperkenalkan identitas Ngopi (@ngopi.top), merchant warkop, atau kampanye resmi ekosistem ngopi.top.',
+        '2. Dasar Perhitungan Komisi (NDR): Seluruh komisi afiliasi (Direct 20%, Level-2 5%, Ambassador maks. 5%, Campaign Promoter 5-10%, dengan batas total 35%) dihitung murni dari Pendapatan Bersih yang Dapat Dibagikan (NDR) atas transaksi sah.',
+        '3. Transparansi Poin & BMC: Poin Ngopi adalah poin loyalitas dalam aplikasi (bukan uang tunai), dan manfaat token BMC tunduk pada mode terkendali serta regulasi Republik Indonesia.',
+        '4. Integritas & Kepatuhan: Mitra dilarang melakukan spam, akun ganda, self-referral, transaksi fiktif, atau klaim sepihak yang menjanjikan keuntungan pasti. Pelanggaran berakibat pembatalan komisi dan pencabutan MoU.',
+        '5. Kepatuhan UU PDP & Hubungan Independen: Mitra wajib menjaga privasi data pengguna sesuai UU PDP No. 27 Tahun 2022. Kerja sama ini bersifat kemitraan independen, bukan hubungan ketenagakerjaan.',
+      ],
+      signed_mous: signedMous,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Gagal memuat MoU Digital.' });
+  }
+});
+
+// POST /api/ngopinomic/mou/sign — Penandatanganan MoU Digital secara eksplisit
+router.post('/mou/sign', ngopinomicWriteLimiter, async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const user = await getDbUser(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { full_name, partnership_role, signature_text, agreed_to_terms } = req.body || {};
+    if (agreed_to_terms !== true) {
+      res.status(400).json({ error: 'Anda wajib mencentang persetujuan isi MoU sebelum menandatangani.' });
+      return;
+    }
+    if (!full_name || typeof full_name !== 'string' || full_name.trim().length < 3) {
+      res.status(400).json({ error: 'Nama lengkap minimal 3 karakter wajib diisi.' });
+      return;
+    }
+    if (!signature_text || typeof signature_text !== 'string' || signature_text.trim().length < 3) {
+      res.status(400).json({ error: 'Tanda tangan digital (ketik nama lengkap) minimal 3 karakter wajib diisi.' });
+      return;
+    }
+    const allowedRoles = ['affiliate_partner', 'community_ambassador', 'merchant_partner', 'ecosystem_builder'];
+    const role = allowedRoles.includes(partnership_role) ? partnership_role : 'affiliate_partner';
+
+    const ngopiNumber = telecomService.getNumberForUser(user);
+    const mouVersion = 'v1.0-2026';
+    const signedAt = new Date();
+    const dateStamp = signedAt.toISOString().slice(0, 10).replace(/-/g, '');
+    const mouNumber = `MOU-NGP-${dateStamp}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+    const signatureHash = crypto
+      .createHash('sha256')
+      .update(`${user.id}|${ngopiNumber}|${mouVersion}|${role}|${signature_text.trim()}|${signedAt.toISOString()}`)
+      .digest('hex');
+
+    const created = await (prisma as any).digitalMouAgreement.create({
+      data: {
+        user_id: user.id,
+        ngopi_id: ngopiNumber,
+        full_name: full_name.trim(),
+        partnership_role: role,
+        mou_version: mouVersion,
+        mou_number: mouNumber,
+        signature_text: signature_text.trim(),
+        signature_hash: signatureHash,
+        status: 'signed',
+        signed_at: signedAt,
+      },
+    });
+
+    res.status(200).json({ success: true, mou: created });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Gagal menandatangani MoU Digital.' });
   }
 });
 

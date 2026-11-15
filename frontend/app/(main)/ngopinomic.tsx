@@ -27,21 +27,28 @@ export default function NgopinomicDashboardScreen() {
   const [dashboard, setDashboard] = useState<any>(null);
   const [marketplace, setMarketplace] = useState<any[]>([]);
   const [rules, setRules] = useState<any>(null);
+  const [mouInfo, setMouInfo] = useState<any>(null);
   const [referralInput, setReferralInput] = useState('');
+  const [mouFullName, setMouFullName] = useState('');
+  const [mouRole, setMouRole] = useState<'affiliate_partner' | 'community_ambassador' | 'merchant_partner' | 'ecosystem_builder'>('affiliate_partner');
+  const [mouSignature, setMouSignature] = useState('');
+  const [mouAgreed, setMouAgreed] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
   const loadAll = useCallback(async () => {
     try {
       const headers = await getAuthHeaders();
-      const [dashRes, mktRes, rulesRes] = await Promise.all([
+      const [dashRes, mktRes, rulesRes, mouRes] = await Promise.all([
         axios.get(`${API_URL}/ngopinomic/dashboard`, { headers }),
         axios.get(`${API_URL}/ngopinomic/marketplace/identities`, { headers }),
         axios.get(`${API_URL}/ngopinomic/rules`),
+        axios.get(`${API_URL}/ngopinomic/mou`, { headers }).catch(() => ({ data: null })),
       ]);
       setDashboard(dashRes.data);
       setMarketplace(mktRes.data?.items || []);
       setRules(rulesRes.data);
+      setMouInfo(mouRes.data);
     } catch (err: any) {
       setStatusMessage(err?.response?.data?.error || 'Gagal memuat data NGOPINOMIC.');
     } finally {
@@ -64,9 +71,10 @@ export default function NgopinomicDashboardScreen() {
         { headers }
       );
       setStatusMessage(
-        res.data?.idempotent
-          ? 'Check-in hari ini sudah tercatat sebelumnya.'
-          : 'Check-in berhasil! +10 Poin Ngopi ditambahkan.'
+        res.data?.message ||
+          (res.data?.idempotent
+            ? 'Check-in harian sudah diklaim pada siklus 07.00 - 07.00 WIB hari ini.'
+            : `Check-in harian berhasil (+${res.data?.pointsAdded ?? res.data?.transaction?.amount ?? 0} Poin Ngopi).`)
       );
       await loadAll();
     } catch (err: any) {
@@ -151,12 +159,45 @@ export default function NgopinomicDashboardScreen() {
       const headers = await getAuthHeaders();
       await axios.post(
         `${API_URL}/ngopinomic/ecosystem/consent`,
-        { app_code: 'boomboom', scopes: ['identity:basic', 'identity:email'] },
+        { app_code: 'boomboom', scopes: ['identity:basic', 'identity:email', 'boomboom:role_hint'] },
         { headers }
       );
-      setStatusMessage('Izin identitas untuk BoomBoom berhasil diaktifkan.');
+      setStatusMessage('Izin identitas (Nomor & Email Ngopi) untuk BoomBoom berhasil diaktifkan.');
     } catch (err: any) {
       setStatusMessage(err?.response?.data?.error || 'Gagal mengatur izin BoomBoom.');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleSignMou = async () => {
+    if (!mouAgreed) {
+      Alert.alert('Persetujuan Diperlukan', 'Centang persetujuan isi MoU Digital terlebih dahulu.');
+      return;
+    }
+    if (mouFullName.trim().length < 3 || mouSignature.trim().length < 3) {
+      Alert.alert('Data Belum Lengkap', 'Isi nama lengkap dan tanda tangan digital minimal 3 karakter.');
+      return;
+    }
+    setBusyAction('mou');
+    try {
+      const headers = await getAuthHeaders();
+      const res = await axios.post(
+        `${API_URL}/ngopinomic/mou/sign`,
+        {
+          full_name: mouFullName.trim(),
+          partnership_role: mouRole,
+          signature_text: mouSignature.trim(),
+          agreed_to_terms: true,
+        },
+        { headers }
+      );
+      setStatusMessage(`MoU Digital berhasil ditandatangani (${res.data?.mou?.mou_number}).`);
+      await loadAll();
+    } catch (err: any) {
+      const msg = err?.response?.data?.error || 'Gagal menandatangani MoU Digital.';
+      setStatusMessage(msg);
+      Alert.alert('Info', msg);
     } finally {
       setBusyAction(null);
     }
@@ -202,15 +243,23 @@ export default function NgopinomicDashboardScreen() {
       {/* 1 & 2. ID Ngopi Saya & Email Ngopi Saya */}
       <View style={styles.gridRow}>
         <View style={[styles.card, styles.halfCard]}>
-          <Text style={styles.cardLabel}>1. ID Ngopi Saya</Text>
-          <Text style={styles.highlightValue}>{dashboard?.my_identity?.ngopi_id || '-'}</Text>
+          <View style={styles.syncRow}>
+            <Text style={styles.cardLabel}>1. ID Ngopi Saya</Text>
+            <Text style={styles.syncBadge}>Sinkron Identitas Ngopi</Text>
+          </View>
+          <Text style={styles.highlightValue}>
+            #{dashboard?.my_identity?.ngopi_number || dashboard?.my_identity?.ngopi_id || '-'}
+          </Text>
           <Text style={styles.mutedText}>
-            Status: {dashboard?.my_identity?.tier === 'premium' ? 'ID Ngopi Premium' : 'Identitas Dasar Gratis'}
+            Status: {dashboard?.my_identity?.tier === 'premium' ? 'ID Ngopi Premium' : 'Identitas Dasar Gratis'} • Nomor Ngopi aktif
           </Text>
         </View>
 
         <View style={[styles.card, styles.halfCard]}>
-          <Text style={styles.cardLabel}>2. Email Ngopi Saya</Text>
+          <View style={styles.syncRow}>
+            <Text style={styles.cardLabel}>2. Email Ngopi Saya</Text>
+            <Text style={styles.syncBadge}>Sinkron Identitas Ngopi</Text>
+          </View>
           {(dashboard?.my_emails || []).map((e: any) => (
             <Text key={e.email_address} style={styles.emailItem}>
               • {e.email_address} ({e.type === 'premium' ? 'Email Ngopi Premium' : 'Dasar'})
@@ -223,7 +272,10 @@ export default function NgopinomicDashboardScreen() {
       <View style={styles.card}>
         <View style={styles.cardHeaderBetween}>
           <View>
-            <Text style={styles.cardLabel}>3. Poin Ngopi</Text>
+            <View style={styles.syncRow}>
+              <Text style={styles.cardLabel}>3. Poin Ngopi</Text>
+              <Text style={styles.syncBadge}>Sinkron Ekonomi Ngopi & BMC</Text>
+            </View>
             <Text style={styles.highlightValue}>{dashboard?.my_points?.balance ?? 0} Poin Ngopi</Text>
           </View>
           <TouchableOpacity
@@ -232,13 +284,13 @@ export default function NgopinomicDashboardScreen() {
             disabled={busyAction === 'checkin'}
           >
             <Text style={styles.btnText}>
-              {busyAction === 'checkin' ? 'Memproses...' : 'Check-in Harian (+10)'}
+              {busyAction === 'checkin' ? 'Memproses...' : 'Klaim Streak Harian'}
             </Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.mutedText}>
-          Total diperoleh: {dashboard?.my_points?.lifetime_earned ?? 0} | Ditukar: {dashboard?.my_points?.lifetime_redeemed ?? 0}.
-          Poin Ngopi adalah poin loyalitas dalam aplikasi dan bukan uang tunai.
+          Total diperoleh: {dashboard?.my_points?.lifetime_earned ?? 0} | Ditukar: {dashboard?.my_points?.lifetime_redeemed ?? 0} | Streak: {dashboard?.my_points?.streak_days ?? 0} hari (Siklus 07.00–07.00 WIB: +1, +3, +5, +7, +9, +11, +20 Poin).
+          Terhubung langsung dengan Ekonomi Ngopi & BMC Token.
         </Text>
       </View>
 
@@ -300,9 +352,15 @@ export default function NgopinomicDashboardScreen() {
 
       {/* 6. Undang Teman */}
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>6. Undang Teman</Text>
+        <View style={styles.syncRow}>
+          <Text style={styles.cardLabel}>6. Undang Teman & Kode Profil</Text>
+          <Text style={styles.syncBadge}>Sinkron Profile Link</Text>
+        </View>
         <Text style={styles.bodyText}>
           Kode Anda: <Text style={{ color: coffee.accent, fontWeight: '700' }}>{dashboard?.my_referral?.referral_code}</Text> ({dashboard?.my_referral?.total_invited ?? 0} teman)
+        </Text>
+        <Text style={styles.mutedText}>
+          Profile Link: {dashboard?.my_referral?.profile_link}
         </Text>
         <TouchableOpacity style={styles.secondaryBtn} onPress={handleCopyReferral}>
           <Text style={styles.btnText}>Salin Tautan Undang Teman</Text>
@@ -321,11 +379,144 @@ export default function NgopinomicDashboardScreen() {
         </View>
       </View>
 
+      {/* Infografis & Diagram Skema Penghasilan NGOPINOMIC */}
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>Infografis & Diagram Penghasilan NGOPINOMIC</Text>
+        <Text style={styles.mutedText}>
+          Alur Perhitungan Resmi: Harga Transaksi (100%) → Dikurangi Pajak (11%), Payment Fee (2%), Infrastruktur (3%), Cadangan Refund (4%), Operasional (10%) = 70% Dasar Komisi Bersih (NDR). Maksimal total komisi 35% dari NDR.
+        </Text>
+
+        {/* Visual Flow Diagram */}
+        <View style={styles.diagramRow}>
+          <View style={styles.diagramBox}>
+            <Text style={styles.diagramTitle}>Transaksi Sah</Text>
+            <Text style={styles.diagramValue}>Rp250.000</Text>
+            <Text style={styles.mutedText}>Gross (100%)</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={coffee.accent} />
+          <View style={styles.diagramBox}>
+            <Text style={styles.diagramTitle}>Dasar Komisi (NDR)</Text>
+            <Text style={styles.diagramValue}>Rp175.000</Text>
+            <Text style={styles.mutedText}>70% Bersih</Text>
+          </View>
+          <Ionicons name="arrow-forward" size={18} color={coffee.accent} />
+          <View style={styles.diagramBox}>
+            <Text style={styles.diagramTitle}>Porsi Komisi</Text>
+            <Text style={styles.diagramValue}>Maks 35%</Text>
+            <Text style={styles.mutedText}>s/d Rp61.250</Text>
+          </View>
+        </View>
+
+        {/* a) Affiliate */}
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoTitle}>a) Jadi Affiliate (Komisi Rupiah / Poin)</Text>
+          <Text style={styles.bodyText}>• Affiliate Langsung (Level 1): 20% dari NDR (contoh: Rp35.000 dari transaksi Rp250.000)</Text>
+          <Text style={styles.bodyText}>• Referral Level 2: 5% dari NDR (contoh: Rp8.750)</Text>
+          <Text style={styles.bodyText}>• Community Ambassador: hingga 5% dari NDR</Text>
+          <Text style={styles.bodyText}>• Campaign Promoter: 5% – 10% dari NDR (total semua komisi tetap dibatasi cap 35% NDR)</Text>
+        </View>
+
+        {/* b) Referral */}
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoTitle}>b) Me-referral-kan Teman</Text>
+          <Text style={styles.bodyText}>• Bonus Daftar Aktif: +50 Poin Ngopi per teman aktif di warkop</Text>
+          <Text style={styles.bodyText}>• Komisi Berkelanjutan: 20% NDR (Level 1) + 5% NDR (Level 2) saat teman bertransaksi di marketplace</Text>
+        </View>
+
+        {/* c) Aktivitas Sosial */}
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoTitle}>c) Membagi, Mentag, Follow, Like, Komen</Text>
+          <Text style={styles.bodyText}>• Membagi (Share) Tautan Kampanye: 5% – 10% NDR bila terjadi transaksi + Misi Harian (+20 Poin)</Text>
+          <Text style={styles.bodyText}>• Mentag / Bantu Jawab (Helper): +5 Poin Ngopi per jawaban membantu</Text>
+          <Text style={styles.bodyText}>• Follow / Check-in Harian (Siklus 07.00–07.00 WIB): Streak H-1 s/d H-7 (+1, +3, +5, +7, +9, +11, +20 Poin)</Text>
+          <Text style={styles.bodyText}>• Like / Reaction: +2 Poin Ngopi per reaksi (maks. 20 Poin/hari)</Text>
+          <Text style={styles.bodyText}>• Komen / Chat Warkop: +1 Poin Ngopi per pesan (maks. 50 Poin/hari)</Text>
+          <Text style={styles.mutedText}>Batas total perolehan poin harian: 500 Poin/hari. Konversi indikatif: 1.000 Poin ≈ 1 BMC (aktif setelah izin regulasi).</Text>
+        </View>
+      </View>
+
+      {/* MoU Digital Kemitraan Ekosistem ngopi.top */}
+      <View style={styles.card}>
+        <Text style={styles.cardLabel}>MoU Digital Kemitraan Ekosistem ngopi.top</Text>
+        {(dashboard?.my_mou || (mouInfo?.signed_mous || []).length > 0) ? (
+          <View style={styles.mouSignedBox}>
+            <Text style={styles.infoTitle}>Sertifikat MoU Digital Terverifikasi</Text>
+            <Text style={styles.bodyText}>
+              Nomor MoU: {(dashboard?.my_mou || mouInfo?.signed_mous?.[0])?.mou_number}
+            </Text>
+            <Text style={styles.bodyText}>
+              Mitra: {(dashboard?.my_mou || mouInfo?.signed_mous?.[0])?.full_name} ({(dashboard?.my_mou || mouInfo?.signed_mous?.[0])?.partnership_role})
+            </Text>
+            <Text style={styles.mutedText}>
+              SHA-256: {(dashboard?.my_mou || mouInfo?.signed_mous?.[0])?.signature_hash}
+            </Text>
+          </View>
+        ) : null}
+
+        <Text style={styles.mutedText}>
+          Draft Perjanjian ({mouInfo?.version || 'v1.0-2026'}):
+        </Text>
+        {(mouInfo?.clauses || [
+          '1. Mitra berperan aktif membangun komunitas & ekosistem ngopi.top secara jujur.',
+          '2. Seluruh komisi dihitung dari Pendapatan Bersih yang Dapat Dibagikan (NDR) dengan batas cap 35%.',
+          '3. Poin Ngopi adalah poin loyalitas; fitur BMC tunduk pada regulasi Indonesia.',
+          '4. Dilarang spam, akun ganda, self-referral, atau transaksi fiktif.',
+          '5. Kepatuhan UU PDP No. 27 Tahun 2022 dan hubungan kemitraan independen.',
+        ]).map((c: string, idx: number) => (
+          <Text key={idx} style={styles.mutedText}>{c}</Text>
+        ))}
+
+        <View style={styles.prefRow}>
+          {[
+            { id: 'affiliate_partner', label: 'Affiliate' },
+            { id: 'community_ambassador', label: 'Ambassador' },
+            { id: 'merchant_partner', label: 'Merchant' },
+            { id: 'ecosystem_builder', label: 'Builder' },
+          ].map((r) => (
+            <TouchableOpacity
+              key={r.id}
+              style={[styles.chipBtn, mouRole === r.id && styles.chipBtnActive]}
+              onPress={() => setMouRole(r.id as any)}
+            >
+              <Text style={styles.chipText}>{r.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TextInput
+          value={mouFullName}
+          onChangeText={setMouFullName}
+          placeholder="Nama Lengkap sesuai identitas"
+          placeholderTextColor={coffee.muted}
+          style={styles.input}
+        />
+        <TextInput
+          value={mouSignature}
+          onChangeText={setMouSignature}
+          placeholder="Tanda Tangan Digital (ketik ulang nama lengkap)"
+          placeholderTextColor={coffee.muted}
+          style={styles.input}
+        />
+        <TouchableOpacity style={styles.checkRow} onPress={() => setMouAgreed((v) => !v)}>
+          <Ionicons name={mouAgreed ? 'checkbox' : 'square-outline'} size={20} color={coffee.accent} />
+          <Text style={[styles.mutedText, { flex: 1 }]}>
+            Saya telah membaca, memahami, dan menyetujui seluruh klausul MoU Digital Ekosistem ngopi.top.
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.primaryBtn} onPress={handleSignMou} disabled={busyAction === 'mou'}>
+          <Text style={styles.btnText}>
+            {busyAction === 'mou' ? 'Menyimpan MoU...' : 'Tandatangani MoU Secara Digital'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       {/* 7. Keanggotaan Komunitas & BoomBoom */}
       <View style={styles.card}>
-        <Text style={styles.cardLabel}>7. Keanggotaan Komunitas & Layanan Terhubung</Text>
+        <Text style={styles.cardLabel}>7. Keanggotaan Komunitas & Integrasi BoomBoom (bamboochain.id)</Text>
         <Text style={styles.bodyText}>
           Status Komunitas: {dashboard?.my_community?.membership_tier || 'komunitas'} | Koperasi: {dashboard?.my_community?.cooperative_status || 'not_enrolled'}
+        </Text>
+        <Text style={styles.mutedText}>
+          Alur Integrasi BoomBoom: Saat mendaftar/login di BoomBoom (bamboochain.id), Nomor Ngopi (#{dashboard?.my_identity?.ngopi_number || '-'}) dan Email Ngopi ({dashboard?.my_identity?.ngopi_email || '-'}) digunakan sebagai identitas SSO terverifikasi (scope: identity:basic, identity:email, boomboom:role_hint). Verifikasi keselamatan, SIM, KYC, dan asuransi tetap diproses mandiri oleh sistem BoomBoom.
         </Text>
         <TouchableOpacity style={styles.secondaryBtn} onPress={handleBoomBoomConsent} disabled={busyAction === 'boomboom'}>
           <Text style={styles.btnText}>Izinkan Identitas Ngopi untuk BoomBoom</Text>
@@ -429,5 +620,15 @@ const styles = StyleSheet.create({
   tierBadge: { color: coffee.accent, fontWeight: '700' },
   actionGroup: { flexDirection: 'row', gap: 8 },
   txRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: coffee.border },
+  syncRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  syncBadge: { color: '#22c55e', fontSize: 10, fontWeight: '700', backgroundColor: 'rgba(34,197,94,0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  diagramRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, flexWrap: 'wrap', marginVertical: 6 },
+  diagramBox: { flex: 1, minWidth: 95, backgroundColor: coffee.inset, padding: 10, borderRadius: 10, borderWidth: 1, borderColor: coffee.border, alignItems: 'center' },
+  diagramTitle: { color: coffee.secondary, fontSize: 11, fontWeight: '700' },
+  diagramValue: { color: coffee.accent, fontSize: 15, fontWeight: '800', marginVertical: 2 },
+  infoBlock: { backgroundColor: coffee.inset, padding: 12, borderRadius: 10, borderWidth: 1, borderColor: coffee.border, gap: 4 },
+  infoTitle: { color: coffee.accent, fontSize: 13, fontWeight: '700', marginBottom: 2 },
+  mouSignedBox: { backgroundColor: 'rgba(34,197,94,0.10)', padding: 12, borderRadius: 10, borderWidth: 1, borderColor: '#22c55e', gap: 4 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
 });
 
