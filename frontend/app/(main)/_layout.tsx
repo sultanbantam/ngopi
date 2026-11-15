@@ -15,6 +15,7 @@ import ConsentBannerModal from '../../src/components/ConsentBannerModal';
 import ModerationAlertModal from '../../src/components/ModerationAlertModal';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 import NgopAIFloatingAgent from '../../src/components/NgopAIFloatingAgent';
+import { useCekkesPassiveAgent } from '../../src/components/cekkes/useCekkesPassiveAgent';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -65,6 +66,7 @@ export default function MainLayout() {
   const { width } = useWindowDimensions();
   const isLargeScreen = width > 768;
   const pathname = usePathname();
+  useCekkesPassiveAgent(true);
 
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);

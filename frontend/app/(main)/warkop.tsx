@@ -1225,6 +1225,30 @@ export default function BambupediaRoom() {
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
 
+            {/* ceKKes (Cek Kesehatan Mandiri) Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: '#10B981', backgroundColor: 'rgba(16, 185, 129, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                router.push('/(main)/cekkes' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                <Ionicons name="medkit-outline" size={22} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>ceKKes (Cek Kesehatan Mandiri)</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#10B981' }]}>
+                    <Text style={[styles.offlineBadgeText, { color: '#052e16', fontWeight: '800' }]}>AGENT ACTIVE</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>Pemantauan pasif 4 aktivitas, 6-sensor aktif, & resep OTC/Herbal</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#10B981" />
+            </TouchableOpacity>
+
             {/* Featured Merchant Dashboard (Bisnis Cafe) */}
             <TouchableOpacity
               style={[styles.featuredHtCard, { borderColor: 'rgba(99, 102, 241, 0.4)', backgroundColor: 'rgba(99, 102, 241, 0.08)', marginTop: 8 }]}

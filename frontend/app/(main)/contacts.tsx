@@ -664,6 +664,13 @@ export default function ContactsScreen() {
           <Ionicons name="wallet-outline" size={18} color={coffee.accent} />
           <Text style={[styles.gameLobbyButtonText, { color: coffee.accent }]}>NGOPINOMIC</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.gameLobbyButton, { borderColor: '#10B981', backgroundColor: '#1A120B' }]}
+          onPress={() => router.push('/(main)/cekkes' as any)}
+        >
+          <Ionicons name="medkit-outline" size={18} color="#10B981" />
+          <Text style={[styles.gameLobbyButtonText, { color: '#10B981' }]}>ceKKes (Cek Kesehatan Mandiri)</Text>
+        </TouchableOpacity>
         {(currentRole === 'admin' || currentRole === 'superadmin') && (
           <TouchableOpacity
             style={styles.adminButton}
