@@ -96,16 +96,22 @@ export default function NgopinomicDashboardScreen() {
     setBusyAction('referral');
     try {
       const headers = await getAuthHeaders();
-      await axios.post(
+      const res = await axios.post(
         `${API_URL}/ngopinomic/referral/register`,
         { referral_code: referralInput.trim() },
         { headers }
       );
+      const msg =
+        res.data?.message ||
+        'Berhasil! Kode undangan terdaftar dan +50 Poin Ngopi telah ditambahkan ke pengundang.';
       setReferralInput('');
-      setStatusMessage('Kode undangan berhasil didaftarkan.');
+      setStatusMessage(msg);
+      Alert.alert('Undang Teman Berhasil', msg);
       await loadAll();
     } catch (err: any) {
-      setStatusMessage(err?.response?.data?.error || 'Gagal mendaftarkan kode undangan.');
+      const errMsg = err?.response?.data?.error || 'Gagal mendaftarkan kode undangan.';
+      setStatusMessage(errMsg);
+      Alert.alert('Info', errMsg);
     } finally {
       setBusyAction(null);
     }
@@ -308,6 +314,15 @@ export default function NgopinomicDashboardScreen() {
           </View>
         </View>
         <Text style={styles.mutedText}>{dashboard?.my_commissions?.explanation}</Text>
+        <View style={styles.infoBlock}>
+          <Text style={styles.infoTitle}>Sumber Komisi & Status Pencairan</Text>
+          <Text style={styles.mutedText}>
+            • Sumber Terintegrasi: Pembelian ID/Email Ngopi Premium, transaksi promo/merchant warkop, kampanye Promoter, serta referral Level 1 (20% NDR) & Level 2 (5% NDR).
+          </Text>
+          <Text style={styles.mutedText}>
+            • Pencairan Rupiah: Komisi masuk "Menunggu Penyelesaian" selama 7 hari (antisipasi refund) sebelum menjadi "Siap Dicairkan". Pencairan dana ke rekening/e-wallet saat ini terkunci menunggu integrasi payment gateway disbursement & verifikasi KYC; Anda juga dapat memilih preferensi Poin Ngopi.
+          </Text>
+        </View>
         <View style={styles.prefRow}>
           <Text style={styles.mutedText}>Preferensi Penerimaan:</Text>
           <TouchableOpacity
@@ -365,18 +380,27 @@ export default function NgopinomicDashboardScreen() {
         <TouchableOpacity style={styles.secondaryBtn} onPress={handleCopyReferral}>
           <Text style={styles.btnText}>Salin Tautan Undang Teman</Text>
         </TouchableOpacity>
-        <View style={styles.inputRow}>
-          <TextInput
-            value={referralInput}
-            onChangeText={setReferralInput}
-            placeholder="Masukkan kode pengundang (opsional)"
-            placeholderTextColor={coffee.muted}
-            style={styles.input}
-          />
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleRegisterReferral} disabled={busyAction === 'referral'}>
-            <Text style={styles.btnText}>Pakai</Text>
-          </TouchableOpacity>
-        </View>
+        {dashboard?.my_referral?.invited_by ? (
+          <View style={styles.mouSignedBox}>
+            <Text style={styles.infoTitle}>Undangan Terkonfirmasi</Text>
+            <Text style={styles.bodyText}>
+              Anda sudah berhasil terhubung menggunakan kode profil: {dashboard.my_referral.invited_by.referral_code} (+50 Poin Ngopi telah ditambahkan ke pengundang).
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.inputRow}>
+            <TextInput
+              value={referralInput}
+              onChangeText={setReferralInput}
+              placeholder="Masukkan kode profil atau tautan (mis. albantani)"
+              placeholderTextColor={coffee.muted}
+              style={styles.input}
+            />
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleRegisterReferral} disabled={busyAction === 'referral'}>
+              <Text style={styles.btnText}>Pakai</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       {/* Infografis & Diagram Skema Penghasilan NGOPINOMIC */}

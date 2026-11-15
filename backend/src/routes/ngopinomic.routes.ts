@@ -147,9 +147,14 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
       latestMou = null;
     }
 
-    const referralCount = await prisma.referralRelationship.count({
-      where: { referrer_user_id: user.id },
-    });
+    const [referralCount, invitedByRel] = await Promise.all([
+      prisma.referralRelationship.count({
+        where: { referrer_user_id: user.id },
+      }),
+      prisma.referralRelationship.findUnique({
+        where: { referred_user_id: user.id },
+      }),
+    ]);
 
     res.status(200).json({
       success: true,
@@ -197,6 +202,13 @@ router.get('/dashboard', async (req: AuthRequest, res: Response): Promise<void> 
         profile_link: profileLink,
         referral_link: `https://ngopi.top/register?ref=${encodeURIComponent(canonicalCode)}`,
         total_invited: referralCount,
+        invited_by: invitedByRel
+          ? {
+              referral_code: invitedByRel.referral_code_used,
+              status: invitedByRel.status,
+              created_at: invitedByRel.created_at,
+            }
+          : null,
         synced_with_profile_link: true,
       },
       my_community: community,
@@ -374,10 +386,38 @@ router.post('/referral/register', async (req: AuthRequest, res: Response): Promi
       res.status(400).json({ error: 'referral_code wajib diisi.' });
       return;
     }
-    const rel = await prisma.$transaction(async (tx: any) =>
-      registerReferral(tx, { referredUserId: user.id, referralCode: referral_code })
-    );
-    res.status(200).json({ success: true, relationship: rel });
+    const rel = await prisma.$transaction(async (tx: any) => {
+      const created = await registerReferral(tx, { referredUserId: user.id, referralCode: referral_code });
+      await earnPoints(tx, {
+        userId: created.referrer_user_id,
+        activityCode: 'referral_reward',
+        amount: 50,
+        idempotencyKey: `referral:${created.referrer_user_id}:${user.id}`,
+        description: `Bonus undang teman menggunakan kode profil ${created.referral_code_used} (+50 Poin Ngopi)`,
+        metadata: { referred_user_id: user.id, referral_code: created.referral_code_used },
+      });
+      return created;
+    });
+
+    pointsEconomyService.earnReferralReward(rel.referrer_user_id, user.id);
+
+    const referrerUser = await prisma.user.findUnique({
+      where: { id: rel.referrer_user_id },
+      select: { username: true, display_name: true },
+    });
+    const recommenderLabel = referrerUser?.display_name || referrerUser?.username || rel.referral_code_used;
+    const message = `Berhasil! Anda terhubung menggunakan kode profil "${rel.referral_code_used}" (${recommenderLabel}). +50 Poin Ngopi telah ditambahkan ke pengundang.`;
+
+    res.status(200).json({
+      success: true,
+      relationship: rel,
+      points_awarded: 50,
+      recommender: {
+        referral_code: rel.referral_code_used,
+        name: recommenderLabel,
+      },
+      message,
+    });
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Gagal mendaftarkan referral.' });
   }

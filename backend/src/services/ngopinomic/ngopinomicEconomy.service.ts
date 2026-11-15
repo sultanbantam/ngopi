@@ -481,11 +481,29 @@ export async function redeemPoints(
   return { transaction: tx, idempotent: false };
 }
 
+export function extractReferralCode(input: string): string {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed) || trimmed.includes('ngopi.top/')) {
+    try {
+      const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+      const url = new URL(normalized);
+      const refParam = url.searchParams.get('ref');
+      if (refParam && refParam.trim()) return refParam.trim();
+      const segs = url.pathname.split('/').filter(Boolean);
+      if (segs.length > 0) return decodeURIComponent(segs[segs.length - 1]);
+    } catch {
+      // Fallback to raw trimmed string
+    }
+  }
+  return trimmed.replace(/^@/, '');
+}
+
 export async function registerReferral(
   db: any = defaultPrisma,
   params: { referredUserId: string; referralCode: string }
 ) {
-  const raw = params.referralCode.trim();
+  const raw = extractReferralCode(params.referralCode);
   const referrerProfile =
     (await db.affiliateProfile.findUnique({ where: { referral_code: raw } })) ||
     (await db.affiliateProfile.findUnique({ where: { referral_code: raw.toLowerCase() } })) ||
