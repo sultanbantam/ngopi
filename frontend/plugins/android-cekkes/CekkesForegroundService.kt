@@ -3,6 +3,7 @@ package top.ngopi.app.cekkes
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -24,10 +25,13 @@ class CekkesForegroundService : Service(), SensorEventListener {
   private var lastMag: Float = 9.81f
   private var crossCount: Int = 0
   private var windowStartMs: Long = 0L
+  private var lastAlertNotifMs: Long = 0L
 
   companion object {
     const val CHANNEL_ID = "cekkes_health_monitor"
+    const val ALERT_CHANNEL_ID = "cekkes_health_alerts"
     const val NOTIF_ID = 4301
+    const val ALERT_NOTIF_ID = 4302
     const val PREFS_NAME = "cekkes_native_prefs"
   }
 
@@ -86,6 +90,15 @@ class CekkesForegroundService : Service(), SensorEventListener {
         .putLong("updatedAtMs", now)
         .apply()
 
+      // Send local status-bar push notification when strain is detected (2h cooldown)
+      if ((pitchDeg < 35 || hz >= 6.5f) && (now - lastAlertNotifMs >= 7_200_000L)) {
+        lastAlertNotifMs = now
+        postAlertNotification(
+          "dr. ceKKes AI — Pengingat Kesehatan",
+          "Terdeteksi sudut leher ${pitchDeg}° & getaran ${String.format("%.1f", hz)} Hz. Ketuk untuk istirahat & cek saran."
+        )
+      }
+
       if (elapsedSec >= 5.0) {
         crossCount = 0
         windowStartMs = now
@@ -108,15 +121,53 @@ class CekkesForegroundService : Service(), SensorEventListener {
 
   private fun createNotificationChannel() {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      val mgr = getSystemService(NotificationManager::class.java)
       val channel = NotificationChannel(
         CHANNEL_ID,
         "ceKKes Health Sensor Monitor",
         NotificationManager.IMPORTANCE_LOW
       )
       channel.description = "Pemantauan postur & getaran IMU untuk kesehatan mandiri ceKKes."
-      val mgr = getSystemService(NotificationManager::class.java)
       mgr?.createNotificationChannel(channel)
+
+      val alertChannel = NotificationChannel(
+        ALERT_CHANNEL_ID,
+        "ceKKes Health Alerts",
+        NotificationManager.IMPORTANCE_DEFAULT
+      )
+      alertChannel.description = "Notifikasi peringatan kelelahan & jadwal kesehatan ceKKes AI."
+      mgr?.createNotificationChannel(alertChannel)
     }
+  }
+
+  private fun postAlertNotification(title: String, body: String) {
+    val launchIntent = packageManager.getLaunchIntentForPackage(packageName)
+    val pending = if (launchIntent != null) {
+      PendingIntent.getActivity(
+        this,
+        101,
+        launchIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+      )
+    } else null
+
+    val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+      Notification.Builder(this, ALERT_CHANNEL_ID)
+    } else {
+      @Suppress("DEPRECATION")
+      Notification.Builder(this)
+    }
+    builder
+      .setContentTitle(title)
+      .setContentText(body)
+      .setStyle(Notification.BigTextStyle().bigText(body))
+      .setSmallIcon(android.R.drawable.ic_dialog_info)
+      .setAutoCancel(true)
+    if (pending != null) {
+      builder.setContentIntent(pending)
+    }
+    val mgr = getSystemService(Context.NOTIFICATION_SERVICE) as? NotificationManager
+    mgr?.notify(ALERT_NOTIF_ID, builder.build())
   }
 
   private fun buildNotification(): Notification {

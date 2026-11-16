@@ -11,6 +11,7 @@ const PERMISSIONS = [
   'android.permission.FOREGROUND_SERVICE_HEALTH',
   'android.permission.HIGH_SAMPLING_RATE_SENSORS',
   'android.permission.PACKAGE_USAGE_STATS',
+  'android.permission.POST_NOTIFICATIONS',
 ];
 
 function withCekkesAndroidSensors(config) {
@@ -93,15 +94,22 @@ function withCekkesAndroidSensors(config) {
     let contents = cfg.modResults.contents;
     if (!contents.includes('top.ngopi.app.cekkes.CekkesBackgroundPackage')) {
       contents = contents.replace(
-        /import\s+expo\.modules\.ApplicationLifecycleDispatcher/,
-        'import top.ngopi.app.cekkes.CekkesBackgroundPackage\nimport expo.modules.ApplicationLifecycleDispatcher'
+        /^(package\s+[^\r\n]+)/m,
+        '$1\n\nimport top.ngopi.app.cekkes.CekkesBackgroundPackage'
       );
     }
-    if (!contents.includes('add(CekkesBackgroundPackage())')) {
-      contents = contents.replace(
-        /PackageList\(this\)\.packages\.apply\s*\{/,
-        'PackageList(this).packages.apply {\n              add(CekkesBackgroundPackage())'
-      );
+    if (!contents.includes('CekkesBackgroundPackage()')) {
+      if (/PackageList\(this\)\.packages\.apply\s*\{/.test(contents)) {
+        contents = contents.replace(
+          /PackageList\(this\)\.packages\.apply\s*\{/,
+          'PackageList(this).packages.apply {\n              add(CekkesBackgroundPackage())'
+        );
+      } else if (/val\s+packages\s*=\s*PackageList\(this\)\.packages/.test(contents)) {
+        contents = contents.replace(
+          /(val\s+packages\s*=\s*PackageList\(this\)\.packages[^\r\n]*)/,
+          '$1\n            packages.add(CekkesBackgroundPackage())'
+        );
+      }
     }
     cfg.modResults.contents = contents;
     return cfg;
