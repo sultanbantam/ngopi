@@ -10,6 +10,15 @@ import {
 import { CarePlanResult, DetectedFinding } from './medicalKnowledgeBase';
 import { analyzeVocalPcm } from './sensorProcessors';
 import DoctorVoicePlayer, { CekkesLang } from './DoctorVoicePlayer';
+import {
+  checkAndroidUsageStatsPermission,
+  isCekkesNativeAndroidAvailable,
+  openAndroidUsageStatsSettings,
+  readAndroidImuMetrics,
+  readAndroidUsageStatsSummary,
+  startAndroidForegroundImu,
+  stopAndroidForegroundImu,
+} from './nativeAndroidBridge';
 
 interface PassiveDashboardProps {
   lang: CekkesLang;
@@ -50,7 +59,67 @@ export default function PassiveDashboard({
   const [sandboxText, setSandboxText] = useState('');
   const [micSimActive, setMicSimActive] = useState(false);
   const [sensorMsg, setSensorMsg] = useState<string | null>(null);
+  const [nativeBgActive, setNativeBgActive] = useState(false);
+  const [nativeStatusMsg, setNativeStatusMsg] = useState<string | null>(null);
   const lastTypeTimeRef = useRef<number>(Date.now());
+
+  const handleToggleNativeBg = async () => {
+    if (!isCekkesNativeAndroidAvailable) {
+      setNativeStatusMsg(
+        lang === 'en'
+          ? 'Cross-app background IMU & UsageStats run on the Android APK (top.ngopi.app). Web mode monitors while ngopi.top is open.'
+          : 'Layanan latar belakang IMU & UsageStats lintas-aplikasi berjalan di APK Android (top.ngopi.app). Mode Web memantau otomatis saat ngopi.top terbuka.'
+      );
+      return;
+    }
+    if (nativeBgActive) {
+      await stopAndroidForegroundImu();
+      setNativeBgActive(false);
+      setNativeStatusMsg(lang === 'en' ? 'Background IMU stopped.' : 'Sensor latar belakang IMU dihentikan.');
+    } else {
+      const ok = await startAndroidForegroundImu();
+      setNativeBgActive(ok);
+      setNativeStatusMsg(
+        ok
+          ? lang === 'en'
+            ? 'Foreground IMU active (monitoring vibration & posture across apps).'
+            : 'Foreground IMU aktif (memantau getaran & postur lintas aplikasi).'
+          : 'Gagal memulai Foreground Service.'
+      );
+    }
+  };
+
+  const handleSyncNativeUsageAndImu = async () => {
+    if (!isCekkesNativeAndroidAvailable) return;
+    const hasPerm = await checkAndroidUsageStatsPermission();
+    if (!hasPerm) {
+      await openAndroidUsageStatsSettings();
+      setNativeStatusMsg(
+        lang === 'en'
+          ? 'Please grant Usage Access for Ngopi in Android Settings, then tap Sync again.'
+          : 'Aktifkan izin Akses Penggunaan (Usage Access) untuk Ngopi di Pengaturan Android, lalu tekan Sinkronkan lagi.'
+      );
+      return;
+    }
+    const [imu, usage] = await Promise.all([
+      readAndroidImuMetrics(),
+      readAndroidUsageStatsSummary(16),
+    ]);
+    onUpdateTelemetry((prev) => ({
+      ...prev,
+      tremorHz: imu ? Number(imu.tremorHz.toFixed(1)) : prev.tremorHz,
+      posturePitchDeg: imu ? imu.posturePitchDeg : prev.posturePitchDeg,
+      screenTimeHours: usage
+        ? Number((usage.totalScreenMinutes / 60).toFixed(2))
+        : prev.screenTimeHours,
+      activePreset: 'live',
+    }));
+    setNativeStatusMsg(
+      lang === 'en'
+        ? `Synced: ${usage?.totalScreenMinutes ?? 0} mins across ${usage?.activeAppCount ?? 0} apps.`
+        : `Tersinkron: ${usage?.totalScreenMinutes ?? 0} mnt layar di ${usage?.activeAppCount ?? 0} aplikasi.`
+    );
+  };
 
   // Dynamic 24h Wellness Score (0 - 100)
   const wellnessScore = useMemo(() => {
@@ -455,6 +524,63 @@ export default function PassiveDashboard({
           {sensorMsg && <Text style={[styles.mutedText, { color: '#38BDF8' }]}>{sensorMsg}</Text>}
         </View>
       )}
+
+      {/* Compact Android Native Background Monitor & Wake-to-Sleep Info */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sectionTitle}>
+              {isCekkesNativeAndroidAvailable
+                ? lang === 'en'
+                  ? 'Android Background Monitor (IMU + UsageStats)'
+                  : 'Monitor Latar Belakang Android (IMU + UsageStats)'
+                : lang === 'en'
+                ? 'Cross-App & Sleep Cycle Mode'
+                : 'Mode Lintas-Aplikasi & Siklus Tidur'}
+            </Text>
+            <Text style={styles.mutedText}>
+              {lang === 'en'
+                ? `Timezone: ${telemetry.localTimezone || 'Local'}${
+                    telemetry.estimatedSleepHours
+                      ? ` • Last rest gap: ${telemetry.estimatedSleepHours}h`
+                      : ''
+                  }`
+                : `Zona waktu: ${telemetry.localTimezone || 'Lokal'}${
+                    telemetry.estimatedSleepHours
+                      ? ` • Jeda istirahat: ${telemetry.estimatedSleepHours} jam`
+                      : ''
+                  }`}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TouchableOpacity style={styles.stepBtn} onPress={handleToggleNativeBg}>
+              <Text style={styles.stepText}>
+                {isCekkesNativeAndroidAvailable
+                  ? nativeBgActive
+                    ? lang === 'en'
+                      ? 'Stop IMU'
+                      : 'Stop IMU'
+                    : lang === 'en'
+                    ? 'Start IMU'
+                    : 'Aktifkan IMU'
+                  : lang === 'en'
+                  ? 'APK Info'
+                  : 'Info APK'}
+              </Text>
+            </TouchableOpacity>
+            {isCekkesNativeAndroidAvailable && (
+              <TouchableOpacity style={styles.cyanBtnSmall} onPress={handleSyncNativeUsageAndImu}>
+                <Text style={styles.cyanBtnSmallText}>
+                  {lang === 'en' ? 'Sync Usage' : 'Sinkronkan'}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+        {nativeStatusMsg && (
+          <Text style={[styles.mutedText, { color: '#38BDF8' }]}>{nativeStatusMsg}</Text>
+        )}
+      </View>
 
       {/* 3. Automatic 24h Care Recommendations Preview (Right on Tab 1) */}
       <View style={styles.card}>

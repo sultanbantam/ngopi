@@ -63,7 +63,8 @@
       ],
       "expo-font",
       "expo-secure-store",
-      "expo-asset"
+      "expo-asset",
+      "./plugins/withCekkesAndroidSensors"
     ],
     "extra": {
       "router": {},
