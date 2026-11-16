@@ -21,6 +21,7 @@ interface CekkesNativeModuleInterface {
   getUsageStatsSummary(hoursBack: number): Promise<NativeUsageStatsSummary>;
   speakText?(text: string, langCode: string): Promise<boolean>;
   stopSpeaking?(): Promise<boolean>;
+  setLanguageCode?(langCode: string): Promise<boolean>;
 }
 
 const directNativeMod: CekkesNativeModuleInterface | null =
@@ -89,4 +90,8 @@ export async function speakAndroidTts(text: string, langCode: 'id' | 'en'): Prom
 
 export async function stopAndroidTts(): Promise<boolean> {
   return Boolean(await callNative<boolean>('stopSpeaking'));
+}
+
+export async function syncAndroidLanguageCode(langCode: 'id' | 'en'): Promise<boolean> {
+  return Boolean(await callNative<boolean>('setLanguageCode', [langCode]));
 }

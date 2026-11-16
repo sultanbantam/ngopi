@@ -93,10 +93,19 @@ class CekkesForegroundService : Service(), SensorEventListener {
       // Send local status-bar push notification when strain is detected (2h cooldown)
       if ((pitchDeg < 35 || hz >= 6.5f) && (now - lastAlertNotifMs >= 7_200_000L)) {
         lastAlertNotifMs = now
-        postAlertNotification(
-          "dr. ceKKes AI — Pengingat Kesehatan",
-          "Terdeteksi sudut leher ${pitchDeg}° & getaran ${String.format("%.1f", hz)} Hz. Ketuk untuk istirahat & cek saran."
-        )
+        val isEn = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+          .getString("langCode", "id") == "en"
+        if (isEn) {
+          postAlertNotification(
+            "dr. ceKKes AI — Health Alert",
+            "Detected neck angle ${pitchDeg}° & micro-tremor ${String.format("%.1f", hz)} Hz. Tap to rest & view self-care."
+          )
+        } else {
+          postAlertNotification(
+            "dr. ceKKes AI — Pengingat Kesehatan",
+            "Terdeteksi sudut leher ${pitchDeg}° & getaran ${String.format("%.1f", hz)} Hz. Ketuk untuk istirahat & cek saran."
+          )
+        }
       }
 
       if (elapsedSec >= 5.0) {
@@ -171,6 +180,8 @@ class CekkesForegroundService : Service(), SensorEventListener {
   }
 
   private fun buildNotification(): Notification {
+    val isEn = getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+      .getString("langCode", "id") == "en"
     val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       Notification.Builder(this, CHANNEL_ID)
     } else {
@@ -178,8 +189,11 @@ class CekkesForegroundService : Service(), SensorEventListener {
       Notification.Builder(this)
     }
     return builder
-      .setContentTitle("ceKKes AI Aktif")
-      .setContentText("Memantau postur & getaran IMU secara lokal (tanpa merekam isi).")
+      .setContentTitle(if (isEn) "ceKKes AI Active" else "ceKKes AI Aktif")
+      .setContentText(
+        if (isEn) "Monitoring posture & IMU vibration locally (zero content)."
+        else "Memantau postur & getaran IMU secara lokal (tanpa merekam isi)."
+      )
       .setSmallIcon(android.R.drawable.ic_menu_compass)
       .setOngoing(true)
       .build()

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PassiveTelemetryState } from './useCekkesPassiveAgent';
 import { CarePlanResult, DetectedFinding } from './medicalKnowledgeBase';
 import { speakAndroidTts, stopAndroidTts, isCekkesNativeAndroidAvailableCheck } from './nativeAndroidBridge';
+import { MoveDailySummary } from './moveProcessors';
 
 export type CekkesLang = 'id' | 'en';
 
@@ -11,7 +12,8 @@ export function buildDoctorBriefingScript(
   lang: CekkesLang,
   telemetry: PassiveTelemetryState,
   findings: DetectedFinding[],
-  carePlan: CarePlanResult
+  carePlan: CarePlanResult,
+  moveSummary?: MoveDailySummary
 ): string {
   const hr = Math.round(telemetry.passiveHeartRateBpm);
   const fatigue = Math.round(telemetry.fingerFatiguePct);
@@ -38,7 +40,17 @@ export function buildDoctorBriefingScript(
         ? `For early self-care today, I recommend ${otcNames || 'adequate screen rest'}, supported by ${herbalNames || 'warm hydration'} and ${carePlan.nutrition.waterMinMl} milliliters of water.`
         : `Keep up your daily hydration target of ${carePlan.nutrition.waterMinMl} milliliters and take a 20-20-20 eye break.`;
 
-    return `Hello, I am your ceKKes Digital Health Assistant. Based on 24-hour passive monitoring of how you hold your phone, touch the screen, gaze at the display, and speak during calls: your passive heart rate is ${hr} BPM, and ${issueSummary} ${careSummary} If you want to examine a specific symptom on your chest, abdomen, eyes, mouth, or skin, tap the Deep Check tab below.`;
+    const moveNoteEn = moveSummary
+      ? moveSummary.steps >= 7000
+        ? ` You have also logged ${moveSummary.steps.toLocaleString('en-US')} steps (${(
+            moveSummary.walkingKm + moveSummary.runningKm
+          ).toFixed(1)} kilometers) and burned ${moveSummary.caloriesKcal} kilocalories, so extra electrolytes and calf recovery care are included.`
+        : moveSummary.steps > 0 && moveSummary.steps < 2000 && telemetry.screenTimeHours >= 4
+        ? ` Your step count is still low at ${moveSummary.steps} steps, so try a 15-minute brisk walk to refresh circulation.`
+        : ''
+      : '';
+
+    return `Hello, I am your ceKKes Digital Health Assistant. Based on 24-hour passive monitoring of how you hold your phone, touch the screen, gaze at the display, and speak during calls: your passive heart rate is ${hr} BPM, and ${issueSummary}${moveNoteEn} ${careSummary} If you want to examine a specific symptom on your chest, abdomen, eyes, mouth, or skin, tap the Deep Check tab below.`;
   }
 
   const issueId =
@@ -51,7 +63,17 @@ export function buildDoctorBriefingScript(
       ? `Untuk penanganan awal hari ini, saya merekomendasikan istirahat layar sejenak, ${otcNames || 'hidrasi cukup'}, serta seduhan herbal ${herbalNames || 'air hangat'} dengan target minum minimal ${carePlan.nutrition.waterMinMl} mililiter.`
       : `Pertahankan minum air putih minimal ${carePlan.nutrition.waterMinMl} mililiter hari ini dan lakukan peregangan ringan setiap satu jam.`;
 
-  return `Halo, saya dokter digital ceKKes Anda. Berdasarkan pemantauan otomatis selama 24 jam dari aktivitas Anda memegang handphone, mengetik di layar, menatap layar, dan berbicara di telepon: saat ini detak jantung pasif Anda ${hr} kali per menit, dan ${issueId} ${careId} Jika Anda merasakan keluhan lain di dada, perut, kulit, atau tenggorokan, silakan sentuh menu Cek Detail di bawah untuk pemeriksaan langsung dengan sensor handphone Anda.`;
+  const moveNoteId = moveSummary
+    ? moveSummary.steps >= 7000
+      ? ` Anda juga tercatat aktif bergerak sebanyak ${moveSummary.steps.toLocaleString('id-ID')} langkah sejauh ${(
+          moveSummary.walkingKm + moveSummary.runningKm
+        ).toFixed(1)} kilometer dengan ${moveSummary.caloriesKcal} kilokalori terbakar, sehingga tambahan elektrolit dan pemulihan otot betis sudah saya siapkan.`
+      : moveSummary.steps > 0 && moveSummary.steps < 2000 && telemetry.screenTimeHours >= 4
+      ? ` Jumlah langkah Anda hari ini masih rendah (${moveSummary.steps} langkah), disarankan berjalan kaki santai 15 menit untuk melancarkan peredaran darah.`
+      : ''
+    : '';
+
+  return `Halo, saya dokter digital ceKKes Anda. Berdasarkan pemantauan otomatis selama 24 jam dari aktivitas Anda memegang handphone, mengetik di layar, menatap layar, dan berbicara di telepon: saat ini detak jantung pasif Anda ${hr} kali per menit, dan ${issueId}${moveNoteId} ${careId} Jika Anda merasakan keluhan lain di dada, perut, kulit, atau tenggorokan, silakan sentuh menu Cek Detail di bawah untuk pemeriksaan langsung dengan sensor handphone Anda.`;
 }
 
 export function speakDoctorText(

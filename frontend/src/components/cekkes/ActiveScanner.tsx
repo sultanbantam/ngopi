@@ -20,6 +20,7 @@ export type SensorModuleId = 'ppg' | 'ocular' | 'chest_abdomen' | 'voice' | 'vis
 interface ActiveScannerProps {
   lang: CekkesLang;
   activeFindings: DetectedFinding[];
+  totalFindingsCount?: number;
   onUpsertFinding: (finding: DetectedFinding) => void;
   onSpeakResult?: (message: string) => void;
   onUpdateTelemetry?: (metrics: {
@@ -41,70 +42,72 @@ const SENSOR_CARDS: Array<{
   subEn: string;
   color: string;
 }> = [
-  {
-    id: 'ppg',
-    emoji: '👆',
-    titleId: 'Sentuhan Jari',
-    titleEn: 'Fingertip Pulse',
-    subId: 'Nadi PPG & Motorik',
-    subEn: 'PPG & Finger Tap',
-    color: '#38BDF8',
-  },
-  {
-    id: 'ocular',
-    emoji: '👁️',
-    titleId: 'Tatapan & Mata',
-    titleEn: 'Eye & Blink Test',
-    subId: 'Uji Tahan Kedip',
-    subEn: 'Tear Film (TBUT)',
-    color: '#10B981',
-  },
-  {
-    id: 'chest_abdomen',
-    emoji: '❤️',
-    titleId: 'Dada, Perut & Ginjal',
-    titleEn: 'Chest & Abdomen',
-    subId: 'SCG, Usus & Ginjal',
-    subEn: 'SCG, Bowel & Kidney',
-    color: '#FB7185',
-  },
-  {
-    id: 'voice',
-    emoji: '🗣️',
-    titleId: 'Suara & Keluhan',
-    titleEn: 'Voice & Symptoms',
-    subId: 'Rekam 5d & NLP',
-    subEn: '5s Voice & NLP',
-    color: '#A78BFA',
-  },
-  {
-    id: 'vision',
-    emoji: '📸',
-    titleId: 'Foto Mata/Mulut/Kulit',
-    titleEn: 'Clinical Photo',
-    subId: 'Kamera & Galeri',
-    subEn: 'Camera & Upload',
-    color: '#D4AF37',
-  },
-  {
-    id: 'thermal',
-    emoji: '🌡️',
-    titleId: 'Terapi Hangat 43°C',
-    titleEn: '43°C Heat Guide',
-    subId: 'Kutil & Batas Aman',
-    subEn: 'Safe Thermal Timer',
-    color: '#F59E0B',
-  },
-];
+    {
+      id: 'ppg',
+      emoji: '👆',
+      titleId: 'Sentuhan Jari',
+      titleEn: 'Fingertip Pulse',
+      subId: 'Nadi PPG & Motorik',
+      subEn: 'PPG & Finger Tap',
+      color: '#38BDF8',
+    },
+    {
+      id: 'ocular',
+      emoji: '👁️',
+      titleId: 'Tatapan & Mata',
+      titleEn: 'Eye & Blink Test',
+      subId: 'Uji Tahan Kedip',
+      subEn: 'Tear Film (TBUT)',
+      color: '#10B981',
+    },
+    {
+      id: 'chest_abdomen',
+      emoji: '❤️',
+      titleId: 'Dada, Perut & Ginjal',
+      titleEn: 'Chest & Abdomen',
+      subId: 'SCG, Usus & Ginjal',
+      subEn: 'SCG, Bowel & Kidney',
+      color: '#FB7185',
+    },
+    {
+      id: 'voice',
+      emoji: '🗣️',
+      titleId: 'Suara & Keluhan',
+      titleEn: 'Voice & Symptoms',
+      subId: 'Rekam 5d & NLP',
+      subEn: '5s Voice & NLP',
+      color: '#A78BFA',
+    },
+    {
+      id: 'vision',
+      emoji: '📸',
+      titleId: 'Foto Mata/Mulut/Kulit',
+      titleEn: 'Clinical Photo',
+      subId: 'Kamera & Galeri',
+      subEn: 'Camera & Upload',
+      color: '#D4AF37',
+    },
+    {
+      id: 'thermal',
+      emoji: '🌡️',
+      titleId: 'Terapi Hangat 43°C',
+      titleEn: '43°C Heat Guide',
+      subId: 'Kutil & Batas Aman',
+      subEn: 'Safe Thermal Timer',
+      color: '#F59E0B',
+    },
+  ];
 
 export default function ActiveScanner({
   lang,
   activeFindings,
+  totalFindingsCount,
   onUpsertFinding,
   onSpeakResult,
   onUpdateTelemetry,
   onGoToCarePlan,
 }: ActiveScannerProps) {
+  const badgeCount = totalFindingsCount ?? activeFindings.length;
   const [selectedModule, setSelectedModule] = useState<SensorModuleId | null>(null);
 
   // Modul 1: PPG & Finger Tap
@@ -164,8 +167,8 @@ export default function ActiveScanner({
         tapCount >= 45
           ? 'Normal / Cepat'
           : tapCount >= 28
-          ? 'Sedang (Agak Lelah)'
-          : 'Melambat (Kelelahan Motorik)';
+            ? 'Sedang (Agak Lelah)'
+            : 'Melambat (Kelelahan Motorik)';
       const msg = `Finger Tap 15d: ${tapCount} ketukan (${speed}).`;
       setPpgResult(msg);
       if (tapCount < 28) {
@@ -512,9 +515,8 @@ export default function ActiveScanner({
       });
     }
 
-    const finalMsg = `${vocalSummary || 'Audio belum terukur.'} NLP: ${
-      detectedTags.length > 0 ? detectedTags.join(', ') : 'Tidak ada gejala akut.'
-    }`;
+    const finalMsg = `${vocalSummary || 'Audio belum terukur.'} NLP: ${detectedTags.length > 0 ? detectedTags.join(', ') : 'Tidak ada gejala akut.'
+      }`;
     setNlpResult(finalMsg);
     setVoiceActive(false);
     onSpeakResult?.(finalMsg);
@@ -721,7 +723,7 @@ export default function ActiveScanner({
             </Text>
             <TouchableOpacity style={styles.goldPill} onPress={onGoToCarePlan}>
               <Text style={styles.goldPillText}>
-                {lang === 'en' ? `Plan (${activeFindings.length})` : `Resep (${activeFindings.length})`} →
+                {lang === 'en' ? `Plan (${badgeCount})` : `Resep (${badgeCount})`} →
               </Text>
             </TouchableOpacity>
           </View>
@@ -762,7 +764,7 @@ export default function ActiveScanner({
         </TouchableOpacity>
         <TouchableOpacity style={styles.goldPill} onPress={onGoToCarePlan}>
           <Text style={styles.goldPillText}>
-            {lang === 'en' ? `View Plan (${activeFindings.length})` : `Lihat Resep (${activeFindings.length})`} →
+            {lang === 'en' ? `View Plan (${badgeCount})` : `Lihat Resep (${badgeCount})`} →
           </Text>
         </TouchableOpacity>
       </View>

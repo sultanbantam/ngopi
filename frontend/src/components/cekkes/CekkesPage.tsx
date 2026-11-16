@@ -20,6 +20,8 @@ import {
 } from './DoctorVoicePlayer';
 import { useLanguage } from '../../utils/i18n';
 import { fetchCekkesServerState, queueCekkesServerSync } from './cekkesSync';
+import CekkesMoveModal, { MoveSessionResult } from './CekkesMoveModal';
+import { MoveDailySummary } from './moveProcessors';
 
 type CekkesTab = 'passive' | 'active' | 'careplan';
 const ACTIVE_FINDINGS_KEY = 'ngopi_cekkes_active_findings';
@@ -46,6 +48,39 @@ export default function CekkesPage() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
+  const [moveModalOpen, setMoveModalOpen] = useState(false);
+
+  const getMoveKey = () => `ngopi_cekkes_move_${new Date().toISOString().slice(0, 10)}`;
+  const [moveSummary, setMoveSummary] = useState<MoveDailySummary>(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const raw = window.localStorage.getItem(`ngopi_cekkes_move_${today}`);
+        if (raw) return JSON.parse(raw);
+      }
+    } catch {
+      // ignore
+    }
+    return {
+      date: today,
+      steps: 1450,
+      walkingKm: 1.0,
+      runningKm: 0,
+      durationMinutes: 14,
+      caloriesKcal: 62,
+      lastMode: 'walking',
+    };
+  });
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        window.localStorage.setItem(getMoveKey(), JSON.stringify(moveSummary));
+      }
+    } catch {
+      // ignore
+    }
+  }, [moveSummary]);
 
   const [activeFindings, setActiveFindings] = useState<DetectedFinding[]>(() => {
     try {
@@ -131,9 +166,49 @@ export default function CekkesPage() {
   );
 
   const doctorScript = useMemo(
-    () => buildDoctorBriefingScript(lang, telemetry, combinedFindings, carePlanPreview),
-    [lang, telemetry, combinedFindings, carePlanPreview]
+    () => buildDoctorBriefingScript(lang, telemetry, combinedFindings, carePlanPreview, moveSummary),
+    [lang, telemetry, combinedFindings, carePlanPreview, moveSummary]
   );
+
+  const recordMoveActivity = (res: MoveSessionResult) => {
+    const nextSteps = moveSummary.steps + res.steps;
+    const nextWalk = Number(
+      (moveSummary.walkingKm + (res.mode === 'walking' ? res.distanceKm : 0)).toFixed(2)
+    );
+    const nextRun = Number(
+      (moveSummary.runningKm + (res.mode === 'running' ? res.distanceKm : 0)).toFixed(2)
+    );
+    const nextDur = moveSummary.durationMinutes + Math.max(1, Math.round(res.durationSec / 60));
+    const nextKcal = moveSummary.caloriesKcal + res.caloriesKcal;
+
+    setMoveSummary({
+      date: new Date().toISOString().slice(0, 10),
+      steps: nextSteps,
+      walkingKm: nextWalk,
+      runningKm: nextRun,
+      durationMinutes: nextDur,
+      caloriesKcal: nextKcal,
+      lastMode: res.mode,
+    });
+
+    if (res.mode === 'running' || nextSteps >= 7000) {
+      upsertActiveFinding({
+        id: 'active-move-recovery',
+        title:
+          lang === 'en'
+            ? 'Post-Run / High-Step Recovery (+Electrolyte & Calf Care)'
+            : 'Pemulihan Pasca Lari / Langkah Tinggi (+Elektrolit & Betis)',
+        source: 'active',
+        severity: 'perhatian',
+        category: 'activity_recovery',
+        summary:
+          lang === 'en'
+            ? `Logged ${nextSteps.toLocaleString('en-US')} steps (${(nextWalk + nextRun).toFixed(1)} km, ${nextKcal} kcal). Added +600 ml electrolytes & calf recovery.`
+            : `Tercatat ${nextSteps.toLocaleString('id-ID')} langkah (${(nextWalk + nextRun).toFixed(1)} km, ${nextKcal} kcal). Tambahan +600 ml elektrolit & pemulihan betis disiapkan.`,
+      });
+    }
+    setMoveModalOpen(false);
+  };
 
   const toggleSpeak = (customText?: string) => {
     if (isSpeaking && !customText) {
@@ -217,9 +292,9 @@ export default function CekkesPage() {
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Smart 24h Proactive Notification Banner */}
+        {/* Smart 24h Proactive Notification Banner (shown ONLY on Tab 1: 24h Routine) */}
         <SmartHealthBanner
-          visible={bannerVisible}
+          visible={tab === 'passive' && bannerVisible}
           lang={lang}
           telemetry={telemetry}
           findings={combinedFindings}
@@ -239,6 +314,7 @@ export default function CekkesPage() {
             imuStatus={imuStatus}
             findings={passiveFindings}
             carePlan={carePlanPreview}
+            moveSummary={moveSummary}
             doctorScript={doctorScript}
             isSpeaking={isSpeaking}
             onToggleSpeak={() => toggleSpeak()}
@@ -246,6 +322,29 @@ export default function CekkesPage() {
               setBannerVisible(true);
               scrollRef.current?.scrollTo({ y: 0, animated: true });
             }}
+            onOpenMoveTracker={() => setMoveModalOpen(true)}
+            onSimulate5KRun={() =>
+              recordMoveActivity({
+                mode: 'running',
+                steps: 6250,
+                distanceKm: 5.0,
+                durationSec: 1860,
+                caloriesKcal: 365,
+                paceLabel: "6'12\" /km",
+                cadenceSpm: 162,
+              })
+            }
+            onSimulate30mWalk={() =>
+              recordMoveActivity({
+                mode: 'walking',
+                steps: 3400,
+                distanceKm: 2.4,
+                durationSec: 1800,
+                caloriesKcal: 135,
+                paceLabel: "12'30\" /km",
+                cadenceSpm: 113,
+              })
+            }
             onApplyPreset={applyPreset}
             onUpdateTelemetry={updateTelemetry}
             onRecordKeystroke={recordKeystrokeSample}
@@ -265,6 +364,7 @@ export default function CekkesPage() {
           <ActiveScanner
             lang={lang}
             activeFindings={activeFindings}
+            totalFindingsCount={combinedFindings.length}
             onUpsertFinding={upsertActiveFinding}
             onSpeakResult={(msg) => toggleSpeak(msg)}
             onUpdateTelemetry={(metrics) => {
@@ -344,6 +444,15 @@ export default function CekkesPage() {
           </Text>
         </TouchableOpacity>
       </View>
+
+      {/* Modal: Strava-Style ceKKes Move Tracker */}
+      <CekkesMoveModal
+        visible={moveModalOpen}
+        lang={lang}
+        weightKg={previewProfile.weightKg}
+        onClose={() => setMoveModalOpen(false)}
+        onFinishSession={recordMoveActivity}
+      />
 
       {/* Modal: Info Klinis, Asumsi & Batasan (Hack2skill Compliance) */}
       <Modal

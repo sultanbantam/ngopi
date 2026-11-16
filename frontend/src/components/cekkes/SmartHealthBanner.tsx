@@ -28,23 +28,47 @@ export default function SmartHealthBanner({
 }: SmartHealthBannerProps) {
   if (!visible) return null;
 
+  const alertParts: string[] = [];
+  if (telemetry.blinkRatePerMin < 11) {
+    alertParts.push(
+      lang === 'en'
+        ? `blink ${Math.round(telemetry.blinkRatePerMin)}/min`
+        : `kedipan ${Math.round(telemetry.blinkRatePerMin)}x/mnt`
+    );
+  }
+  if (telemetry.fingerFatiguePct >= 55) {
+    alertParts.push(
+      lang === 'en'
+        ? `finger fatigue ${Math.round(telemetry.fingerFatiguePct)}%`
+        : `kelelahan jari ${Math.round(telemetry.fingerFatiguePct)}%`
+    );
+  }
+  if (telemetry.posturePitchDeg < 35) {
+    alertParts.push(
+      lang === 'en'
+        ? `neck angle ${Math.round(telemetry.posturePitchDeg)}°`
+        : `sudut leher ${Math.round(telemetry.posturePitchDeg)}°`
+    );
+  }
+  if (telemetry.hnrDb < 14) {
+    alertParts.push(
+      lang === 'en'
+        ? `vocal HNR ${telemetry.hnrDb.toFixed(1)} dB`
+        : `kejernihan suara ${telemetry.hnrDb.toFixed(1)} dB`
+    );
+  }
+
   const summary =
     lang === 'en'
-      ? findings.length > 0
-        ? `24h screen & call scan detected ${findings.length} alert(s): blink ${Math.round(
-            telemetry.blinkRatePerMin
-          )}/min & finger fatigue ${Math.round(telemetry.fingerFatiguePct)}%.`
+      ? alertParts.length > 0
+        ? `24h screen & call scan detected ${alertParts.length} alert(s): ${alertParts.join(', ')}.`
         : `24h routine summary ready: HR ${Math.round(
             telemetry.passiveHeartRateBpm
           )} bpm, blink ${Math.round(telemetry.blinkRatePerMin)}/min, vocal ${Math.round(
             telemetry.vocalEnergyPct
           )}%.`
-      : findings.length > 0
-      ? `Dari aktivitas layar & telepon 24 jam, terdeteksi ${findings.length} perhatian: kedipan ${Math.round(
-          telemetry.blinkRatePerMin
-        )}x/mnt & kelelahan jari ${Math.round(telemetry.fingerFatiguePct)}% (${Math.round(
-          telemetry.motorResponseMs
-        )} ms).`
+      : alertParts.length > 0
+      ? `Dari aktivitas layar & telepon 24 jam, terdeteksi ${alertParts.length} perhatian: ${alertParts.join(', ')}.`
       : `Ringkasan 24 jam siap: HR pasif ${Math.round(
           telemetry.passiveHeartRateBpm
         )} bpm, kedipan ${Math.round(telemetry.blinkRatePerMin)}x/mnt, vokal ${Math.round(

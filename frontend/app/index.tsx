@@ -7,9 +7,11 @@ import { Platform } from 'react-native';
 import * as SecureStore from '../src/utils/storage';
 
 import NgopiBrand from '../src/components/NgopiBrand';
+import { useLanguage } from '../src/utils/i18n';
 
 export default function IndexScreen() {
   const { ref } = useLocalSearchParams<{ ref?: string }>();
+  const { lang, toggleLang, t } = useLanguage();
 
   useEffect(() => {
     const checkSession = async () => {
@@ -41,20 +43,38 @@ export default function IndexScreen() {
 
   return (
     <View style={styles.container}>
+      <TouchableOpacity
+        onPress={toggleLang}
+        style={{
+          position: 'absolute',
+          top: 18,
+          right: 18,
+          paddingHorizontal: 10,
+          paddingVertical: 5,
+          borderRadius: 8,
+          backgroundColor: '#261C15',
+          borderWidth: 1,
+          borderColor: '#4A3728',
+        }}
+      >
+        <Text style={{ color: '#D4AF37', fontSize: 11, fontWeight: '800' }}>
+          {lang === 'id' ? 'ID | en' : 'EN | id'}
+        </Text>
+      </TouchableOpacity>
       <NgopiBrand />
 
       <TouchableOpacity
         style={styles.button}
         onPress={() => router.push('/test-payment')}
       >
-        <Text style={styles.buttonText}>Langsung ke Test Payment</Text>
+        <Text style={styles.buttonText}>{t('Langsung ke Test Payment', 'Go to Test Payment')}</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={[styles.button, { backgroundColor: coffee.border, marginTop: 15 }]}
         onPress={() => router.push('/(auth)/login')}
       >
-        <Text style={styles.buttonText}>Masuk ke Aplikasi</Text>
+        <Text style={styles.buttonText}>{t('Masuk ke Aplikasi', 'Sign In to App')}</Text>
       </TouchableOpacity>
     </View>
   );

@@ -1219,10 +1219,10 @@ export default function BambupediaRoom() {
                 <View style={styles.featuredHtTitleRow}>
                   <Text style={styles.featuredHtTitle}>NGOPINOMIC</Text>
                   <View style={[styles.offlineBadge, { backgroundColor: coffee.button }]}>
-                    <Text style={styles.offlineBadgeText}>IDENTITAS & POIN</Text>
+                    <Text style={styles.offlineBadgeText}>{t('IDENTITAS & POIN', 'IDENTITY & PTS')}</Text>
                   </View>
                 </View>
-                <Text style={styles.featuredHtDesc}>ID Ngopi, Poin Ngopi, Undang Teman & Komisi Bersih</Text>
+                <Text style={styles.featuredHtDesc}>{t('ID Ngopi, Poin Ngopi, Undang Teman & Komisi Bersih', 'Ngopi ID, Points, Invite Friends & Net Commission')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
@@ -1241,12 +1241,12 @@ export default function BambupediaRoom() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.featuredHtTitleRow}>
-                  <Text style={styles.featuredHtTitle}>ceKKes (Cek Kesehatan Mandiri)</Text>
+                  <Text style={styles.featuredHtTitle}>{t('ceKKes (Cek Kesehatan Mandiri)', 'ceKKes (Self Health Check)')}</Text>
                   <View style={[styles.offlineBadge, { backgroundColor: '#10B981' }]}>
                     <Text style={[styles.offlineBadgeText, { color: '#052e16', fontWeight: '800' }]}>AGENT ACTIVE</Text>
                   </View>
                 </View>
-                <Text style={styles.featuredHtDesc}>Pemantauan pasif 4 aktivitas, 6-sensor aktif, & resep OTC/Herbal</Text>
+                <Text style={styles.featuredHtDesc}>{t('Pemantauan pasif 4 aktivitas, 6-sensor aktif, & resep OTC/Herbal', '24h passive health monitor, Strava Move, 6-sensor & OTC/Herbal')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#10B981" />
             </TouchableOpacity>
@@ -1265,12 +1265,12 @@ export default function BambupediaRoom() {
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.featuredHtTitleRow}>
-                  <Text style={styles.featuredHtTitle}>Merchant Dashboard (Bisnis)</Text>
+                  <Text style={styles.featuredHtTitle}>{t('Merchant Dashboard (Bisnis)', 'Merchant Dashboard (Business)')}</Text>
                   <View style={[styles.offlineBadge, { backgroundColor: '#6366f1' }]}>
                     <Text style={styles.offlineBadgeText}>CAFE OWNER</Text>
                   </View>
                 </View>
-                <Text style={styles.featuredHtDesc}>Kelola cafe partner, cetak plakat meja QR, dan pantau pengunjung</Text>
+                <Text style={styles.featuredHtDesc}>{t('Kelola cafe partner, cetak plakat meja QR, dan pantau pengunjung', 'Manage partner cafe, print QR table plaques, and track visitors')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={coffee.accent} />
             </TouchableOpacity>
@@ -1290,7 +1290,7 @@ export default function BambupediaRoom() {
                 <View style={[styles.menuIconCircle, { backgroundColor: 'rgba(212, 163, 115, 0.2)' }]}>
                   <Ionicons name="mic" size={15} color={coffee.accent} />
                 </View>
-                <Text style={[styles.menuTileText2Col, { color: coffee.accent, fontWeight: '800' }]} numberOfLines={1}>Alih Bahasa</Text>
+                <Text style={[styles.menuTileText2Col, { color: coffee.accent, fontWeight: '800' }]} numberOfLines={1}>{t('Alih Bahasa', 'Translator')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.menuTile2Col} onPress={() => router.push('/(main)/help-center')}>

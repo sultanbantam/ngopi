@@ -1,9 +1,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import * as SecureStore from './storage';
+import { syncAndroidLanguageCode } from '../components/cekkes/nativeAndroidBridge';
 
 export type AppLanguage = 'id' | 'en';
-const LANG_KEY = 'ngopi_app_language';
+const LANG_KEY = 'ngopi_lang';
+const LEGACY_LANG_KEY = 'ngopi_app_language';
 
 interface LanguageContextValue {
   lang: AppLanguage;
@@ -22,7 +24,7 @@ const LanguageContext = createContext<LanguageContextValue>({
 function readInitialLang(): AppLanguage {
   try {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      const v = window.localStorage.getItem(LANG_KEY);
+      const v = window.localStorage.getItem(LANG_KEY) || window.localStorage.getItem(LEGACY_LANG_KEY);
       if (v === 'en' || v === 'id') return v;
     }
   } catch {
@@ -52,6 +54,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       // ignore
     }
     SecureStore.setItemAsync(LANG_KEY, next).catch(() => {});
+    syncAndroidLanguageCode(next).catch(() => {});
   }, []);
 
   const toggleLang = useCallback(() => {

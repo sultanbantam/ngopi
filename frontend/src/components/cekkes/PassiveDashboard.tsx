@@ -10,6 +10,7 @@ import {
 import { CarePlanResult, DetectedFinding } from './medicalKnowledgeBase';
 import { analyzeVocalPcm } from './sensorProcessors';
 import DoctorVoicePlayer, { CekkesLang } from './DoctorVoicePlayer';
+import { MoveDailySummary } from './moveProcessors';
 import {
   checkAndroidUsageStatsPermission,
   isCekkesNativeAndroidAvailableCheck,
@@ -26,10 +27,14 @@ interface PassiveDashboardProps {
   imuStatus?: ImuPermissionStatus;
   findings: DetectedFinding[];
   carePlan: CarePlanResult;
+  moveSummary: MoveDailySummary;
   doctorScript: string;
   isSpeaking: boolean;
   onToggleSpeak: () => void;
   onTrigger24hNotification: () => void;
+  onOpenMoveTracker: () => void;
+  onSimulate5KRun: () => void;
+  onSimulate30mWalk: () => void;
   onApplyPreset: (preset: ScenarioPresetKey) => void;
   onUpdateTelemetry: (updater: (prev: PassiveTelemetryState) => PassiveTelemetryState) => void;
   onRecordKeystroke: (isBackspace: boolean, dwellMs: number, flightMs: number) => void;
@@ -44,10 +49,14 @@ export default function PassiveDashboard({
   imuStatus = 'idle',
   findings,
   carePlan,
+  moveSummary,
   doctorScript,
   isSpeaking,
   onToggleSpeak,
   onTrigger24hNotification,
+  onOpenMoveTracker,
+  onSimulate5KRun,
+  onSimulate30mWalk,
   onApplyPreset,
   onUpdateTelemetry,
   onRecordKeystroke,
@@ -384,7 +393,9 @@ export default function PassiveDashboard({
                 </View>
               </View>
               <Text style={styles.miniLabel}>{lang === 'en' ? 'Eye Gaze & rPPG' : 'Tatapan Mata'}</Text>
-              <Text style={styles.miniValue}>{Math.round(telemetry.blinkRatePerMin)} /mnt</Text>
+              <Text style={styles.miniValue}>
+                {Math.round(telemetry.blinkRatePerMin)} {lang === 'en' ? '/min' : '/mnt'}
+              </Text>
               <Text style={styles.miniSub}>
                 HR: {Math.round(telemetry.passiveHeartRateBpm)} bpm • + Detail
               </Text>
@@ -526,6 +537,52 @@ export default function PassiveDashboard({
         </View>
       )}
 
+      {/* ceKKes Move: Strava-Style Walk & Run Activity Card */}
+      <View style={[styles.card, { borderColor: '#FC4C02' }]}>
+        <View style={styles.rowBetween}>
+          <Text style={[styles.sectionTitle, { color: '#FC4C02' }]}>
+            🏃 {lang === 'en' ? 'Walk & Run Activity — Strava Mode' : 'Aktivitas Jalan & Lari — Mode Strava'}
+          </Text>
+          <Text style={styles.miniSub}>
+            {moveSummary.steps >= 7000
+              ? lang === 'en'
+                ? 'Active Goal Met'
+                : 'Target Aktif Tercapai'
+              : lang === 'en'
+              ? 'Goal: 8,000 steps'
+              : 'Target: 8.000 langkah'}
+          </Text>
+        </View>
+        <Text style={styles.moveHeadline}>
+          {moveSummary.steps.toLocaleString(lang === 'en' ? 'en-US' : 'id-ID')}{' '}
+          {lang === 'en' ? 'Steps' : 'Langkah'} • {(moveSummary.walkingKm + moveSummary.runningKm).toFixed(1)} km •{' '}
+          {moveSummary.durationMinutes} {lang === 'en' ? 'min' : 'mnt'} • {moveSummary.caloriesKcal} kcal
+        </Text>
+        <Text style={styles.mutedText}>
+          {lang === 'en'
+            ? `Walking: ${moveSummary.walkingKm.toFixed(1)} km • Running: ${moveSummary.runningKm.toFixed(1)} km`
+            : `Jalan Kaki: ${moveSummary.walkingKm.toFixed(1)} km • Lari: ${moveSummary.runningKm.toFixed(1)} km`}
+        </Text>
+        <View style={styles.chipsRow}>
+          <TouchableOpacity style={styles.stravaBtn} onPress={onOpenMoveTracker}>
+            <Ionicons name="play" size={14} color="#FFF" />
+            <Text style={styles.stravaBtnText}>
+              {lang === 'en' ? 'Start Walk / Run Tracker' : 'Mulai Pelacak Jalan / Lari'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.stepBtn} onPress={onSimulate5KRun}>
+            <Text style={styles.stepText}>
+              ⚡ {lang === 'en' ? 'Simulate 5K Run' : 'Simulasi Lari 5K'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.stepBtn} onPress={onSimulate30mWalk}>
+            <Text style={styles.stepText}>
+              🚶 {lang === 'en' ? 'Simulate 30m Walk' : 'Simulasi Jalan 30m'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       {/* Compact Android Native Background Monitor & Wake-to-Sleep Info */}
       <View style={styles.card}>
         <View style={styles.rowBetween}>
@@ -616,8 +673,9 @@ export default function PassiveDashboard({
           <Ionicons name="water-outline" size={16} color="#38BDF8" />
           <Text style={styles.recText}>
             <Text style={styles.recLabel}>{lang === 'en' ? 'Hydration: ' : 'Hidrasi: '}</Text>
-            {carePlan.nutrition.waterMinMl.toLocaleString('id-ID')}–
-            {carePlan.nutrition.waterMaxMl.toLocaleString('id-ID')} ml/hari
+            {carePlan.nutrition.waterMinMl.toLocaleString(lang === 'en' ? 'en-US' : 'id-ID')}–
+            {carePlan.nutrition.waterMaxMl.toLocaleString(lang === 'en' ? 'en-US' : 'id-ID')}{' '}
+            {lang === 'en' ? 'ml/day' : 'ml/hari'}
           </Text>
         </View>
       </View>
@@ -881,5 +939,24 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 12.5,
     fontWeight: '800',
+  },
+  moveHeadline: {
+    color: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  stravaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FC4C02',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
+  stravaBtnText: {
+    color: '#FFF',
+    fontSize: 11.5,
+    fontWeight: '900',
   },
 });

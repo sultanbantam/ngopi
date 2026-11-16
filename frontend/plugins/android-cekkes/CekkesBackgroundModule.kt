@@ -68,6 +68,19 @@ class CekkesBackgroundModule(private val reactCtx: ReactApplicationContext) :
   }
 
   @ReactMethod
+  fun setLanguageCode(langCode: String, promise: Promise) {
+    try {
+      reactCtx.getSharedPreferences(CekkesForegroundService.PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putString("langCode", if (langCode.startsWith("en")) "en" else "id")
+        .apply()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
+
+  @ReactMethod
   fun startForegroundImuService(promise: Promise) {
     try {
       val intent = Intent(reactCtx, CekkesForegroundService::class.java)

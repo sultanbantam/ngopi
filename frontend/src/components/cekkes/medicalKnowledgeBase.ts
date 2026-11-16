@@ -18,7 +18,7 @@ export interface DetectedFinding {
   title: string;
   source: 'passive' | 'active';
   severity: ClinicalSeverity;
-  category: 'ocular' | 'motor_nerve' | 'vocal_throat' | 'gastric' | 'skin_fungal' | 'skin_wart' | 'skin_eczema' | 'anemia_fatigue' | 'kidney_screen';
+  category: 'ocular' | 'motor_nerve' | 'vocal_throat' | 'gastric' | 'skin_fungal' | 'skin_wart' | 'skin_eczema' | 'anemia_fatigue' | 'kidney_screen' | 'activity_recovery' | 'sedentary_risk';
   summary: string;
 }
 
@@ -307,8 +307,55 @@ export function generateAutonomousCarePlan(
     });
   }
 
-  const waterMinMl = Math.round(weightKg * 30);
-  const waterMaxMl = Math.round(weightKg * 35);
+  const extraHydrationMl = categories.has('activity_recovery') ? 600 : 0;
+  const waterMinMl = Math.round(weightKg * 30) + extraHydrationMl;
+  const waterMaxMl = Math.round(weightKg * 35) + extraHydrationMl;
+
+  if (categories.has('activity_recovery')) {
+    otcList.push({
+      id: 'otc-move-recovery',
+      condition: isEn ? 'Post-Run / High-Step Muscle & Calf Recovery' : 'Pemulihan Otot Betis & Sendi Pasca Lari / Langkah Tinggi',
+      activeIngredient: isEn ? 'Topical Menthol / Methyl Salicylate Gel + Oral Electrolyte' : 'Gel Topikal Menthol / Methyl Salicylate + Larutan Elektrolit',
+      categoryCircle: 'Biru (Obat Bebas Terbatas)',
+      dosage: isEn ? 'Apply thin layer on sore calves/thighs + 1 sachet oral electrolyte in 250 ml water' : 'Oles tipis di betis/paha pegal + 1 sachet elektrolit dalam 250 ml air',
+      frequency: isEn ? '1–2x after workout' : '1–2x setelah olahraga',
+      maxDuration: isEn ? 'Max 5–7 days; avoid broken skin' : 'Maksimal 5–7 hari; jangan dioles pada kulit luka',
+      usageRule: isEn ? 'Wash hands after applying topical gel; avoid eyes.' : 'Cuci tangan setelah mengoles gel; hindari area mata.',
+    });
+    herbalList.push({
+      id: 'herb-move-recovery',
+      condition: isEn ? 'Post-Exercise Muscle Soreness & Circulation' : 'Pegal Otot & Sirkulasi Pasca Jalan/Lari',
+      plantName: isEn ? 'Red Ginger (Zingiber officinale) & Citronella Oil Rub' : 'Jahe Merah Hangat (Zingiber officinale) & Oles Minyak Sereh Wangi',
+      partUsed: isEn ? 'Fresh red ginger rhizome + topical essential oil' : 'Rimpang jahe merah + minyak sereh wangi topikal',
+      dosageAmount: isEn ? '2 grams sliced red ginger in 200 ml warm water' : '2 gram irisan jahe merah seduh 200 ml air hangat',
+      preparation: isEn ? 'Steep 5–8 mins, drink warm; gently massage calves with citronella oil.' : 'Seduh 5–8 menit lalu minum hangat; pijat lembut betis dengan minyak sereh wangi.',
+      schedule: isEn ? 'After workout or evening.' : 'Setelah olahraga atau sore/malam.',
+      interactionWarning: profile.onBloodThinners
+        ? (isEn ? 'WARNING: Limit red ginger if on blood thinners.' : 'PERINGATAN: Batasi jahe merah jika mengonsumsi pengencer darah.')
+        : undefined,
+    });
+    schedule.push({
+      id: 'sch-move-recovery',
+      timeSlot: '16:30 Sore',
+      action: isEn ? 'Post-Workout Electrolyte (+600 ml) & Calf Recovery' : 'Elektrolit Pasca Lari (+600 ml) & Pemulihan Otot',
+      detail: isEn
+        ? 'Drink 500–600 ml coconut water / light electrolyte, eat banana + protein, steep 2g warm red ginger.'
+        : 'Minum 500–600 ml air kelapa murni / elektrolit ringan, makan pisang + protein, seduh 2g jahe merah hangat.',
+      type: 'nutrition',
+    });
+  }
+
+  if (categories.has('sedentary_risk')) {
+    schedule.push({
+      id: 'sch-sedentary-walk',
+      timeSlot: '12:30 Siang',
+      action: isEn ? '15-Min Brisk Walk (1,500 Steps) Break' : 'Jalan Kaki Aktif 15 Menit (1.500 Langkah)',
+      detail: isEn
+        ? 'Stand up and walk 15 mins to boost blood circulation and relieve neck/eye screen tension.'
+        : 'Berdiri dan berjalan kaki 15 menit untuk melancarkan sirkulasi darah & menurunkan ketegangan leher/mata.',
+      type: 'therapy',
+    });
+  }
 
   const recommendedFoods = isEn
     ? [
