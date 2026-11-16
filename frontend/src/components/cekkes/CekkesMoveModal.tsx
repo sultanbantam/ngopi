@@ -357,7 +357,7 @@ export default function CekkesMoveModal({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={styles.headerEmoji}>{activeMode === 'running' ? '🏃' : '🚶'}</Text>
               <View>
-                <Text style={styles.title}>ceKKes Move — Strava Mode</Text>
+                <Text style={styles.title}>ceKKes Move</Text>
                 <Text style={styles.subtitle}>
                   {isEn ? 'GPS Route + IMU Step Counter' : 'Rute GPS + Penghitung Langkah IMU'}
                 </Text>

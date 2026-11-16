@@ -541,7 +541,7 @@ export default function PassiveDashboard({
       <View style={[styles.card, { borderColor: '#FC4C02' }]}>
         <View style={styles.rowBetween}>
           <Text style={[styles.sectionTitle, { color: '#FC4C02' }]}>
-            🏃 {lang === 'en' ? 'Walk & Run Activity — Strava Mode' : 'Aktivitas Jalan & Lari — Mode Strava'}
+            🏃 {lang === 'en' ? 'Walk & Run Activity' : 'Aktivitas Jalan & Lari'}
           </Text>
           <Text style={styles.miniSub}>
             {moveSummary.steps >= 7000
