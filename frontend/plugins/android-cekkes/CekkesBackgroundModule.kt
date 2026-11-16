@@ -7,16 +7,65 @@ import android.content.Intent
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
+import android.speech.tts.TextToSpeech
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.Promise
 import com.facebook.react.bridge.ReactApplicationContext
 import com.facebook.react.bridge.ReactContextBaseJavaModule
 import com.facebook.react.bridge.ReactMethod
+import java.util.Locale
 
 class CekkesBackgroundModule(private val reactCtx: ReactApplicationContext) :
-  ReactContextBaseJavaModule(reactCtx) {
+  ReactContextBaseJavaModule(reactCtx), TextToSpeech.OnInitListener {
+
+  private var tts: TextToSpeech? = null
+  private var ttsReady = false
+  private var pendingText: String? = null
+  private var pendingLocale: Locale = Locale("id", "ID")
 
   override fun getName(): String = "CekkesBackgroundModule"
+
+  override fun onInit(status: Int) {
+    if (status == TextToSpeech.SUCCESS) {
+      ttsReady = true
+      tts?.language = pendingLocale
+      pendingText?.let { text ->
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "cekkes_doc_voice")
+        pendingText = null
+      }
+    }
+  }
+
+  @ReactMethod
+  fun speakText(text: String, langCode: String, promise: Promise) {
+    try {
+      val locale = if (langCode.startsWith("en")) Locale.US else Locale("id", "ID")
+      pendingLocale = locale
+      if (tts == null) {
+        pendingText = text
+        tts = TextToSpeech(reactCtx.applicationContext, this)
+      } else if (ttsReady) {
+        tts?.language = locale
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "cekkes_doc_voice")
+      } else {
+        pendingText = text
+      }
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.reject("CEKKES_TTS_ERR", e.message, e)
+    }
+  }
+
+  @ReactMethod
+  fun stopSpeaking(promise: Promise) {
+    try {
+      pendingText = null
+      tts?.stop()
+      promise.resolve(true)
+    } catch (e: Exception) {
+      promise.resolve(false)
+    }
+  }
 
   @ReactMethod
   fun startForegroundImuService(promise: Promise) {

@@ -19,6 +19,8 @@ interface CekkesNativeModuleInterface {
   hasUsageStatsPermission(): Promise<boolean>;
   openUsageStatsSettings(): Promise<boolean>;
   getUsageStatsSummary(hoursBack: number): Promise<NativeUsageStatsSummary>;
+  speakText?(text: string, langCode: string): Promise<boolean>;
+  stopSpeaking?(): Promise<boolean>;
 }
 
 const nativeMod: CekkesNativeModuleInterface | null =
@@ -58,4 +60,14 @@ export async function readAndroidUsageStatsSummary(
 ): Promise<NativeUsageStatsSummary | null> {
   if (!nativeMod) return null;
   return nativeMod.getUsageStatsSummary(hoursBack);
+}
+
+export async function speakAndroidTts(text: string, langCode: 'id' | 'en'): Promise<boolean> {
+  if (!nativeMod || typeof nativeMod.speakText !== 'function') return false;
+  return nativeMod.speakText(text, langCode);
+}
+
+export async function stopAndroidTts(): Promise<boolean> {
+  if (!nativeMod || typeof nativeMod.stopSpeaking !== 'function') return false;
+  return nativeMod.stopSpeaking();
 }

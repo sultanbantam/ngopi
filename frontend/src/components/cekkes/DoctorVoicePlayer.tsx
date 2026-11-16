@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { PassiveTelemetryState } from './useCekkesPassiveAgent';
 import { CarePlanResult, DetectedFinding } from './medicalKnowledgeBase';
+import { speakAndroidTts, stopAndroidTts } from './nativeAndroidBridge';
 
 export type CekkesLang = 'id' | 'en';
 
@@ -61,7 +62,11 @@ export function speakDoctorText(
 ) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
     onStart?.();
-    setTimeout(() => onEnd?.(), 3000);
+    if (Platform.OS === 'android') {
+      speakAndroidTts(text, lang).catch(() => {});
+    }
+    const fallbackMs = Math.min(22000, Math.max(4000, text.length * 60));
+    setTimeout(() => onEnd?.(), fallbackMs);
     return;
   }
 
@@ -116,6 +121,9 @@ export function speakDoctorText(
 }
 
 export function stopDoctorSpeech() {
+  if (Platform.OS === 'android') {
+    stopAndroidTts().catch(() => {});
+  }
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.speechSynthesis) {
     try {
       window.speechSynthesis.cancel();
