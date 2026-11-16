@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import '../src/interceptors/axios.interceptor';
 import * as serviceWorkerRegistration from '../src/serviceWorkerRegistration';
 import NgopiWebViewContainer from '../src/components/NgopiWebViewContainer';
+import { LanguageProvider } from '../src/utils/i18n';
 
 export { ErrorBoundary } from 'expo-router';
 
@@ -20,13 +21,15 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: coffee.background } }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(main)" options={{ headerShown: false }} />
-      <Stack.Screen name="privacy" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="terms" options={{ headerShown: false, presentation: 'modal' }} />
-      <Stack.Screen name="test-payment" options={{ headerShown: false }} />
-    </Stack>
+    <LanguageProvider>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: coffee.background } }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(main)" options={{ headerShown: false }} />
+        <Stack.Screen name="privacy" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="terms" options={{ headerShown: false, presentation: 'modal' }} />
+        <Stack.Screen name="test-payment" options={{ headerShown: false }} />
+      </Stack>
+    </LanguageProvider>
   );
 }

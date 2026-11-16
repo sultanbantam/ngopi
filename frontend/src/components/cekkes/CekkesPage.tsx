@@ -18,6 +18,8 @@ import {
   speakDoctorText,
   stopDoctorSpeech,
 } from './DoctorVoicePlayer';
+import { useLanguage } from '../../utils/i18n';
+import { fetchCekkesServerState, queueCekkesServerSync } from './cekkesSync';
 
 type CekkesTab = 'passive' | 'active' | 'careplan';
 const ACTIVE_FINDINGS_KEY = 'ngopi_cekkes_active_findings';
@@ -40,7 +42,7 @@ export default function CekkesPage() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView | null>(null);
   const [tab, setTab] = useState<CekkesTab>('passive');
-  const [lang, setLang] = useState<CekkesLang>('id');
+  const { lang, setLang } = useLanguage();
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [bannerVisible, setBannerVisible] = useState(true);
   const [clinicalModalOpen, setClinicalModalOpen] = useState(false);
@@ -65,7 +67,22 @@ export default function CekkesPage() {
     } catch {
       // ignore
     }
+    queueCekkesServerSync({ findings: activeFindings });
   }, [activeFindings]);
+
+  // Hydrate ceKKes state from server account on mount (so history survives phone switch / uninstall)
+  useEffect(() => {
+    let mounted = true;
+    fetchCekkesServerState().then((remote) => {
+      if (!mounted || !remote) return;
+      if (Array.isArray(remote.findings) && remote.findings.length > 0) {
+        setActiveFindings(remote.findings);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -174,7 +191,7 @@ export default function CekkesPage() {
             onPress={() => {
               stopDoctorSpeech();
               setIsSpeaking(false);
-              setLang((l) => (l === 'id' ? 'en' : 'id'));
+              setLang(lang === 'id' ? 'en' : 'id');
             }}
           >
             <Text style={styles.langText}>{lang === 'id' ? 'ID | en' : 'EN | id'}</Text>

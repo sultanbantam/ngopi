@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { DetectedFinding } from './medicalKnowledgeBase';
 import { analyzeMotionSamples, MotionSample } from './sensorProcessors';
+import { queueCekkesServerSync } from './cekkesSync';
 
 export const CEKKES_STORAGE_KEY = 'ngopi_cekkes_telemetry';
 export const CEKKES_SCAN_HISTORY_KEY = 'ngopi_cekkes_scan_history';
@@ -262,6 +263,7 @@ export function useCekkesPassiveAgent(enableGlobalListeners = false) {
     setTelemetry((prev) => {
       const next = { ...updater(prev), lastUpdatedIso: new Date().toISOString() };
       writeStoredTelemetry(next);
+      queueCekkesServerSync({ telemetry: next });
       return next;
     });
   }, []);

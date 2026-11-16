@@ -15,12 +15,14 @@ import { uploadProfileAvatar, profileSaveError } from '../../src/utils/profileUp
 import { profileSlug } from '../../src/utils/profileLink';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useNightMode } from '../../src/theme/nightMode';
+import { useLanguage } from '../../src/utils/i18n';
 import HTWalkieTalkieModal from '../../src/components/HTWalkieTalkieModal';
 import NgopiTelecomMailModal, { computeDefaultNgopiNumber, formatNgopiEmail } from '../../src/components/NgopiTelecomMailModal';
 
 const API_URL = 'https://api.ngopi.top/api';
 
 export default function ContactsScreen() {
+  const { t } = useLanguage();
   const { openMenu, createWarkop, editWarkop, join } = useLocalSearchParams<{ openMenu?: string; createWarkop?: string; editWarkop?: string; join?: string }>();
   const [loading, setLoading] = useState(true);
   const [isHtModalVisible, setHtModalVisible] = useState(false);
@@ -691,13 +693,13 @@ export default function ContactsScreen() {
       <View style={{ marginBottom: 16 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsContainer}>
           <TouchableOpacity style={[styles.chip, activeTab === 'semua' && styles.activeChip]} onPress={() => setActiveTab('semua')}>
-            <Text style={[styles.chipText, activeTab === 'semua' && styles.activeChipText]}>Semua</Text>
+            <Text style={[styles.chipText, activeTab === 'semua' && styles.activeChipText]}>{t('Semua', 'All')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.chip, activeTab === 'belum_dibaca' && styles.activeChip]} onPress={() => setActiveTab('belum_dibaca')}>
-            <Text style={[styles.chipText, activeTab === 'belum_dibaca' && styles.activeChipText]}>Belum dibaca</Text>
+            <Text style={[styles.chipText, activeTab === 'belum_dibaca' && styles.activeChipText]}>{t('Belum dibaca', 'Unread')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.chip, activeTab === 'favorit' && styles.activeChip]} onPress={() => setActiveTab('favorit')}>
-            <Text style={[styles.chipText, activeTab === 'favorit' && styles.activeChipText]}>Favorit</Text>
+            <Text style={[styles.chipText, activeTab === 'favorit' && styles.activeChipText]}>{t('Favorit', 'Favorites')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.chip, activeTab === 'warkop' && styles.activeChip]} onPress={() => setActiveTab('warkop')}>
             <Text style={[styles.chipText, activeTab === 'warkop' && styles.activeChipText]}>Warkop {groups.length}</Text>
@@ -707,7 +709,7 @@ export default function ContactsScreen() {
 
       {(
         <TouchableOpacity style={styles.createGroupBtn} onPress={openCreateGroupModal}>
-          <Text style={styles.createGroupBtnText}>+ Buat Warkop Baru</Text>
+          <Text style={styles.createGroupBtnText}>{t('+ Buat Warkop Baru', '+ Create New Warkop')}</Text>
         </TouchableOpacity>
       )}
 

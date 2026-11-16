@@ -15,6 +15,7 @@ import {
   Vibration,
   Keyboard,
   Alert,
+  NativeModules,
 } from 'react-native';
 import { WebView, WebViewNavigation, WebViewMessageEvent } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -51,6 +52,30 @@ const INJECTED_BRIDGE_JS = `
 
   if (window.__ngopiNativeBridgeInstalled) return;
   window.__ngopiNativeBridgeInstalled = true;
+
+  // 0. Bridge ceKKes Native Android Module (IMU, UsageStats, Android TTS)
+  try {
+    var pendingCekkes = {};
+    var cekkesSeq = 1;
+    window.__ngopiCekkesNativeAvailable = ${Boolean(Platform.OS === 'android')};
+    window.__ngopiCekkesResolve = function(id, res, err) {
+      var cb = pendingCekkes[id];
+      if (!cb) return;
+      delete pendingCekkes[id];
+      if (err) cb.reject(new Error(err));
+      else cb.resolve(res);
+    };
+    window.__ngopiCekkesCall = function(method, args) {
+      return new Promise(function(resolve, reject) {
+        var id = 'ck_' + (cekkesSeq++);
+        pendingCekkes[id] = { resolve: resolve, reject: reject };
+        if (!postToNative({ type: 'CEKKES_NATIVE_CALL', id: id, method: method, args: args || [] })) {
+          delete pendingCekkes[id];
+          reject(new Error('Native bridge unavailable'));
+        }
+      });
+    };
+  } catch (e) {}
 
   // 1. Bridge navigator.clipboard.writeText
   try {
@@ -310,6 +335,25 @@ export default function NgopiWebViewContainer() {
         Linking.openURL(data.url).catch(() => {
           Alert.alert('Info', 'Tidak dapat membuka tautan ini.');
         });
+      } else if (data.type === 'CEKKES_NATIVE_CALL' && data.id && data.method) {
+        const mod = NativeModules?.CekkesBackgroundModule;
+        const fn = mod && typeof mod[data.method] === 'function' ? mod[data.method] : null;
+        if (!fn) {
+          webViewRef.current?.injectJavaScript(
+            `window.__ngopiCekkesResolve && window.__ngopiCekkesResolve(${JSON.stringify(data.id)}, null, "CekkesBackgroundModule unavailable"); true;`
+          );
+          return;
+        }
+        try {
+          const result = await fn(...(Array.isArray(data.args) ? data.args : []));
+          webViewRef.current?.injectJavaScript(
+            `window.__ngopiCekkesResolve && window.__ngopiCekkesResolve(${JSON.stringify(data.id)}, ${JSON.stringify(result)}, null); true;`
+          );
+        } catch (err: any) {
+          webViewRef.current?.injectJavaScript(
+            `window.__ngopiCekkesResolve && window.__ngopiCekkesResolve(${JSON.stringify(data.id)}, null, ${JSON.stringify(err?.message || 'Native call failed')}); true;`
+          );
+        }
       }
     } catch {
       // Ignore non-JSON messages from third-party scripts

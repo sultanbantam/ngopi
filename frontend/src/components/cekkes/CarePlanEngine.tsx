@@ -7,6 +7,7 @@ import {
   generateAutonomousCarePlan,
 } from './medicalKnowledgeBase';
 import { CekkesLang } from './DoctorVoicePlayer';
+import { fetchCekkesServerState, queueCekkesServerSync } from './cekkesSync';
 
 const PROFILE_KEY = 'ngopi_cekkes_profile';
 const getChecklistKey = () => `ngopi_cekkes_checklist_${new Date().toISOString().slice(0, 10)}`;
@@ -58,6 +59,23 @@ export default function CarePlanEngine({ lang = 'id', findings }: CarePlanEngine
   });
 
   useEffect(() => {
+    let mounted = true;
+    fetchCekkesServerState().then((remote) => {
+      if (!mounted || !remote) return;
+      if (remote.profile && typeof remote.profile === 'object') {
+        setProfile((prev) => ({ ...prev, ...remote.profile }));
+      }
+      const today = new Date().toISOString().slice(0, 10);
+      if (remote.checklist && remote.checklistDate === today) {
+        setCheckedSchedule(remote.checklist);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
@@ -65,6 +83,7 @@ export default function CarePlanEngine({ lang = 'id', findings }: CarePlanEngine
     } catch {
       // ignore
     }
+    queueCekkesServerSync({ profile });
   }, [profile]);
 
   useEffect(() => {
@@ -75,6 +94,10 @@ export default function CarePlanEngine({ lang = 'id', findings }: CarePlanEngine
     } catch {
       // ignore
     }
+    queueCekkesServerSync({
+      checklist: checkedSchedule,
+      checklistDate: new Date().toISOString().slice(0, 10),
+    });
   }, [checkedSchedule]);
 
   const isEn = lang === 'en';

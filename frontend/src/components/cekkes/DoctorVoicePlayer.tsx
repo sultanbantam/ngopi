@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import { PassiveTelemetryState } from './useCekkesPassiveAgent';
 import { CarePlanResult, DetectedFinding } from './medicalKnowledgeBase';
-import { speakAndroidTts, stopAndroidTts } from './nativeAndroidBridge';
+import { speakAndroidTts, stopAndroidTts, isCekkesNativeAndroidAvailableCheck } from './nativeAndroidBridge';
 
 export type CekkesLang = 'id' | 'en';
 
@@ -70,6 +70,15 @@ export function speakDoctorText(
     return;
   }
 
+  // If running inside Android APK WebView, use native Android TextToSpeech directly!
+  if (isCekkesNativeAndroidAvailableCheck()) {
+    onStart?.();
+    speakAndroidTts(text, lang).catch(() => {});
+    const fallbackMs = Math.min(22000, Math.max(4000, text.length * 60));
+    setTimeout(() => onEnd?.(), fallbackMs);
+    return;
+  }
+
   // Subtle AudioContext chime so user hears immediate feedback even if TTS voice loads slowly
   try {
     const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
@@ -121,7 +130,7 @@ export function speakDoctorText(
 }
 
 export function stopDoctorSpeech() {
-  if (Platform.OS === 'android') {
+  if (Platform.OS === 'android' || isCekkesNativeAndroidAvailableCheck()) {
     stopAndroidTts().catch(() => {});
   }
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.speechSynthesis) {

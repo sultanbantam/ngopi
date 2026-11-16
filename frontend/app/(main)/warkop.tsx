@@ -18,6 +18,7 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../src/utils/i18n';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
@@ -260,6 +261,7 @@ function AudioMessage({ url }: { url: string }) {
 }
 
 export default function BambupediaRoom() {
+  const { lang, toggleLang, t } = useLanguage();
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -1386,11 +1388,26 @@ export default function BambupediaRoom() {
 
         <View style={[styles.headerActions, width < 600 && styles.headerActionsCompact]}>
           <TouchableOpacity
+            onPress={toggleLang}
+            style={{
+              paddingHorizontal: 8,
+              paddingVertical: 5,
+              borderRadius: 8,
+              backgroundColor: '#261C15',
+              borderWidth: 1,
+              borderColor: '#4A3728',
+            }}
+          >
+            <Text style={{ color: '#D4AF37', fontSize: 10.5, fontWeight: '800' }}>
+              {lang === 'id' ? 'ID | en' : 'EN | id'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={styles.pointsBadgeHeader}
             onPress={() => setLeaderboardVisible(true)}
             accessibilityLabel={`Poin Kopi: ${userPoints}`}
           >
-            <Text style={styles.pointsBadgeText}>☕ {userPoints} Poin</Text>
+            <Text style={styles.pointsBadgeText}>☕ {userPoints} {t('Poin', 'Pts')}</Text>
           </TouchableOpacity>
 
           {/* Identitas Ngopi (@ngopi.top) Header Button */}

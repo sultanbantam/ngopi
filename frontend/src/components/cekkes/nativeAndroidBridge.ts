@@ -23,51 +23,70 @@ interface CekkesNativeModuleInterface {
   stopSpeaking?(): Promise<boolean>;
 }
 
-const nativeMod: CekkesNativeModuleInterface | null =
+const directNativeMod: CekkesNativeModuleInterface | null =
   Platform.OS === 'android' && NativeModules?.CekkesBackgroundModule
     ? (NativeModules.CekkesBackgroundModule as CekkesNativeModuleInterface)
     : null;
 
-export const isCekkesNativeAndroidAvailable = Boolean(nativeMod);
+function getWebViewBridge(): ((method: string, args?: any[]) => Promise<any>) | null {
+  if (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined' &&
+    (window as any).__ngopiCekkesNativeAvailable &&
+    typeof (window as any).__ngopiCekkesCall === 'function'
+  ) {
+    return (window as any).__ngopiCekkesCall;
+  }
+  return null;
+}
+
+export function isCekkesNativeAndroidAvailableCheck(): boolean {
+  return Boolean(directNativeMod || getWebViewBridge());
+}
+
+export const isCekkesNativeAndroidAvailable = Boolean(directNativeMod);
+
+async function callNative<T>(method: keyof CekkesNativeModuleInterface, args: any[] = []): Promise<T | null> {
+  if (directNativeMod && typeof (directNativeMod as any)[method] === 'function') {
+    return (directNativeMod as any)[method](...args);
+  }
+  const webCall = getWebViewBridge();
+  if (webCall) {
+    return webCall(method as string, args);
+  }
+  return null;
+}
 
 export async function startAndroidForegroundImu(): Promise<boolean> {
-  if (!nativeMod) return false;
-  return nativeMod.startForegroundImuService();
+  return Boolean(await callNative<boolean>('startForegroundImuService'));
 }
 
 export async function stopAndroidForegroundImu(): Promise<boolean> {
-  if (!nativeMod) return false;
-  return nativeMod.stopForegroundImuService();
+  return Boolean(await callNative<boolean>('stopForegroundImuService'));
 }
 
 export async function readAndroidImuMetrics(): Promise<NativeImuMetrics | null> {
-  if (!nativeMod) return null;
-  return nativeMod.getLatestImuMetrics();
+  return callNative<NativeImuMetrics>('getLatestImuMetrics');
 }
 
 export async function checkAndroidUsageStatsPermission(): Promise<boolean> {
-  if (!nativeMod) return false;
-  return nativeMod.hasUsageStatsPermission();
+  return Boolean(await callNative<boolean>('hasUsageStatsPermission'));
 }
 
 export async function openAndroidUsageStatsSettings(): Promise<boolean> {
-  if (!nativeMod) return false;
-  return nativeMod.openUsageStatsSettings();
+  return Boolean(await callNative<boolean>('openUsageStatsSettings'));
 }
 
 export async function readAndroidUsageStatsSummary(
   hoursBack = 16
 ): Promise<NativeUsageStatsSummary | null> {
-  if (!nativeMod) return null;
-  return nativeMod.getUsageStatsSummary(hoursBack);
+  return callNative<NativeUsageStatsSummary>('getUsageStatsSummary', [hoursBack]);
 }
 
 export async function speakAndroidTts(text: string, langCode: 'id' | 'en'): Promise<boolean> {
-  if (!nativeMod || typeof nativeMod.speakText !== 'function') return false;
-  return nativeMod.speakText(text, langCode);
+  return Boolean(await callNative<boolean>('speakText', [text, langCode]));
 }
 
 export async function stopAndroidTts(): Promise<boolean> {
-  if (!nativeMod || typeof nativeMod.stopSpeaking !== 'function') return false;
-  return nativeMod.stopSpeaking();
+  return Boolean(await callNative<boolean>('stopSpeaking'));
 }

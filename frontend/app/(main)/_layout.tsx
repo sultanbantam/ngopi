@@ -16,6 +16,7 @@ import ModerationAlertModal from '../../src/components/ModerationAlertModal';
 import { ErrorBoundary } from '../../src/components/ErrorBoundary';
 import NgopAIFloatingAgent from '../../src/components/NgopAIFloatingAgent';
 import { useCekkesPassiveAgent } from '../../src/components/cekkes/useCekkesPassiveAgent';
+import { useLanguage } from '../../src/utils/i18n';
 
 
 const API_URL = 'https://api.ngopi.top/api';
@@ -67,6 +68,7 @@ export default function MainLayout() {
   const isLargeScreen = width > 768;
   const pathname = usePathname();
   useCekkesPassiveAgent(true);
+  const { lang, toggleLang } = useLanguage();
 
   // Toast State
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -637,7 +639,25 @@ export default function MainLayout() {
         headerStyle: { backgroundColor: coffee.surface },
         headerTintColor: coffee.text,
         headerTitleStyle: { fontWeight: 'bold' },
-        contentStyle: { backgroundColor: coffee.background }
+        contentStyle: { backgroundColor: coffee.background },
+        headerRight: () => (
+          <TouchableOpacity
+            onPress={toggleLang}
+            style={{
+              marginRight: 10,
+              paddingHorizontal: 9,
+              paddingVertical: 4,
+              borderRadius: 8,
+              backgroundColor: '#261C15',
+              borderWidth: 1,
+              borderColor: '#4A3728',
+            }}
+          >
+            <Text style={{ color: '#D4AF37', fontSize: 11, fontWeight: '800' }}>
+              {lang === 'id' ? 'ID | en' : 'EN | id'}
+            </Text>
+          </TouchableOpacity>
+        ),
       }}>
         <Stack.Screen name="contacts" options={{ title: 'Ngopi' }} />
         <Stack.Screen name="warkop" options={{ headerShown: false }} />

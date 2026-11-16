@@ -12,7 +12,7 @@ import { analyzeVocalPcm } from './sensorProcessors';
 import DoctorVoicePlayer, { CekkesLang } from './DoctorVoicePlayer';
 import {
   checkAndroidUsageStatsPermission,
-  isCekkesNativeAndroidAvailable,
+  isCekkesNativeAndroidAvailableCheck,
   openAndroidUsageStatsSettings,
   readAndroidImuMetrics,
   readAndroidUsageStatsSummary,
@@ -61,10 +61,11 @@ export default function PassiveDashboard({
   const [sensorMsg, setSensorMsg] = useState<string | null>(null);
   const [nativeBgActive, setNativeBgActive] = useState(false);
   const [nativeStatusMsg, setNativeStatusMsg] = useState<string | null>(null);
+  const isNativeAndroid = isCekkesNativeAndroidAvailableCheck();
   const lastTypeTimeRef = useRef<number>(Date.now());
 
   const handleToggleNativeBg = async () => {
-    if (!isCekkesNativeAndroidAvailable) {
+    if (!isNativeAndroid) {
       setNativeStatusMsg(
         lang === 'en'
           ? 'Cross-app background IMU & UsageStats run on the Android APK (top.ngopi.app). Web mode monitors while ngopi.top is open.'
@@ -90,7 +91,7 @@ export default function PassiveDashboard({
   };
 
   const handleSyncNativeUsageAndImu = async () => {
-    if (!isCekkesNativeAndroidAvailable) return;
+    if (!isNativeAndroid) return;
     const hasPerm = await checkAndroidUsageStatsPermission();
     if (!hasPerm) {
       await openAndroidUsageStatsSettings();
@@ -530,7 +531,7 @@ export default function PassiveDashboard({
         <View style={styles.rowBetween}>
           <View style={{ flex: 1 }}>
             <Text style={styles.sectionTitle}>
-              {isCekkesNativeAndroidAvailable
+              {isNativeAndroid
                 ? lang === 'en'
                   ? 'Android Background Monitor (IMU + UsageStats)'
                   : 'Monitor Latar Belakang Android (IMU + UsageStats)'
@@ -555,7 +556,7 @@ export default function PassiveDashboard({
           <View style={{ flexDirection: 'row', gap: 6 }}>
             <TouchableOpacity style={styles.stepBtn} onPress={handleToggleNativeBg}>
               <Text style={styles.stepText}>
-                {isCekkesNativeAndroidAvailable
+                {isNativeAndroid
                   ? nativeBgActive
                     ? lang === 'en'
                       ? 'Stop IMU'
@@ -568,7 +569,7 @@ export default function PassiveDashboard({
                   : 'Info APK'}
               </Text>
             </TouchableOpacity>
-            {isCekkesNativeAndroidAvailable && (
+            {isNativeAndroid && (
               <TouchableOpacity style={styles.cyanBtnSmall} onPress={handleSyncNativeUsageAndImu}>
                 <Text style={styles.cyanBtnSmallText}>
                   {lang === 'en' ? 'Sync Usage' : 'Sinkronkan'}

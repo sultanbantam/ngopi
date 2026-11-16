@@ -1225,4 +1225,18 @@ model DigitalMouAgreement {
   @@map("ngopinomic_digital_mous")
 }
 
+model CekkesUserRecord {
+  id             String   @id @default(uuid())
+  user_id        String   @unique @map("user_id")
+  profile_json   Json?    @map("profile_json")
+  telemetry_json Json?    @map("telemetry_json")
+  findings_json  Json?    @map("findings_json")
+  checklist_json Json?    @map("checklist_json")
+  checklist_date String?  @map("checklist_date")
+  updated_at     DateTime @updatedAt @map("updated_at")
+  created_at     DateTime @default(now()) @map("created_at")
+
+  @@map("cekkes_user_records")
+}
+
 
