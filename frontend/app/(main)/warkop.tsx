@@ -1246,7 +1246,7 @@ export default function BambupediaRoom() {
                     <Text style={[styles.offlineBadgeText, { color: '#052e16', fontWeight: '800' }]}>AGENT ACTIVE</Text>
                   </View>
                 </View>
-                <Text style={styles.featuredHtDesc}>{t('Pemantauan pasif 4 aktivitas, 6-sensor aktif, & resep OTC/Herbal', '24h passive health monitor, Strava Move, 6-sensor & OTC/Herbal')}</Text>
+                <Text style={styles.featuredHtDesc}>{t('Pemantauan pasif 4 aktivitas, 6-sensor aktif, & resep OTC/Herbal', '24h passive health monitor, ceKKes Move, 6-sensor & OTC/Herbal')}</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color="#10B981" />
             </TouchableOpacity>
@@ -1615,6 +1615,30 @@ export default function BambupediaRoom() {
               accessibilityLabel="Buka Identitas Ngopi"
             >
               <Text style={[styles.quickChipText, { color: '#60a5fa', fontWeight: '800' }]}>📞 Identitas Ngopi</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(212, 163, 115, 0.18)', borderColor: '#D4AF37' }]}
+              onPress={() => router.push('/(main)/ngopinomic' as any)}
+              accessibilityLabel="Buka NGOPINOMIC"
+            >
+              <Text style={[styles.quickChipText, { color: '#D4AF37', fontWeight: '800' }]}>🪙 NGOPINOMIC</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.18)', borderColor: '#10B981' }]}
+              onPress={() => router.push('/(main)/cekkes' as any)}
+              accessibilityLabel="Buka ceKKes"
+            >
+              <Text style={[styles.quickChipText, { color: '#34D399', fontWeight: '800' }]}>🩺 ceKKes</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(34, 197, 94, 0.18)', borderColor: '#22C55E' }]}
+              onPress={() => router.push('/(main)/green' as any)}
+              accessibilityLabel="Buka NGOPI GREEN"
+            >
+              <Text style={[styles.quickChipText, { color: '#4ADE80', fontWeight: '800' }]}>🌿 NGOPI GREEN</Text>
             </TouchableOpacity>
 
             <TouchableOpacity

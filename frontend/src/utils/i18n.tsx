@@ -118,7 +118,9 @@ function translateStringIdToEn(raw: string): string {
   if (!raw || !raw.trim()) return raw;
   let out = raw;
   for (const [idPhrase, enPhrase] of ID_TO_EN_PHRASES) {
-    if (out.includes(idPhrase)) {
+    if (idPhrase === 'Poin') {
+      out = out.replace(/\bPoin\b/g, enPhrase);
+    } else if (out.includes(idPhrase)) {
       out = out.split(idPhrase).join(enPhrase);
     }
   }
