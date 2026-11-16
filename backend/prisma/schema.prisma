@@ -1239,4 +1239,266 @@ model CekkesUserRecord {
   @@map("cekkes_user_records")
 }
 
+// ============================================================================
+// NGOPI GREEN — Eco Lifestyle, Environmental Intelligence & Ngopi Points
+// ============================================================================
+
+model GreenActivityCategory {
+  id             String              @id @default(uuid())
+  code           String              @unique
+  name_id        String              @map("name_id")
+  name_en        String              @map("name_en")
+  description_id String              @map("description_id")
+  description_en String              @map("description_en")
+  icon           String              @default("leaf-outline")
+  sort_order     Int                 @default(0) @map("sort_order")
+  is_active      Boolean             @default(true) @map("is_active")
+  created_at     DateTime            @default(now()) @map("created_at")
+  activityTypes  GreenActivityType[]
+
+  @@map("green_activity_categories")
+}
+
+model GreenActivityType {
+  id                String                @id @default(uuid())
+  category_code     String                @map("category_code")
+  code              String                @unique
+  name_id           String                @map("name_id")
+  name_en           String                @map("name_en")
+  unit              String
+  requires_evidence Boolean               @default(true) @map("requires_evidence")
+  is_green_eligible Boolean               @default(true) @map("is_green_eligible")
+  metadata_json     Json?                 @map("metadata_json")
+  is_active         Boolean               @default(true) @map("is_active")
+  created_at        DateTime              @default(now()) @map("created_at")
+  category          GreenActivityCategory @relation(fields: [category_code], references: [code])
+
+  @@index([category_code])
+  @@map("green_activity_types")
+}
+
+model GreenEmissionFactor {
+  id                            String   @id @default(uuid())
+  code                          String   @unique
+  version                       String   @default("v1.0-2026")
+  activity_type_code            String   @map("activity_type_code")
+  region                        String   @default("Indonesia")
+  factor_kgco2e_per_unit        Decimal  @map("factor_kgco2e_per_unit") @db.Decimal(12, 6)
+  baseline_factor_kgco2e_unit   Decimal? @map("baseline_factor_kgco2e_unit") @db.Decimal(12, 6)
+  unit                          String
+  source_name                   String   @map("source_name")
+  methodology                   String
+  confidence                    String   @default("estimated")
+  is_active                     Boolean  @default(true) @map("is_active")
+  created_at                    DateTime @default(now()) @map("created_at")
+
+  @@index([activity_type_code, is_active])
+  @@map("green_emission_factors")
+}
+
+model GreenRewardRule {
+  id                        String   @id @default(uuid())
+  activity_type_code        String   @unique @map("activity_type_code")
+  version                   String   @default("v1.0-2026")
+  base_points               Int      @default(0) @map("base_points")
+  unit_step                 Decimal  @default(1) @map("unit_step") @db.Decimal(10, 2)
+  max_points_per_submission Int      @default(20) @map("max_points_per_submission")
+  daily_cap_points          Int      @default(40) @map("daily_cap_points")
+  requires_verification     Boolean  @default(true) @map("requires_verification")
+  requires_evidence         Boolean  @default(true) @map("requires_evidence")
+  is_active                 Boolean  @default(true) @map("is_active")
+  created_by_user_id        String?  @map("created_by_user_id")
+  created_at                DateTime @default(now()) @map("created_at")
+
+  @@map("green_reward_rules")
+}
+
+model GreenSubmission {
+  id                 String              @id @default(uuid())
+  user_id            String              @map("user_id")
+  category_code      String              @map("category_code")
+  activity_type_code String              @map("activity_type_code")
+  title              String
+  description        String?
+  quantity           Decimal             @db.Decimal(12, 3)
+  unit               String
+  activity_date      DateTime            @default(now()) @map("activity_date")
+  location_name      String?             @map("location_name")
+  latitude           Decimal?            @db.Decimal(10, 7)
+  longitude          Decimal?            @db.Decimal(10, 7)
+  location_consent   Boolean             @default(false) @map("location_consent")
+  is_public          Boolean             @default(false) @map("is_public")
+  metadata_json      Json?               @map("metadata_json")
+  status             String              @default("pending")
+  awarded_points     Int                 @default(0) @map("awarded_points")
+  points_tx_id       String?             @map("points_tx_id")
+  duplicate_warning  Boolean             @default(false) @map("duplicate_warning")
+  created_at         DateTime            @default(now()) @map("created_at")
+  updated_at         DateTime            @updatedAt @map("updated_at")
+  evidences          GreenEvidence[]
+  verifications      GreenVerification[]
+  impactRecords      GreenImpactRecord[]
+
+  @@index([user_id, created_at])
+  @@index([status, created_at])
+  @@index([category_code, status])
+  @@map("green_submissions")
+}
+
+model GreenEvidence {
+  id            String          @id @default(uuid())
+  submission_id String          @map("submission_id")
+  user_id       String          @map("user_id")
+  file_url      String          @map("file_url")
+  file_name     String          @map("file_name")
+  mime_type     String          @map("mime_type")
+  file_size     Int             @map("file_size")
+  sha256_hash   String          @map("sha256_hash")
+  created_at    DateTime        @default(now()) @map("created_at")
+  submission    GreenSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+
+  @@index([sha256_hash])
+  @@index([submission_id])
+  @@map("green_evidence")
+}
+
+model GreenVerification {
+  id               String          @id @default(uuid())
+  submission_id    String          @map("submission_id")
+  reviewer_user_id String          @map("reviewer_user_id")
+  decision         String
+  reason           String
+  awarded_points   Int             @default(0) @map("awarded_points")
+  created_at       DateTime        @default(now()) @map("created_at")
+  submission       GreenSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+
+  @@index([submission_id, created_at])
+  @@map("green_verifications")
+}
+
+model GreenImpactRecord {
+  id                         String          @id @default(uuid())
+  submission_id              String          @map("submission_id")
+  user_id                    String          @map("user_id")
+  metric_name                String          @map("metric_name")
+  actual_emissions_kgco2e    Decimal?        @map("actual_emissions_kgco2e") @db.Decimal(12, 4)
+  baseline_emissions_kgco2e  Decimal?        @map("baseline_emissions_kgco2e") @db.Decimal(12, 4)
+  avoided_emissions_kgco2e   Decimal?        @map("avoided_emissions_kgco2e") @db.Decimal(12, 4)
+  sequestered_carbon_kgco2e  Decimal?        @map("sequestered_carbon_kgco2e") @db.Decimal(12, 4)
+  waste_prevented_kg         Decimal?        @map("waste_prevented_kg") @db.Decimal(12, 4)
+  water_saved_liters         Decimal?        @map("water_saved_liters") @db.Decimal(12, 3)
+  energy_saved_kwh           Decimal?        @map("energy_saved_kwh") @db.Decimal(12, 4)
+  factor_version             String          @map("factor_version")
+  method_id                  String          @map("method_id")
+  data_quality               String          @default("estimated") @map("data_quality")
+  notes                      String?
+  created_at                 DateTime        @default(now()) @map("created_at")
+  submission                 GreenSubmission @relation(fields: [submission_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, created_at])
+  @@index([submission_id])
+  @@map("green_impact_records")
+}
+
+model GreenPlant {
+  id              String                 @id @default(uuid())
+  user_id         String                 @map("user_id")
+  submission_id   String?                @map("submission_id")
+  common_name     String                 @map("common_name")
+  scientific_name String?                @map("scientific_name")
+  species_group   String                 @map("species_group")
+  quantity        Int                    @default(1)
+  ecosystem_type  String                 @map("ecosystem_type")
+  planted_at      DateTime               @default(now()) @map("planted_at")
+  location_name   String?                @map("location_name")
+  survival_status String                 @default("planted") @map("survival_status")
+  created_at      DateTime               @default(now()) @map("created_at")
+  monitorings     GreenPlantMonitoring[]
+
+  @@index([user_id, planted_at])
+  @@map("green_plants")
+}
+
+model GreenPlantMonitoring {
+  id              String     @id @default(uuid())
+  plant_id        String     @map("plant_id")
+  user_id         String     @map("user_id")
+  submission_id   String?    @map("submission_id")
+  health_status   String     @map("health_status")
+  notes           String?
+  recorded_at     DateTime   @default(now()) @map("recorded_at")
+  plant           GreenPlant @relation(fields: [plant_id], references: [id], onDelete: Cascade)
+
+  @@index([plant_id, recorded_at])
+  @@map("green_plant_monitoring")
+}
+
+model GreenEnvironmentReport {
+  id               String   @id @default(uuid())
+  submission_id    String   @unique @map("submission_id")
+  user_id          String   @map("user_id")
+  report_category  String   @map("report_category")
+  subcategory      String
+  title            String
+  description      String
+  severity         String   @default("medium")
+  status           String   @default("submitted")
+  is_anonymous     Boolean  @default(false) @map("is_anonymous")
+  public_area_label String? @map("public_area_label")
+  approx_lat       Decimal? @map("approx_lat") @db.Decimal(8, 4)
+  approx_lng       Decimal? @map("approx_lng") @db.Decimal(8, 4)
+  created_at       DateTime @default(now()) @map("created_at")
+  updated_at       DateTime @updatedAt @map("updated_at")
+
+  @@index([status, report_category])
+  @@map("green_environment_reports")
+}
+
+model GreenChallenge {
+  id            String                 @id @default(uuid())
+  code          String                 @unique
+  title_id      String                 @map("title_id")
+  title_en      String                 @map("title_en")
+  description_id String                @map("description_id")
+  description_en String                @map("description_en")
+  category_code String                 @map("category_code")
+  target_metric String                 @map("target_metric")
+  target_value  Decimal                @map("target_value") @db.Decimal(12, 2)
+  reward_points Int                    @default(0) @map("reward_points")
+  start_date    DateTime               @map("start_date")
+  end_date      DateTime               @map("end_date")
+  is_active     Boolean                @default(true) @map("is_active")
+  members       GreenChallengeMember[]
+
+  @@map("green_challenges")
+}
+
+model GreenChallengeMember {
+  id           String         @id @default(uuid())
+  challenge_id String         @map("challenge_id")
+  user_id      String         @map("user_id")
+  opt_in_board Boolean        @default(false) @map("opt_in_board")
+  joined_at    DateTime       @default(now()) @map("joined_at")
+  challenge    GreenChallenge @relation(fields: [challenge_id], references: [id], onDelete: Cascade)
+
+  @@unique([challenge_id, user_id])
+  @@map("green_challenge_members")
+}
+
+model GreenAuditLog {
+  id             String   @id @default(uuid())
+  actor_user_id  String   @map("actor_user_id")
+  action         String
+  target_entity  String   @map("target_entity")
+  target_id      String   @map("target_id")
+  previous_value Json?    @map("previous_value")
+  new_value      Json?    @map("new_value")
+  reason         String
+  created_at     DateTime @default(now()) @map("created_at")
+
+  @@index([actor_user_id, created_at])
+  @@index([target_entity, target_id])
+  @@map("green_audit_logs")
+}
+
 

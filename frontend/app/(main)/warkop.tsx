@@ -1251,6 +1251,35 @@ export default function BambupediaRoom() {
               <Ionicons name="chevron-forward" size={18} color="#10B981" />
             </TouchableOpacity>
 
+            {/* NGOPI GREEN Card */}
+            <TouchableOpacity
+              style={[styles.featuredHtCard, { borderColor: '#22C55E', backgroundColor: 'rgba(34, 197, 94, 0.08)', marginTop: 8 }]}
+              onPress={() => {
+                setDrawerVisible(false);
+                router.push('/(main)/green' as any);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.featuredHtIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.2)' }]}>
+                <Ionicons name="leaf-outline" size={22} color="#22C55E" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={styles.featuredHtTitleRow}>
+                  <Text style={styles.featuredHtTitle}>NGOPI GREEN</Text>
+                  <View style={[styles.offlineBadge, { backgroundColor: '#22C55E' }]}>
+                    <Text style={[styles.offlineBadgeText, { color: '#052E16', fontWeight: '800' }]}>ECO POINTS</Text>
+                  </View>
+                </View>
+                <Text style={styles.featuredHtDesc}>
+                  {t(
+                    'Gaya hidup ramah lingkungan, aksi nyata, dampak terukur, dan reward poin.',
+                    'Eco-friendly lifestyle, verified actions, measurable impact, and points rewards.'
+                  )}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#22C55E" />
+            </TouchableOpacity>
+
             {/* Featured Merchant Dashboard (Bisnis Cafe) */}
             <TouchableOpacity
               style={[styles.featuredHtCard, { borderColor: 'rgba(99, 102, 241, 0.4)', backgroundColor: 'rgba(99, 102, 241, 0.08)', marginTop: 8 }]}
