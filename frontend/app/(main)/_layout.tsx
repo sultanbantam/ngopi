@@ -648,6 +648,8 @@ export default function MainLayout() {
         <Stack.Screen name="help-center" options={{ headerShown: false }} />
         <Stack.Screen name="guides/ht" options={{ headerShown: false }} />
         <Stack.Screen name="guides/first-aid" options={{ headerShown: false }} />
+        <Stack.Screen name="cekkes" options={{ headerShown: false }} />
+        <Stack.Screen name="health" options={{ headerShown: false }} />
         <Stack.Screen name="admin/dashboard" options={{ title: "CS Dashboard" }} />
       </Stack>
       {renderIncomingCallModal()}

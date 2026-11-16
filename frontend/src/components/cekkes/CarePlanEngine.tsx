@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   DetectedFinding,
   UserHealthProfile,
   generateAutonomousCarePlan,
 } from './medicalKnowledgeBase';
+import { CekkesLang } from './DoctorVoicePlayer';
 
 const PROFILE_KEY = 'ngopi_cekkes_profile';
 const getChecklistKey = () => `ngopi_cekkes_checklist_${new Date().toISOString().slice(0, 10)}`;
@@ -24,10 +25,14 @@ const DEFAULT_PROFILE: UserHealthProfile = {
 };
 
 interface CarePlanEngineProps {
+  lang?: CekkesLang;
   findings: DetectedFinding[];
 }
 
-export default function CarePlanEngine({ findings }: CarePlanEngineProps) {
+export default function CarePlanEngine({ lang = 'id', findings }: CarePlanEngineProps) {
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserHealthProfile>(() => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
@@ -107,10 +112,36 @@ export default function CarePlanEngine({ findings }: CarePlanEngineProps) {
         </View>
       ) : null}
 
-      {/* User Health Profile Inputs */}
+      {/* Compact Collapsible Profile Pill Bar */}
       <View style={styles.card}>
-        <Text style={styles.sectionTitle}>Profil Medis & Keamanan Pengguna</Text>
-        <View style={styles.rowInputs}>
+        <View style={styles.rowBetween}>
+          <Text style={styles.bodyText} numberOfLines={2}>
+            <Text style={{ color: '#D4AF37', fontWeight: '800' }}>
+              {lang === 'en' ? 'Profile: ' : 'Profil: '}
+            </Text>
+            {profile.age} thn • BB {profile.weightKg} kg • Alergi:{' '}
+            {profile.allergies.trim() || 'Tidak ada'} • Air:{' '}
+            {plan.nutrition.waterMinMl.toLocaleString('id-ID')} ml/hr
+          </Text>
+          <TouchableOpacity
+            style={styles.toggleBtn}
+            onPress={() => setProfileOpen((v) => !v)}
+          >
+            <Text style={styles.toggleBtnText}>
+              {profileOpen
+                ? lang === 'en'
+                  ? 'Close'
+                  : 'Tutup'
+                : lang === 'en'
+                ? 'Edit Profile & Red Flags'
+                : 'Ubah Profil & Red Flags'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {profileOpen && (
+          <View style={{ gap: 10, marginTop: 6 }}>
+            <View style={styles.rowInputs}>
           <View style={{ flex: 1, minWidth: 120 }}>
             <Text style={styles.label}>Usia (tahun)</Text>
             <TextInput
@@ -178,7 +209,9 @@ export default function CarePlanEngine({ findings }: CarePlanEngineProps) {
               </TouchableOpacity>
             );
           })}
-        </View>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* 1. Rekomendasi Obat Bebas (OTC) */}
@@ -252,6 +285,53 @@ export default function CarePlanEngine({ findings }: CarePlanEngineProps) {
           );
         })}
       </View>
+      {/* 5. Collapsible AI Reasoning Trace & Print/Save Medical Summary */}
+      <View style={styles.card}>
+        <View style={styles.rowBetween}>
+          <TouchableOpacity
+            style={styles.toggleBtn}
+            onPress={() => setReasoningOpen((v) => !v)}
+          >
+            <Text style={styles.toggleBtnText}>
+              🧠 {reasoningOpen ? 'Tutup' : 'Lihat'} Alur Penalaran Agent AI
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.printBtn}
+            onPress={() => {
+              if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.print === 'function') {
+                window.print();
+              } else {
+                setExportMsg('Ringkasan medis siap disimpan dari perangkat Anda.');
+              }
+            }}
+          >
+            <Ionicons name="document-text-outline" size={14} color="#1A120B" />
+            <Text style={styles.printBtnText}>📄 Cetak / Simpan Ringkasan Medis</Text>
+          </TouchableOpacity>
+        </View>
+
+        {reasoningOpen && (
+          <View style={styles.itemBox}>
+            <Text style={styles.itemTitle}>Agentic Reasoning Trace ({findings.length} Temuan):</Text>
+            {findings.length === 0 ? (
+              <Text style={styles.mutedText}>
+                • Tidak ada temuan risiko aktif. Agent mempertahankan protokol preventif hidrasi {plan.nutrition.waterMinMl} ml/hari & istirahat tidur 20:30.
+              </Text>
+            ) : (
+              findings.map((f) => (
+                <Text key={f.id} style={styles.mutedText}>
+                  • [{f.source.toUpperCase()} / {f.severity.toUpperCase()}] {f.title} → {f.summary}
+                </Text>
+              ))
+            )}
+            <Text style={styles.mutedText}>
+              • Guardrail: {plan.safetyWarnings.length} peringatan interaksi diperiksa sebelum menyusun {plan.otcList.length} OTC & {plan.herbalList.length} herbal.
+            </Text>
+          </View>
+        )}
+        {exportMsg ? <Text style={styles.mutedText}>{exportMsg}</Text> : null}
+      </View>
     </View>
   );
 }
@@ -283,4 +363,8 @@ const styles = StyleSheet.create({
   dangerNote: { color: '#FDA4AF', fontSize: 11, fontWeight: '800', marginTop: 2 },
   hydrationText: { color: '#38BDF8', fontSize: 14, fontWeight: '800' },
   scheduleRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start', backgroundColor: '#1A120B', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#3B2B1E' },
+  toggleBtn: { backgroundColor: '#1A120B', borderWidth: 1, borderColor: '#D4AF37', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  toggleBtnText: { color: '#D4AF37', fontSize: 11, fontWeight: '800' },
+  printBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#D4AF37', paddingHorizontal: 11, paddingVertical: 7, borderRadius: 10 },
+  printBtnText: { color: '#1A120B', fontSize: 11, fontWeight: '800' },
 });

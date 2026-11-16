@@ -339,6 +339,14 @@ export function generateAutonomousCarePlan(
     });
   }
 
+  const TIME_SLOT_ORDER: Record<DailyScheduleItem['timeSlot'], number> = {
+    '07:00 Pagi': 1,
+    '12:30 Siang': 2,
+    '16:30 Sore': 3,
+    '20:30 Malam': 4,
+  };
+  schedule.sort((a, b) => (TIME_SLOT_ORDER[a.timeSlot] ?? 99) - (TIME_SLOT_ORDER[b.timeSlot] ?? 99));
+
   return {
     hasRedFlag: redFlagReasons.length > 0,
     redFlagReasons,
