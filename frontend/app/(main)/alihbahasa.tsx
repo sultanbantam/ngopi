@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import { isCekkesNativeAndroidAvailableCheck, speakAndroidTts } from '../../src/components/cekkes/nativeAndroidBridge';
 
 interface TranscriptItem {
   id: string;
@@ -154,14 +155,33 @@ export default function AlihBahasaScreen() {
         console.warn('Google NMT chunk error:', err);
       }
 
+      if (!translated) {
+        try {
+          const mmUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(trimmed)}&langpair=${srcLang}|${tgtLang}`;
+          const mmRes = await fetch(mmUrl);
+          if (mmRes.ok) {
+            const mmData = await mmRes.json();
+            if (mmData?.responseData?.translatedText) {
+              translated = mmData.responseData.translatedText;
+            }
+          }
+        } catch (mmErr) {
+          console.warn('MyMemory fallback error:', mmErr);
+        }
+      }
+
       translatedChunks.push(translated || trimmed);
     }
 
     return translatedChunks.join(' ').trim();
   };
 
-  // Text-To-Speech Playback with Voice Gender & Earphone Support
+  // Text-To-Speech Playback with Voice Gender, Earphone & Android APK WebView Support
   const speakTranslation = useCallback((text: string, langCode: string, genderOverride?: 'female' | 'male') => {
+    if (isCekkesNativeAndroidAvailableCheck()) {
+      speakAndroidTts(text, langCode === 'id' ? 'id' : 'en').catch(() => {});
+      return;
+    }
     if (Platform.OS === 'web' && typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
