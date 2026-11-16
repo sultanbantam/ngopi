@@ -37,6 +37,8 @@ export interface PassiveTelemetryState {
 
   // Metadata & Timeline
   lastUpdatedIso: string;
+  localTimezone?: string;
+  estimatedSleepHours?: number;
   activePreset: ScenarioPresetKey | 'live';
   samplesCount: number;
   timeline24h: Array<{
@@ -335,6 +337,27 @@ export function useCekkesPassiveAgent(enableGlobalListeners = false) {
   useEffect(() => {
     if (!enableGlobalListeners || Platform.OS !== 'web' || typeof window === 'undefined') {
       return;
+    }
+
+    // Timezone-aware Wake-to-Sleep cycle detection: if user returns after >= 4h inactivity,
+    // log it as rest/sleep window instead of counting towards continuous screen strain.
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Local';
+      const lastMs = Date.parse(telemetry.lastUpdatedIso || '');
+      const gapHours = Number.isFinite(lastMs) ? (Date.now() - lastMs) / 3600000 : 0;
+      if (gapHours >= 4 && gapHours <= 16) {
+        updateTelemetry((prev) => ({
+          ...prev,
+          localTimezone: tz,
+          estimatedSleepHours: Number(gapHours.toFixed(1)),
+          screenTimeHours: 0.1,
+          wristStaticHours: 0.1,
+        }));
+      } else if (!telemetry.localTimezone) {
+        updateTelemetry((prev) => ({ ...prev, localTimezone: tz }));
+      }
+    } catch {
+      // ignore timezone errors
     }
 
     const onKeyDown = (e: KeyboardEvent) => {

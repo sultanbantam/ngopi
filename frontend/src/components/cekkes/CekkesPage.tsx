@@ -109,8 +109,8 @@ export default function CekkesPage() {
   }, [tab, combinedFindings]);
 
   const carePlanPreview = useMemo(
-    () => generateAutonomousCarePlan(previewProfile, combinedFindings),
-    [previewProfile, combinedFindings]
+    () => generateAutonomousCarePlan(previewProfile, combinedFindings, lang),
+    [previewProfile, combinedFindings, lang]
   );
 
   const doctorScript = useMemo(
