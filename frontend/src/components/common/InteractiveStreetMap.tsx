@@ -120,7 +120,7 @@ export default function InteractiveStreetMap({
   const maxTy = Math.min(maxTileIdx, Math.floor((topLeftWorldY + height) / TILE_SIZE));
 
   const tiles: Array<{ key: string; left: number; top: number; url: string; fallbackUrl: string }> = [];
-  const sub = ['a', 'b', 'c', 'd'];
+  const sub = ['a', 'b', 'c'];
   for (let tx = minTx; tx <= maxTx; tx++) {
     const wrappedTx = ((tx % (maxTileIdx + 1)) + (maxTileIdx + 1)) % (maxTileIdx + 1);
     for (let ty = minTy; ty <= maxTy; ty++) {
@@ -129,7 +129,7 @@ export default function InteractiveStreetMap({
         key: `${zoom}-${tx}-${ty}`,
         left: tx * TILE_SIZE - topLeftWorldX,
         top: ty * TILE_SIZE - topLeftWorldY,
-        url: `https://${s}.basemaps.cartocdn.com/rastertiles/voyager/${zoom}/${wrappedTx}/${ty}.png`,
+        url: `https://${s}.tile.openstreetmap.org/${zoom}/${wrappedTx}/${ty}.png`,
         fallbackUrl: `https://tile.openstreetmap.org/${zoom}/${wrappedTx}/${ty}.png`,
       });
     }
@@ -434,7 +434,7 @@ export default function InteractiveStreetMap({
           pointerEvents: 'none',
         },
       },
-      '© OpenStreetMap • CARTO'
+      '© OpenStreetMap'
     )
   );
 }
