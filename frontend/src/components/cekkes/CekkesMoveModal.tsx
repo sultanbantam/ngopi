@@ -465,8 +465,8 @@ export default function CekkesMoveModal({
             {/* Route Canvas & Live OpenStreetMap Toggle */}
             <View style={styles.mapBox}>
               {Platform.OS === 'web' && (
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.subtitle}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 10, paddingTop: 8, paddingBottom: 6, gap: 8 }}>
+                  <Text style={[styles.subtitle, { flex: 1 }]} numberOfLines={1}>
                     {currentLatLng
                       ? `GPS: ${currentLatLng.lat.toFixed(5)}, ${currentLatLng.lng.toFixed(5)}`
                       : isEn
@@ -474,7 +474,15 @@ export default function CekkesMoveModal({
                         : 'Rute & Peta Jalan'}
                   </Text>
                   <TouchableOpacity
-                    style={[styles.modeBtn, { flex: 0, paddingHorizontal: 10, paddingVertical: 4 }]}
+                    style={{
+                      backgroundColor: '#120D08',
+                      borderWidth: 1,
+                      borderColor: '#4A3728',
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 5,
+                      flexShrink: 0,
+                    }}
                     onPress={() => setShowOsmMap((v) => !v)}
                   >
                     <Text style={styles.modeText}>
