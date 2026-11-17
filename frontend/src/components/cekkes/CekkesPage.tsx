@@ -63,11 +63,11 @@ export default function CekkesPage() {
     }
     return {
       date: today,
-      steps: 1450,
-      walkingKm: 1.0,
+      steps: 0,
+      walkingKm: 0,
       runningKm: 0,
-      durationMinutes: 14,
-      caloriesKcal: 62,
+      durationMinutes: 0,
+      caloriesKcal: 0,
       lastMode: 'walking',
     };
   });
