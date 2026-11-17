@@ -1,4 +1,4 @@
-import * as SecureStore from '../../utils/storage';
+import { getValidAccessToken } from '../../utils/session';
 
 const API_BASE = 'https://api.ngopi.top/api/cekkes';
 
@@ -12,7 +12,7 @@ export interface CekkesServerPayload {
 
 export async function fetchCekkesServerState(): Promise<CekkesServerPayload | null> {
   try {
-    const token = await SecureStore.getItemAsync('token');
+    const token = await getValidAccessToken();
     if (!token) return null;
     const res = await fetch(`${API_BASE}/state`, {
       method: 'GET',
@@ -38,7 +38,7 @@ export function queueCekkesServerSync(partial: CekkesServerPayload) {
     const body = pendingPayload;
     pendingPayload = {};
     try {
-      const token = await SecureStore.getItemAsync('token');
+      const token = await getValidAccessToken();
       if (!token) return;
       await fetch(`${API_BASE}/state`, {
         method: 'PUT',

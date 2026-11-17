@@ -210,6 +210,25 @@ router.post('/submissions', verifyJWT, async (req: AuthRequest, res: Response) =
   }
 });
 
+router.delete('/submissions/:id', verifyJWT, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    const id = String(req.params.id || '');
+    const sub = await prisma.greenSubmission.findUnique({ where: { id } });
+    if (!sub || sub.user_id !== userId) {
+      return res.status(404).json({ error: 'Submission not found' });
+    }
+    if (sub.status !== 'pending' && sub.status !== 'needs_info') {
+      return res.status(400).json({ error: 'Only pending or needs_info submissions can be deleted' });
+    }
+    await prisma.greenSubmission.delete({ where: { id } });
+    return res.json({ ok: true, deletedId: id });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to delete submission' });
+  }
+});
+
 router.get('/reports', verifyJWT, async (req: AuthRequest, res: Response) => {
   try {
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;

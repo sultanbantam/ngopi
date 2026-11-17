@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Platform,
+  Share,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -15,6 +16,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useLanguage } from '../../utils/i18n';
 import * as SecureStore from '../../utils/storage';
 import {
+  deleteGreenSubmission,
   fetchAdminGreenQueue,
   fetchGreenCatalog,
   fetchGreenDashboard,
@@ -30,6 +32,79 @@ import {
 export type GreenTab = 'dashboard' | 'submit' | 'history' | 'map_edu' | 'admin';
 
 const BOTTLE_SIZES_ML = [220, 240, 330, 350, 500, 600, 750, 1000, 1500, 2000, 5000, 10000, 19000];
+
+async function compressAndWatermarkImage(file: File): Promise<{ blob: Blob; name: string }> {
+  if (!file.type.startsWith('image/') || typeof document === 'undefined') {
+    return { blob: file, name: file.name };
+  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onload = () => {
+        const maxDim = 1280;
+        let w = img.width;
+        let h = img.height;
+        if (w > maxDim || h > maxDim) {
+          if (w >= h) {
+            h = Math.round((h * maxDim) / w);
+            w = maxDim;
+          } else {
+            w = Math.round((w * maxDim) / h);
+            h = maxDim;
+          }
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve({ blob: file, name: file.name });
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+
+        // Subtle diagonal watermark
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate(-0.35);
+        ctx.font = `bold ${Math.max(18, Math.round(w / 22))}px sans-serif`;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+        ctx.textAlign = 'center';
+        ctx.fillText('ngopi.top • NGOPI GREEN', 0, 0);
+        ctx.restore();
+
+        // Bottom-right timestamp badge
+        const stamp = `ngopi.top • ${new Date().toISOString().slice(0, 16).replace('T', ' ')}`;
+        ctx.fillStyle = 'rgba(18, 13, 8, 0.65)';
+        const padX = 12;
+        const fontSize = Math.max(12, Math.round(w / 48));
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const textW = ctx.measureText(stamp).width;
+        ctx.fillRect(w - textW - padX * 2 - 10, h - fontSize - 22, textW + padX * 2, fontSize + 14);
+        ctx.fillStyle = '#D4AF37';
+        ctx.fillText(stamp, w - textW - padX - 10, h - 14);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const base = file.name.replace(/\.[^.]+$/, '') || 'evidence';
+              resolve({ blob, name: `${base}_ngopi.jpg` });
+            } else {
+              resolve({ blob: file, name: file.name });
+            }
+          },
+          'image/jpeg',
+          0.72
+        );
+      };
+      img.onerror = () => resolve({ blob: file, name: file.name });
+      img.src = String(reader.result);
+    };
+    reader.onerror = () => resolve({ blob: file, name: file.name });
+    reader.readAsDataURL(file);
+  });
+}
 const PLASTIC_MATERIALS = ['PET', 'HDPE', 'LDPE', 'PP', 'PS', 'PVC', 'Multilayer/Sachet'];
 const REPORT_SUBCATEGORIES = [
   { code: 'trees_vegetation', id: 'Pohon & Ruang Hijau', en: 'Trees & Vegetation' },
@@ -63,6 +138,7 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
   const [dashboard, setDashboard] = useState<any>(null);
   const [historyItems, setHistoryItems] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
+  const [selectedReport, setSelectedReport] = useState<any | null>(null);
   const [adminQueue, setAdminQueue] = useState<any[]>([]);
 
   // Filters
@@ -197,13 +273,55 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
     setErrorMsg(null);
     setUploading(true);
     try {
-      const uploaded = await uploadPrivateEvidenceFile(file);
-      setUploadedEvidences((prev) => [...prev, uploaded]);
+      const isImage = file.type.startsWith('image/');
+      let uploadTarget: File | Blob = file;
+      let uploadName = file.name;
+      let previewUrl: string | undefined;
+      if (isImage) {
+        const processed = await compressAndWatermarkImage(file);
+        uploadTarget = processed.blob;
+        uploadName = processed.name;
+        previewUrl = URL.createObjectURL(processed.blob);
+      }
+      const uploaded = await uploadPrivateEvidenceFile(uploadTarget, uploadName);
+      setUploadedEvidences((prev) => [...prev, { ...uploaded, previewUrl }]);
     } catch (err: any) {
       setErrorMsg(err?.message || t('Gagal mengunggah bukti.', 'Evidence upload failed.'));
     } finally {
       setUploading(false);
       e.target.value = '';
+    }
+  };
+
+  const handleShareGreen = async (customHook?: string) => {
+    const shareUrl = 'https://ngopi.top/green';
+    const message =
+      customHook ||
+      t(
+        `Saya baru saja mencatat aksi ramah lingkungan di NGOPI GREEN! Yuk jaga bumi & kumpulkan Poin Ngopi di ${shareUrl}`,
+        `I just logged an eco-friendly action on NGOPI GREEN! Join me to protect the planet & earn Ngopi Points at ${shareUrl}`
+      );
+    try {
+      if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+        if ((navigator as any).share) {
+          await (navigator as any).share({
+            title: 'NGOPI GREEN • ngopi.top',
+            text: message,
+            url: shareUrl,
+          });
+          return;
+        }
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(message);
+          setSuccessMsg(
+            t('Tautan & ajakan sosial berhasil disalin ke clipboard!', 'Social hook & link copied to clipboard!')
+          );
+          return;
+        }
+      }
+      await Share.share({ message, url: shareUrl, title: 'NGOPI GREEN • ngopi.top' });
+    } catch {
+      // User cancelled share dialog
     }
   };
 
@@ -281,7 +399,7 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
         longitude,
         locationConsent,
         metadata,
-        evidences: uploadedEvidences,
+        evidences: uploadedEvidences.map(({ previewUrl: _previewUrl, ...rest }) => rest),
       });
 
       setSuccessMsg(
@@ -421,9 +539,24 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
 
             {/* Verified Environmental Impact (Zero Fabricated Numbers) */}
             <View style={styles.card}>
-              <Text style={styles.sectionTitle}>
-                {t('Dampak Terverifikasi Anda', 'Your Verified Impact')}
-              </Text>
+              <View style={styles.rowBetween}>
+                <Text style={styles.sectionTitle}>
+                  {t('Dampak Terverifikasi Anda', 'Your Verified Impact')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.smallBtn}
+                  onPress={() =>
+                    handleShareGreen(
+                      t(
+                        `Dampak hijau saya di NGOPI GREEN: ${dashboard.impact?.avoided_emissions_kgco2e ?? 0} kg CO2e dihindari & ${dashboard.impact?.plants_count ?? 0} tanaman tercatat! Yuk gabung di https://ngopi.top/green`,
+                        `My NGOPI GREEN impact: ${dashboard.impact?.avoided_emissions_kgco2e ?? 0} kg CO2e avoided & ${dashboard.impact?.plants_count ?? 0} plants logged! Join me at https://ngopi.top/green`
+                      )
+                    )
+                  }
+                >
+                  <Text style={styles.smallBtnText}>📣 {t('Bagikan', 'Share')}</Text>
+                </TouchableOpacity>
+              </View>
               <View style={styles.impactGrid}>
                 <View style={styles.impactCell}>
                   <Text style={styles.impactVal}>{dashboard.impact?.avoided_emissions_kgco2e ?? 0} kg</Text>
@@ -748,11 +881,30 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                 })}
             </View>
             {uploadedEvidences.map((ev, i) => (
-              <View key={i} style={styles.evidenceRow}>
-                <Ionicons name="document-attach" size={15} color="#10B981" />
-                <Text style={styles.mutedText} numberOfLines={1}>
-                  {ev.fileName} ({Math.round((ev.fileSize || 0) / 1024)} KB) ✓
-                </Text>
+              <View key={i} style={{ gap: 6 }}>
+                <View style={styles.evidenceRow}>
+                  <Ionicons name="document-attach" size={15} color="#10B981" />
+                  <Text style={styles.mutedText} numberOfLines={1}>
+                    {ev.fileName} ({Math.round((ev.fileSize || 0) / 1024)} KB • Watermark ngopi.top) ✓
+                  </Text>
+                </View>
+                {Platform.OS === 'web' &&
+                  ev.previewUrl &&
+                  React.createElement('img', {
+                    src: ev.previewUrl,
+                    alt: ev.fileName,
+                    draggable: false,
+                    onContextMenu: (event: any) => event.preventDefault(),
+                    style: {
+                      width: '100%',
+                      maxHeight: 190,
+                      objectFit: 'contain',
+                      borderRadius: 10,
+                      border: '1px solid #3D2B1F',
+                      userSelect: 'none',
+                      pointerEvents: 'auto',
+                    },
+                  })}
               </View>
             ))}
 
@@ -825,6 +977,39 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                         {t('Catatan Verifikasi', 'Reviewer Note')}: {item.verifications[0].reason}
                       </Text>
                     )}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={styles.smallBtn}
+                        onPress={() =>
+                          handleShareGreen(
+                            t(
+                              `Saya baru mencatat "${item.title}" (${item.quantity} ${item.unit}) di NGOPI GREEN! Yuk ikut aksi hijau & kumpulkan Poin Ngopi di https://ngopi.top/green`,
+                              `I just logged "${item.title}" (${item.quantity} ${item.unit}) on NGOPI GREEN! Join the eco-action at https://ngopi.top/green`
+                            )
+                          )
+                        }
+                      >
+                        <Text style={styles.smallBtnText}>📣 {t('Bagikan', 'Share')}</Text>
+                      </TouchableOpacity>
+                      {(item.status === 'pending' || item.status === 'needs_info') && (
+                        <TouchableOpacity
+                          style={[styles.smallBtn, { borderColor: '#FB7185' }]}
+                          onPress={async () => {
+                            try {
+                              await deleteGreenSubmission(item.id);
+                              setSuccessMsg(t('Aktivitas berhasil dihapus.', 'Submission deleted.'));
+                              await loadAll();
+                            } catch (err: any) {
+                              setErrorMsg(err?.message || t('Gagal menghapus aktivitas.', 'Failed to delete submission.'));
+                            }
+                          }}
+                        >
+                          <Text style={[styles.smallBtnText, { color: '#FB7185' }]}>
+                            🗑 {t('Hapus', 'Delete')}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 ))
               )}
@@ -871,23 +1056,50 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                   'Emergency Disclaimer: NGOPI GREEN is not an emergency response service. Contact local emergency services for imminent danger.'
                 )}
               </Text>
+              {Platform.OS === 'web' && (() => {
+                const focus =
+                  selectedReport?.approx_lat && selectedReport?.approx_lng
+                    ? selectedReport
+                    : reports.find((r) => r.approx_lat && r.approx_lng);
+                const lat = Number(focus?.approx_lat ?? -6.2088);
+                const lng = Number(focus?.approx_lng ?? 106.8456);
+                const bbox = `${lng - 0.03},${lat - 0.025},${lng + 0.03},${lat + 0.025}`;
+                const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+                return React.createElement('iframe', {
+                  title: 'NGOPI GREEN Eco Map',
+                  src: mapUrl,
+                  style: {
+                    width: '100%',
+                    height: 240,
+                    border: '1px solid #3D2B1F',
+                    borderRadius: 12,
+                  },
+                });
+              })()}
               {reports.length === 0 ? (
                 <Text style={styles.mutedText}>
                   {t('Belum ada laporan lingkungan publik.', 'No public environmental reports yet.')}
                 </Text>
               ) : (
-                reports.map((r) => (
-                  <View key={r.id} style={styles.itemBox}>
-                    <View style={styles.rowBetween}>
-                      <Text style={styles.itemTitle}>{r.title}</Text>
-                      <Text style={styles.statusTag}>{r.status}</Text>
-                    </View>
-                    <Text style={styles.mutedText}>
-                      {r.report_category} • {r.severity} • {r.public_area_label || t('Area Umum', 'General Area')}
-                      {r.approx_lat ? ` (~${r.approx_lat}, ${r.approx_lng})` : ''}
-                    </Text>
-                  </View>
-                ))
+                reports.map((r) => {
+                  const isSelected = selectedReport?.id === r.id;
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.itemBox, isSelected && { borderColor: '#10B981' }]}
+                      onPress={() => setSelectedReport(r)}
+                    >
+                      <View style={styles.rowBetween}>
+                        <Text style={styles.itemTitle}>{r.title}</Text>
+                        <Text style={styles.statusTag}>{r.status}</Text>
+                      </View>
+                      <Text style={styles.mutedText}>
+                        {r.report_category} • {r.severity} • {r.public_area_label || t('Area Umum', 'General Area')}
+                        {r.approx_lat ? ` (~${r.approx_lat}, ${r.approx_lng}) 📍` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </View>
 

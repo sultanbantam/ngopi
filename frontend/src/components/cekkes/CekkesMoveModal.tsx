@@ -33,6 +33,8 @@ interface CekkesMoveModalProps {
 
 type TrackerModeOption = 'auto' | 'walking' | 'running';
 
+const MOVE_SESSION_KEY = 'ngopi_cekkes_move_active_session';
+
 export default function CekkesMoveModal({
   visible,
   lang,
@@ -51,6 +53,8 @@ export default function CekkesMoveModal({
   const [cadenceSpm, setCadenceSpm] = useState(0);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [routePoints, setRoutePoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [currentLatLng, setCurrentLatLng] = useState<{ lat: number; lng: number } | null>(null);
+  const [showOsmMap, setShowOsmMap] = useState(false);
   const [imuBars, setImuBars] = useState<number[]>([15, 22, 18, 25, 20, 16, 24, 19, 21, 17]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -60,6 +64,62 @@ export default function CekkesMoveModal({
   const prevMagRef = useRef<number>(9.81);
   const lastStepMsRef = useRef<number>(0);
   const stepTimestampsRef = useRef<number[]>([]);
+  const hydratedRef = useRef(false);
+
+  // Restore active walk/run session across screen rotation or remount
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || hydratedRef.current) return;
+    hydratedRef.current = true;
+    try {
+      const raw = window.localStorage.getItem(MOVE_SESSION_KEY);
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      if (saved && (saved.running || saved.elapsedSec > 0 || saved.steps > 0)) {
+        if (saved.selectedMode) setSelectedMode(saved.selectedMode);
+        if (saved.detectedMode) setDetectedMode(saved.detectedMode);
+        if (typeof saved.elapsedSec === 'number') setElapsedSec(saved.elapsedSec);
+        if (typeof saved.steps === 'number') setSteps(saved.steps);
+        if (typeof saved.distanceKm === 'number') setDistanceKm(saved.distanceKm);
+        if (typeof saved.cadenceSpm === 'number') setCadenceSpm(saved.cadenceSpm);
+        if (Array.isArray(saved.routePoints)) setRoutePoints(saved.routePoints);
+        if (saved.currentLatLng) setCurrentLatLng(saved.currentLatLng);
+        if (saved.lastGps) prevGpsRef.current = saved.lastGps;
+        if (typeof saved.simulating === 'boolean') setSimulating(saved.simulating);
+        if (typeof saved.running === 'boolean') setRunning(saved.running);
+      }
+    } catch {
+      // Ignore corrupt storage
+    }
+  }, []);
+
+  // Persist active walk/run session so orientation changes never lose progress
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || !hydratedRef.current) return;
+    try {
+      if (!running && elapsedSec === 0 && steps === 0) {
+        window.localStorage.removeItem(MOVE_SESSION_KEY);
+        return;
+      }
+      window.localStorage.setItem(
+        MOVE_SESSION_KEY,
+        JSON.stringify({
+          running,
+          simulating,
+          elapsedSec,
+          steps,
+          distanceKm,
+          cadenceSpm,
+          selectedMode,
+          detectedMode,
+          routePoints: routePoints.slice(-300),
+          currentLatLng,
+          lastGps: prevGpsRef.current,
+        })
+      );
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [running, simulating, elapsedSec, steps, distanceKm, cadenceSpm, selectedMode, detectedMode, routePoints, currentLatLng]);
 
   const activeMode: MoveActivityMode =
     selectedMode === 'auto' ? detectedMode : selectedMode;
@@ -236,6 +296,7 @@ export default function CekkesMoveModal({
             }
           }
           prevGpsRef.current = { lat, lng, t };
+          setCurrentLatLng({ lat, lng });
           setRoutePoints((pts) => [
             ...pts,
             {
@@ -283,11 +344,14 @@ export default function CekkesMoveModal({
       ]);
       // Draw smooth Strava loop route
       const angle = tick * 0.14;
+      const dx = Math.cos(angle) * 0.004 + Math.sin(angle * 2) * 0.001;
+      const dy = Math.sin(angle) * 0.004;
+      setCurrentLatLng({ lat: -6.2088 + dy, lng: 106.8456 + dx });
       setRoutePoints((pts) => [
         ...pts,
         {
-          x: Math.cos(angle) * 0.004 + Math.sin(angle * 2) * 0.001,
-          y: Math.sin(angle) * 0.004,
+          x: dx,
+          y: dy,
         },
       ]);
     }, 600);
@@ -346,7 +410,15 @@ export default function CekkesMoveModal({
     setSteps(0);
     setDistanceKm(0);
     setRoutePoints([]);
+    setCurrentLatLng(null);
     setStatusMsg(null);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        window.localStorage.removeItem(MOVE_SESSION_KEY);
+      } catch {
+        // ignore
+      }
+    }
   };
 
   return (
@@ -390,15 +462,47 @@ export default function CekkesMoveModal({
               ))}
             </View>
 
-            {/* Strava Route Canvas */}
+            {/* Route Canvas & Live OpenStreetMap Toggle */}
             <View style={styles.mapBox}>
+              {Platform.OS === 'web' && (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={styles.subtitle}>
+                    {currentLatLng
+                      ? `GPS: ${currentLatLng.lat.toFixed(5)}, ${currentLatLng.lng.toFixed(5)}`
+                      : isEn
+                        ? 'Route & Street Map'
+                        : 'Rute & Peta Jalan'}
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.modeBtn, { flex: 0, paddingHorizontal: 10, paddingVertical: 4 }]}
+                    onPress={() => setShowOsmMap((v) => !v)}
+                  >
+                    <Text style={styles.modeText}>
+                      {showOsmMap ? (isEn ? '📍 Route Line' : '📍 Garis Rute') : isEn ? '🗺 Street Map' : '🗺 Peta Jalan'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {Platform.OS === 'web' ? (
-                React.createElement('canvas', {
-                  ref: canvasRef,
-                  width: 340,
-                  height: 150,
-                  style: { width: '100%', height: 150, borderRadius: 12 },
-                })
+                showOsmMap ? (
+                  (() => {
+                    const lat = currentLatLng?.lat ?? -6.2088;
+                    const lng = currentLatLng?.lng ?? 106.8456;
+                    const bbox = `${lng - 0.012},${lat - 0.01},${lng + 0.012},${lat + 0.01}`;
+                    return React.createElement('iframe', {
+                      title: 'ceKKes Move OSM Map',
+                      src: `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`,
+                      style: { width: '100%', height: 170, border: 'none', borderRadius: 12 },
+                    });
+                  })()
+                ) : (
+                  React.createElement('canvas', {
+                    ref: canvasRef,
+                    width: 340,
+                    height: 150,
+                    style: { width: '100%', height: 150, borderRadius: 12 },
+                  })
+                )
               ) : (
                 <View style={styles.nativeMapFallback}>
                   <Ionicons name="navigate" size={28} color="#FC4C02" />

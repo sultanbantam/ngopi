@@ -1632,6 +1632,15 @@ export default function BambupediaRoom() {
             >
               <Text style={[styles.quickChipText, { color: '#34D399', fontWeight: '800' }]}>🩺 ceKKes</Text>
             </TouchableOpacity>
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: '#10B981' }]}
+                onPress={() => typeof window !== 'undefined' && window.open('/cekkes', '_blank')}
+                accessibilityLabel="Buka ceKKes di Jendela Baru"
+              >
+                <Text style={[styles.quickChipText, { color: '#34D399', fontWeight: '800' }]}>↗</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(34, 197, 94, 0.18)', borderColor: '#22C55E' }]}
@@ -1640,6 +1649,15 @@ export default function BambupediaRoom() {
             >
               <Text style={[styles.quickChipText, { color: '#4ADE80', fontWeight: '800' }]}>🌿 NGOPI GREEN</Text>
             </TouchableOpacity>
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: '#22C55E' }]}
+                onPress={() => typeof window !== 'undefined' && window.open('/green', '_blank')}
+                accessibilityLabel="Buka NGOPI GREEN di Jendela Baru"
+              >
+                <Text style={[styles.quickChipText, { color: '#4ADE80', fontWeight: '800' }]}>↗</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: '#d97706' }]}
