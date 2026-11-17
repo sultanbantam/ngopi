@@ -407,7 +407,7 @@ export default function BambupediaRoom() {
       setMemberSummary({
         online: nextOnline,
         total: nextMembers.length,
-        label: nextMembers.length > 0 ? `${nextOnline} online - ${nextMembers.length} anggota` : 'Memuat anggota',
+        label: nextMembers.length > 0 ? `${nextOnline} online - ${nextMembers.length} ${t('anggota', 'members')}` : t('Memuat anggota', 'Loading members'),
       });
     };
 
@@ -474,7 +474,7 @@ export default function BambupediaRoom() {
         setMemberSummary({
           online: nextOnline,
           total: nextMembers.length,
-          label: nextMembers.length > 0 ? `${nextOnline} online - ${nextMembers.length} anggota` : 'Memuat anggota',
+          label: nextMembers.length > 0 ? `${nextOnline} online - ${nextMembers.length} ${t('anggota', 'members')}` : t('Memuat anggota', 'Loading members'),
         });
       };
 
@@ -569,7 +569,7 @@ export default function BambupediaRoom() {
               setMemberSummary({
                 online: nextOnline,
                 total: rawList.length,
-                label: `${nextOnline} online - ${rawList.length} anggota`,
+                label: `${nextOnline} online - ${rawList.length} ${t('anggota', 'members')}`,
               });
             }
           })
@@ -1778,7 +1778,7 @@ export default function BambupediaRoom() {
               style={styles.textInputCompact}
               value={inputText}
               onChangeText={setInputText}
-              placeholder="Ketik pesan di Warung Kopi..."
+              placeholder={t('Ketik pesan di Warung Kopi...', 'Type a message in Coffee Lounge...')}
               placeholderTextColor={coffee.muted}
               multiline
               maxLength={1000}

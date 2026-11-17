@@ -10,9 +10,11 @@ import { explainAuthError } from '../../src/utils/auth-errors';
 import { deriveKeyPairFromSeed } from '../../src/utils/e2ee';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
+import { useLanguage } from '../../src/utils/i18n';
 
 
 export default function LoginScreen() {
+  const { lang, toggleLang, t } = useLanguage();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -122,14 +124,34 @@ export default function LoginScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
+        <TouchableOpacity
+          onPress={toggleLang}
+          style={{
+            alignSelf: 'flex-end',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+            backgroundColor: '#261C15',
+            borderWidth: 1,
+            borderColor: '#4A3728',
+            marginBottom: 8,
+          }}
+        >
+          <Text style={{ color: '#D4AF37', fontSize: 11, fontWeight: '800' }}>
+            {lang === 'id' ? 'ID | en' : 'EN | id'}
+          </Text>
+        </TouchableOpacity>
         <NgopiBrand />
-        <Text style={styles.subtitle}>Selamat datang kembali.</Text>
+        <Text style={styles.subtitle}>{t('Selamat datang kembali.', 'Welcome back.')}</Text>
 
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
         <TextInput
           style={styles.input}
-          placeholder="Username, Nomor Ngopi (0 / 101+), atau Email @ngopi.top"
+          placeholder={t(
+            'Username, Nomor Ngopi (0 / 101+), atau Email @ngopi.top',
+            'Username, Ngopi Number (0 / 101+), or @ngopi.top Email'
+          )}
           placeholderTextColor={coffee.muted}
           value={username}
           onChangeText={setUsername}
@@ -140,7 +162,7 @@ export default function LoginScreen() {
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
-            placeholder="Password"
+            placeholder={t('Kata Sandi', 'Password')}
             placeholderTextColor={coffee.muted}
             value={password}
             onChangeText={setPassword}
@@ -149,14 +171,16 @@ export default function LoginScreen() {
             textContentType="none"
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Text style={{ color: coffee.secondary }}>{showPassword ? 'Hide' : 'Show'}</Text>
+            <Text style={{ color: coffee.secondary }}>
+              {showPassword ? t('Sembunyikan', 'Hide') : t('Tampilkan', 'Show')}
+            </Text>
           </TouchableOpacity>
         </View>
 
         {challengeToken ? (
           <TextInput
             style={styles.input}
-            placeholder="Kode MFA 6 digit"
+            placeholder={t('Kode MFA 6 digit', '6-digit MFA Code')}
             placeholderTextColor={coffee.muted}
             value={mfaCode}
             onChangeText={setMfaCode}
@@ -165,28 +189,41 @@ export default function LoginScreen() {
           />
         ) : null}
 
-        <TouchableOpacity onPress={() => alert('Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin untuk bantuan lebih lanjut.')}>
-          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        <TouchableOpacity
+          onPress={() =>
+            alert(
+              t(
+                'Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin untuk bantuan lebih lanjut.',
+                'Since this is a decentralized app without email recovery, automatic password reset is unavailable. Please contact an admin for assistance.'
+              )
+            )
+          }
+        >
+          <Text style={styles.forgotPasswordText}>{t('Lupa Kata Sandi?', 'Forgot Password?')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.buttonText}>Login</Text>}
+          {loading ? (
+            <ActivityIndicator color={coffee.text} />
+          ) : (
+            <Text style={styles.buttonText}>{t('Masuk', 'Login')}</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
+          <Text style={styles.footerText}>{t('Belum punya akun?', "Don't have an account?")}</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-            <Text style={styles.linkText}> Sign Up</Text>
+            <Text style={styles.linkText}> {t('Daftar', 'Sign Up')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.raised }}>
           <TouchableOpacity onPress={() => router.push('/privacy')}>
-            <Text style={{ color: coffee.muted, fontSize: 12 }}>Kebijakan Privasi</Text>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>{t('Kebijakan Privasi', 'Privacy Policy')}</Text>
           </TouchableOpacity>
           <Text style={{ color: coffee.muted, fontSize: 12 }}>•</Text>
           <TouchableOpacity onPress={() => router.push('/terms')}>
-            <Text style={{ color: coffee.muted, fontSize: 12 }}>Syarat & Ketentuan</Text>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>{t('Syarat & Ketentuan', 'Terms & Conditions')}</Text>
           </TouchableOpacity>
         </View>
 

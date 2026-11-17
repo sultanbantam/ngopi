@@ -37,6 +37,8 @@ const ID_TO_EN_PHRASES: Array<[string, string]> = [
   ['Minta Tebakan', 'Ask Riddle'],
   ['Sapa Warung', 'Greet Lounge'],
   ['Ketik pesan di Warung Kopi...', 'Type a message in Coffee Lounge...'],
+  ['Ketik pesan di Coffee Lounge...', 'Type a message in Coffee Lounge...'],
+  ['Tips: Account Settings & Profil', 'Tips: Account Settings & Profile'],
   ['Menghubungkan', 'Connecting'],
   ['Anggota', 'Members'],
   ['anggota', 'members'],

@@ -2,33 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { coffee } from '../theme/coffee';
 import * as SecureStore from '../utils/storage';
+import { useLanguage } from '../utils/i18n';
 
 const ONBOARDING_KEY = 'ngopi_has_seen_onboarding_v1';
 
-const STEPS = [
-  {
-    icon: '☕',
-    title: 'Selamat datang di Ngopi!',
-    subtitle: 'ngobrol paling intim',
-    description: 'Di sini obrolanmu privat, terenkripsi ujung-ke-ujung (E2EE), dan tanpa nomor HP. Santai seperti ngopi di warung.',
-  },
-  {
-    icon: '🌿',
-    title: 'Suasana Warung Kopi',
-    subtitle: 'Nongkrong Tanpa Tekanan Medsos',
-    description: 'Nikmati Warung Kopi bersama komunitas. Putar lagu bareng di Jukebox, hidupkan suara hujan, dan rasakan obrolan yang lebih hidup.',
-  },
-  {
-    icon: '🤝',
-    title: 'Mulai Obrolan Baru',
-    subtitle: 'Ruang Privat untuk Semua Generasi',
-    description: 'Cari teman lewat ID Ngopi, buat Warung pribadimu, atau saling traktir kopi dengan token BMC. Selamat bergabung!',
-  },
-];
-
 export const OnboardingModal = () => {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+
+  const STEPS = [
+    {
+      icon: '☕',
+      title: t('Selamat datang di Ngopi!', 'Welcome to Ngopi!'),
+      subtitle: t('ngobrol paling intim', 'the most intimate chats'),
+      description: t(
+        'Di sini obrolanmu privat, terenkripsi ujung-ke-ujung (E2EE), dan tanpa nomor HP. Santai seperti ngopi di warung.',
+        'Here your chats are private, end-to-end encrypted (E2EE), and require no phone number. Relax just like hanging out at a coffee lounge.'
+      ),
+    },
+    {
+      icon: '🌿',
+      title: t('Suasana Warung Kopi', 'Coffee Lounge Atmosphere'),
+      subtitle: t('Nongkrong Tanpa Tekanan Medsos', 'Hang Out Without Social Media Pressure'),
+      description: t(
+        'Nikmati Warung Kopi bersama komunitas. Putar lagu bareng di Jukebox, hidupkan suara hujan, dan rasakan obrolan yang lebih hidup.',
+        'Enjoy the Coffee Lounge with the community. Play songs together on the Jukebox, turn on ambient rain, and experience livelier chats.'
+      ),
+    },
+    {
+      icon: '🤝',
+      title: t('Mulai Obrolan Baru', 'Start a New Conversation'),
+      subtitle: t('Ruang Privat untuk Semua Generasi', 'A Private Space for Every Generation'),
+      description: t(
+        'Cari teman lewat ID Ngopi, buat Warung pribadimu, atau saling traktir kopi dengan token BMC. Selamat bergabung!',
+        'Find friends with a Ngopi ID, create your own Lounge, or treat each other to coffee with BMC tokens. Welcome aboard!'
+      ),
+    },
+  ];
 
   useEffect(() => {
     const checkOnboarding = async () => {
@@ -99,11 +110,11 @@ export const OnboardingModal = () => {
           <View style={styles.buttonRow}>
             {!isLast && (
               <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
-                <Text style={styles.skipText}>Lewati</Text>
+                <Text style={styles.skipText}>{t('Lewati', 'Skip')}</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity style={styles.nextButton} onPress={handleNext}>
-              <Text style={styles.nextText}>{isLast ? 'Mulai Ngopi ☕' : 'Lanjut →'}</Text>
+              <Text style={styles.nextText}>{isLast ? t('Mulai Ngopi ☕', 'Start Ngopi ☕') : t('Lanjut →', 'Next →')}</Text>
             </TouchableOpacity>
           </View>
         </View>

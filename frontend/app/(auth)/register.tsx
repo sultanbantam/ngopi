@@ -12,9 +12,11 @@ import { explainAuthError } from '../../src/utils/auth-errors';
 const API_URL = 'https://api.ngopi.top/api';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
+import { useLanguage } from '../../src/utils/i18n';
 
 
 export default function RegisterScreen() {
+  const { lang, toggleLang, t } = useLanguage();
   const params = useLocalSearchParams<{ ref?: string }>();
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
@@ -113,8 +115,25 @@ export default function RegisterScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.card}>
+        <TouchableOpacity
+          onPress={toggleLang}
+          style={{
+            alignSelf: 'flex-end',
+            paddingHorizontal: 10,
+            paddingVertical: 5,
+            borderRadius: 8,
+            backgroundColor: '#261C15',
+            borderWidth: 1,
+            borderColor: '#4A3728',
+            marginBottom: 8,
+          }}
+        >
+          <Text style={{ color: '#D4AF37', fontSize: 11, fontWeight: '800' }}>
+            {lang === 'id' ? 'ID | en' : 'EN | id'}
+          </Text>
+        </TouchableOpacity>
         <NgopiBrand />
-        <Text style={styles.subtitle}>Mulai obrolan dengan akun unikmu.</Text>
+        <Text style={styles.subtitle}>{t('Mulai obrolan dengan akun unikmu.', 'Start chatting with your unique account.')}</Text>
 
         {referralCode ? (
           <View style={{
@@ -131,10 +150,13 @@ export default function RegisterScreen() {
             <Text style={{ fontSize: 20 }}>🏆</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ color: coffee.accent, fontSize: 12, fontWeight: '700' }}>
-                Undangan dari @{referralCode}
+                {t(`Undangan dari @${referralCode}`, `Invited by @${referralCode}`)}
               </Text>
               <Text style={{ color: coffee.secondary, fontSize: 10 }}>
-                Bergabung melalui link kemenangan! Kawan Anda akan menerima +50 Poin Referral.
+                {t(
+                  'Bergabung melalui link kemenangan! Kawan Anda akan menerima +50 Poin Referral.',
+                  'Joined via referral link! Your friend will receive +50 Referral Points.'
+                )}
               </Text>
             </View>
           </View>
@@ -144,7 +166,7 @@ export default function RegisterScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Display Name"
+          placeholder={t('Nama Tampilan', 'Display Name')}
           placeholderTextColor={coffee.muted}
           value={displayName}
           onChangeText={setDisplayName}
@@ -152,7 +174,7 @@ export default function RegisterScreen() {
 
         <TextInput
           style={styles.input}
-          placeholder="Username"
+          placeholder={t('Nama Pengguna (Username)', 'Username')}
           placeholderTextColor={coffee.muted}
           value={username}
           onChangeText={setUsername}
@@ -163,7 +185,7 @@ export default function RegisterScreen() {
         <View style={styles.passwordContainer}>
           <TextInput
             style={styles.passwordInput}
-            placeholder="Password"
+            placeholder={t('Kata Sandi', 'Password')}
             placeholderTextColor={coffee.muted}
             value={password}
             onChangeText={setPassword}
@@ -172,29 +194,37 @@ export default function RegisterScreen() {
             secureTextEntry={!showPassword}
           />
           <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Text style={{ color: coffee.secondary }}>{showPassword ? 'Hide' : 'Show'}</Text>
+            <Text style={{ color: coffee.secondary }}>
+              {showPassword ? t('Sembunyikan', 'Hide') : t('Tampilkan', 'Show')}
+            </Text>
           </TouchableOpacity>
         </View>
-        <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: -8, marginBottom: 12 }}>Minimal 8 karakter</Text>
+        <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: -8, marginBottom: 12 }}>
+          {t('Minimal 8 karakter', 'Minimum 8 characters')}
+        </Text>
 
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
-          {loading ? <ActivityIndicator color={coffee.text} /> : <Text style={styles.buttonText}>Sign Up</Text>}
+          {loading ? (
+            <ActivityIndicator color={coffee.text} />
+          ) : (
+            <Text style={styles.buttonText}>{t('Daftar', 'Sign Up')}</Text>
+          )}
         </TouchableOpacity>
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
+          <Text style={styles.footerText}>{t('Sudah punya akun?', 'Already have an account?')}</Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
-            <Text style={styles.linkText}> Login</Text>
+            <Text style={styles.linkText}> {t('Masuk', 'Login')}</Text>
           </TouchableOpacity>
         </View>
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.raised }}>
           <TouchableOpacity onPress={() => router.push('/privacy')}>
-            <Text style={{ color: coffee.muted, fontSize: 12 }}>Kebijakan Privasi</Text>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>{t('Kebijakan Privasi', 'Privacy Policy')}</Text>
           </TouchableOpacity>
           <Text style={{ color: coffee.muted, fontSize: 12 }}>•</Text>
           <TouchableOpacity onPress={() => router.push('/terms')}>
-            <Text style={{ color: coffee.muted, fontSize: 12 }}>Syarat & Ketentuan</Text>
+            <Text style={{ color: coffee.muted, fontSize: 12 }}>{t('Syarat & Ketentuan', 'Terms & Conditions')}</Text>
           </TouchableOpacity>
         </View>
       </View>

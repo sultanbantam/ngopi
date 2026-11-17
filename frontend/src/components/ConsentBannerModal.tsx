@@ -12,6 +12,7 @@ import { coffee as baseCoffee } from '../theme/coffee';
 import axios from 'axios';
 import { getAuthHeaders } from '../utils/api';
 import PrivacyModal from './PrivacyModal';
+import { useLanguage } from '../utils/i18n';
 
 const coffee = {
   ...baseCoffee,
@@ -24,6 +25,7 @@ const API_URL = 'https://api.ngopi.top/api';
 const CONSENT_STORAGE_KEY = 'ngopi_consent_v3';
 
 export default function ConsentBannerModal() {
+  const { t } = useLanguage();
   const [visible, setVisible] = useState(false);
   const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
@@ -72,13 +74,16 @@ export default function ConsentBannerModal() {
                 <Ionicons name="shield-checkmark" size={18} color="#FFF" />
               </View>
               <View style={styles.titleCol}>
-                <Text style={styles.title}>Perlindungan Data Pribadi (UU PDP)</Text>
-                <Text style={styles.subtitle}>UU No. 27/2022 • Atmosfer Warkop Privat & Aman</Text>
+                <Text style={styles.title}>{t('Perlindungan Data Pribadi (UU PDP)', 'Personal Data Protection (UU PDP)')}</Text>
+                <Text style={styles.subtitle}>{t('UU No. 27/2022 • Atmosfer Warkop Privat & Aman', 'Law No. 27/2022 • Private & Secure Lounge Atmosphere')}</Text>
               </View>
             </View>
 
             <Text style={styles.bodyText}>
-              Ngopi menjamin privasi Anda: Chat terenkripsi penuh (E2EE X25519/AES-256-GCM), tanpa nomor HP, dan data Anda tidak pernah dijual ke pengiklan. Dengan melanjutkan, Anda menyetujui Kebijakan Privasi dan Syarat Ketentuan kami.
+              {t(
+                'Ngopi menjamin privasi Anda: Chat terenkripsi penuh (E2EE X25519/AES-256-GCM), tanpa nomor HP, dan data Anda tidak pernah dijual ke pengiklan. Dengan melanjutkan, Anda menyetujui Kebijakan Privasi dan Syarat Ketentuan kami.',
+                'Ngopi protects your privacy: Chats are fully end-to-end encrypted (E2EE X25519/AES-256-GCM), require no phone number, and your data is never sold to advertisers. By continuing, you agree to our Privacy Policy and Terms & Conditions.'
+              )}
             </Text>
 
             <View style={styles.actionRow}>
@@ -86,11 +91,11 @@ export default function ConsentBannerModal() {
                 style={styles.readPolicyBtn}
                 onPress={() => setPrivacyModalVisible(true)}
               >
-                <Text style={styles.readPolicyText}>Baca Kebijakan</Text>
+                <Text style={styles.readPolicyText}>{t('Baca Kebijakan', 'Read Policy')}</Text>
               </TouchableOpacity>
 
               <TouchableOpacity style={styles.acceptBtn} onPress={handleAccept}>
-                <Text style={styles.acceptBtnText}>Saya Paham & Setuju</Text>
+                <Text style={styles.acceptBtnText}>{t('Saya Paham & Setuju', 'I Understand & Agree')}</Text>
               </TouchableOpacity>
             </View>
           </View>
