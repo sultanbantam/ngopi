@@ -17,15 +17,20 @@ import { useLanguage } from '../../utils/i18n';
 import * as SecureStore from '../../utils/storage';
 import InteractiveStreetMap from '../common/InteractiveStreetMap';
 import {
+  applyForGreenAdmin,
   deleteGreenSubmission,
   fetchAdminGreenQueue,
   fetchGreenCatalog,
   fetchGreenDashboard,
   fetchGreenReports,
   fetchGreenSubmissions,
+  fetchMyAdminApplication,
+  fetchSuperadminOverview,
   joinGreenChallenge,
   monitorGreenPlant,
   submitGreenActivity,
+  superadminPromoteUser,
+  superadminReviewApplication,
   uploadPrivateEvidenceFile,
   verifyAdminGreenSubmission,
 } from './greenApi';
@@ -149,6 +154,18 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
   const [adminReason, setAdminReason] = useState('');
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
 
+  // Admin Application & Superadmin Founder State
+  const [myAdminApps, setMyAdminApps] = useState<any[]>([]);
+  const [bmcTxRef, setBmcTxRef] = useState('');
+  const [applyingAdmin, setApplyingAdmin] = useState(false);
+  const [superOverview, setSuperOverview] = useState<{ admins: any[]; applications: any[] }>({
+    admins: [],
+    applications: [],
+  });
+  const [promoteUsername, setPromoteUsername] = useState('');
+  const [promoteReason, setPromoteReason] = useState('');
+  const [promoting, setPromoting] = useState(false);
+
   // Submission Form State
   const [selectedCat, setSelectedCat] = useState('mobility');
   const [selectedTypeCode, setSelectedTypeCode] = useState('mobility_walk_cycle');
@@ -191,6 +208,13 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
       ]);
       setCatalog(catRes);
       setDashboard(dashRes);
+      const liveRole = String(dashRes?.userRole || role || 'user').toLowerCase();
+      setUserRole(liveRole);
+      if (liveRole === 'user') {
+        fetchMyAdminApplication()
+          .then((r) => setMyAdminApps(r.applications || []))
+          .catch(() => {});
+      }
     } catch (err: any) {
       setErrorMsg(
         err?.message?.includes('401') || err?.message?.includes('Unauthorized')
@@ -222,8 +246,13 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
       fetchAdminGreenQueue(adminStatusFilter)
         .then(setAdminQueue)
         .catch((e) => setErrorMsg(e.message));
+      if (userRole === 'superadmin') {
+        fetchSuperadminOverview()
+          .then((ov) => setSuperOverview({ admins: ov.admins || [], applications: ov.applications || [] }))
+          .catch(() => {});
+      }
     }
-  }, [tab, historyCat, historyStatus, adminStatusFilter]);
+  }, [tab, historyCat, historyStatus, adminStatusFilter, userRole]);
 
   const typesForCategory = useMemo(
     () => (catalog.activityTypes || []).filter((a: any) => a.category_code === selectedCat),
@@ -636,6 +665,112 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                 );
               })}
             </View>
+
+            {/* User Admin Application Card (500,000 Ngopi Points or 500 BMC) */}
+            {userRole === 'user' && (
+              <View style={styles.card}>
+                <Text style={styles.sectionTitle}>
+                  🛡️ {t('Ajukan Diri Sebagai Admin Validator', 'Apply as Admin Validator')}
+                </Text>
+                <Text style={styles.bodyText}>
+                  {t(
+                    'Syarat pengajuan Admin NGOPI GREEN: deposit 500.000 Poin Ngopi ATAU 500 Token BMC. Pengajuan akan direview langsung oleh Superadmin (Founder).',
+                    'Requirement to apply as NGOPI GREEN Admin: deposit 500,000 Ngopi Points OR 500 BMC Tokens. Applications are reviewed by the Superadmin (Founder).'
+                  )}
+                </Text>
+                <Text style={styles.mutedText}>
+                  {t('Saldo Poin Ngopi Anda', 'Your Ngopi Points')}:{' '}
+                  {(dashboard.pointsBalance ?? 0).toLocaleString('id-ID')} / 500.000
+                </Text>
+
+                {myAdminApps[0] && (
+                  <View style={styles.itemBox}>
+                    <Text style={styles.itemTitle}>
+                      {t('Status Pengajuan Terakhir', 'Latest Application')}:{' '}
+                      {String(myAdminApps[0].status).toUpperCase()}
+                    </Text>
+                    <Text style={styles.mutedText}>
+                      {myAdminApps[0].deposit_method === 'points'
+                        ? '500.000 Poin Ngopi'
+                        : `500 Token BMC (${myAdminApps[0].bmc_tx_ref || '-'})`}
+                      {myAdminApps[0].review_reason ? ` • ${myAdminApps[0].review_reason}` : ''}
+                    </Text>
+                  </View>
+                )}
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryGreenBtn,
+                    { justifyContent: 'center', opacity: (dashboard.pointsBalance ?? 0) >= 500000 ? 1 : 0.6 },
+                  ]}
+                  disabled={applyingAdmin}
+                  onPress={async () => {
+                    setErrorMsg(null);
+                    setSuccessMsg(null);
+                    setApplyingAdmin(true);
+                    try {
+                      await applyForGreenAdmin({ depositMethod: 'points' });
+                      setSuccessMsg(
+                        t(
+                          'Pengajuan Admin (deposit 500.000 Poin) berhasil dikirim! Menunggu persetujuan Founder.',
+                          'Admin application (500,000 Points deposit) submitted! Waiting for Founder approval.'
+                        )
+                      );
+                      await loadAll();
+                    } catch (err: any) {
+                      setErrorMsg(err?.message || t('Pengajuan gagal.', 'Application failed.'));
+                    } finally {
+                      setApplyingAdmin(false);
+                    }
+                  }}
+                >
+                  <Text style={styles.primaryGreenText}>
+                    {applyingAdmin
+                      ? t('Memproses...', 'Processing...')
+                      : t('Ajukan dengan Deposit 500.000 Poin', 'Apply with 500,000 Points Deposit')}
+                  </Text>
+                </TouchableOpacity>
+
+                <Text style={styles.label}>
+                  {t('Atau Deposit 500 Token BMC (Masukkan Hash / Ref Transaksi)', 'Or Deposit 500 BMC Tokens (Enter Tx Hash / Ref)')}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <TextInput
+                    value={bmcTxRef}
+                    onChangeText={setBmcTxRef}
+                    placeholder="0x... / Ref Transaksi 500 BMC"
+                    placeholderTextColor="#8B735B"
+                    style={[styles.input, { flex: 1 }]}
+                  />
+                  <TouchableOpacity
+                    style={styles.smallBtn}
+                    disabled={applyingAdmin}
+                    onPress={async () => {
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                      setApplyingAdmin(true);
+                      try {
+                        await applyForGreenAdmin({ depositMethod: 'bmc', bmcTxRef });
+                        setBmcTxRef('');
+                        setSuccessMsg(
+                          t(
+                            'Pengajuan Admin (500 Token BMC) berhasil dikirim! Menunggu verifikasi Founder.',
+                            'Admin application (500 BMC Tokens) submitted! Waiting for Founder verification.'
+                          )
+                        );
+                        await loadAll();
+                      } catch (err: any) {
+                        setErrorMsg(err?.message || t('Pengajuan gagal.', 'Application failed.'));
+                      } finally {
+                        setApplyingAdmin(false);
+                      }
+                    }}
+                  >
+                    <Text style={styles.smallBtnText}>{t('Ajukan BMC', 'Apply BMC')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -1207,6 +1342,150 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                 </View>
               ))
             )}
+          </View>
+        )}
+
+        {/* SUPERADMIN PANEL (FOUNDER ONLY) */}
+        {tab === 'admin' && userRole === 'superadmin' && (
+          <View style={[styles.card, { borderColor: '#D4AF37' }]}>
+            <Text style={[styles.sectionTitle, { color: '#D4AF37' }]}>
+              👑 {t('Panel Superadmin (Founder)', 'Superadmin Panel (Founder)')}
+            </Text>
+            <Text style={styles.mutedText}>
+              {t(
+                'Angkat / turunkan admin secara langsung atau setujui pengajuan admin dari user (deposit 500.000 Poin / 500 BMC).',
+                'Promote/demote admins directly or review user admin applications (500,000 Points / 500 BMC deposit).'
+              )}
+            </Text>
+
+            <Text style={styles.label}>{t('Angkat / Kelola Role Admin (Username)', 'Promote / Manage Admin Role (Username)')}</Text>
+            <TextInput
+              value={promoteUsername}
+              onChangeText={setPromoteUsername}
+              placeholder={t('Masukkan username target...', 'Enter target username...')}
+              placeholderTextColor="#8B735B"
+              style={styles.input}
+            />
+            <TextInput
+              value={promoteReason}
+              onChangeText={setPromoteReason}
+              placeholder={t('Catatan / alasan (opsional)', 'Note / reason (optional)')}
+              placeholderTextColor="#8B735B"
+              style={styles.input}
+            />
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                style={[styles.primaryGreenBtn, { flex: 1, justifyContent: 'center' }]}
+                disabled={promoting}
+                onPress={async () => {
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                  setPromoting(true);
+                  try {
+                    const r = await superadminPromoteUser({
+                      username: promoteUsername,
+                      action: 'promote',
+                      reason: promoteReason || undefined,
+                    });
+                    setSuccessMsg(`@${r.user?.username} ${t('berhasil diangkat menjadi Admin!', 'promoted to Admin!')}`);
+                    setPromoteUsername('');
+                    setPromoteReason('');
+                    const ov = await fetchSuperadminOverview();
+                    setSuperOverview({ admins: ov.admins || [], applications: ov.applications || [] });
+                  } catch (err: any) {
+                    setErrorMsg(err?.message || t('Gagal mengangkat admin.', 'Failed to promote user.'));
+                  } finally {
+                    setPromoting(false);
+                  }
+                }}
+              >
+                <Text style={styles.primaryGreenText}>{t('Angkat Jadi Admin', 'Promote to Admin')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.smallBtn, { borderColor: '#FB7185', justifyContent: 'center', paddingHorizontal: 14 }]}
+                disabled={promoting}
+                onPress={async () => {
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                  setPromoting(true);
+                  try {
+                    const r = await superadminPromoteUser({
+                      username: promoteUsername,
+                      action: 'demote',
+                      reason: promoteReason || undefined,
+                    });
+                    setSuccessMsg(`@${r.user?.username} ${t('diturunkan menjadi User biasa.', 'demoted to User.')}`);
+                    setPromoteUsername('');
+                    setPromoteReason('');
+                    const ov = await fetchSuperadminOverview();
+                    setSuperOverview({ admins: ov.admins || [], applications: ov.applications || [] });
+                  } catch (err: any) {
+                    setErrorMsg(err?.message || t('Gagal menurunkan admin.', 'Failed to demote user.'));
+                  } finally {
+                    setPromoting(false);
+                  }
+                }}
+              >
+                <Text style={[styles.smallBtnText, { color: '#FB7185' }]}>{t('Turunkan', 'Demote')}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.label}>
+              {t('Daftar Pengajuan Admin (Deposit 500rb Poin / 500 BMC)', 'Admin Applications (500k Points / 500 BMC)')}
+            </Text>
+            {superOverview.applications.length === 0 ? (
+              <Text style={styles.mutedText}>{t('Belum ada pengajuan admin.', 'No admin applications yet.')}</Text>
+            ) : (
+              superOverview.applications.map((app: any) => (
+                <View key={app.id} style={styles.itemBox}>
+                  <View style={styles.rowBetween}>
+                    <Text style={styles.itemTitle}>
+                      @{app.applicant?.username || app.user_id.slice(0, 8)} •{' '}
+                      {app.deposit_method === 'points' ? '500.000 Poin' : '500 Token BMC'}
+                    </Text>
+                    <Text style={styles.statusTag}>{String(app.status).toUpperCase()}</Text>
+                  </View>
+                  {app.bmc_tx_ref && (
+                    <Text style={styles.mutedText}>BMC Ref: {app.bmc_tx_ref}</Text>
+                  )}
+                  {app.status === 'pending' && (
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[styles.smallBtn, { backgroundColor: '#10B981' }]}
+                        onPress={async () => {
+                          await superadminReviewApplication(app.id, 'approved', 'Disetujui oleh Founder');
+                          const ov = await fetchSuperadminOverview();
+                          setSuperOverview({ admins: ov.admins || [], applications: ov.applications || [] });
+                          setSuccessMsg(t('Pengajuan disetujui & user diangkat menjadi Admin!', 'Application approved & promoted to Admin!'));
+                        }}
+                      >
+                        <Text style={[styles.smallBtnText, { color: '#052E16' }]}>
+                          {t('Setujui & Angkat Admin', 'Approve & Promote')}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.smallBtn, { backgroundColor: '#F43F5E' }]}
+                        onPress={async () => {
+                          await superadminReviewApplication(app.id, 'rejected', 'Ditolak oleh Founder');
+                          const ov = await fetchSuperadminOverview();
+                          setSuperOverview({ admins: ov.admins || [], applications: ov.applications || [] });
+                          setSuccessMsg(t('Pengajuan ditolak (deposit poin dikembalikan).', 'Application rejected (points deposit refunded).'));
+                        }}
+                      >
+                        <Text style={styles.smallBtnText}>{t('Tolak', 'Reject')}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              ))
+            )}
+
+            <Text style={styles.label}>{t('Admin & Superadmin Aktif', 'Active Admins & Superadmins')}</Text>
+            {superOverview.admins.map((adm: any) => (
+              <Text key={adm.id} style={styles.mutedText}>
+                • @{adm.username} ({adm.display_name}) — {String(adm.role).toUpperCase()}
+              </Text>
+            ))}
           </View>
         )}
       </ScrollView>

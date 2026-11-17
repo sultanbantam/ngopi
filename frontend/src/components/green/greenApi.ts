@@ -151,3 +151,66 @@ export async function verifyAdminGreenSubmission(
   if (!res.ok) throw new Error(extractErrorMsg(json, 'Verification failed'));
   return json;
 }
+
+export async function fetchMyAdminApplication() {
+  const res = await fetch(`${GREEN_API_BASE}/admin-application/me`, {
+    headers: await authHeaders(false),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMsg(json, `HTTP ${res.status}`));
+  return json;
+}
+
+export async function applyForGreenAdmin(payload: {
+  depositMethod: 'points' | 'bmc';
+  bmcTxRef?: string;
+  notes?: string;
+}) {
+  const res = await fetch(`${GREEN_API_BASE}/admin-application/apply`, {
+    method: 'POST',
+    headers: await authHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMsg(json, 'Failed to submit admin application'));
+  return json;
+}
+
+export async function fetchSuperadminOverview() {
+  const res = await fetch(`${GREEN_API_BASE}/superadmin/overview`, {
+    headers: await authHeaders(false),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMsg(json, `HTTP ${res.status}`));
+  return json;
+}
+
+export async function superadminPromoteUser(payload: {
+  username: string;
+  action: 'promote' | 'demote';
+  reason?: string;
+}) {
+  const res = await fetch(`${GREEN_API_BASE}/superadmin/promote`, {
+    method: 'POST',
+    headers: await authHeaders(true),
+    body: JSON.stringify(payload),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMsg(json, 'Role update failed'));
+  return json;
+}
+
+export async function superadminReviewApplication(
+  applicationId: string,
+  decision: 'approved' | 'rejected',
+  reason?: string
+) {
+  const res = await fetch(`${GREEN_API_BASE}/superadmin/applications/${applicationId}/review`, {
+    method: 'POST',
+    headers: await authHeaders(true),
+    body: JSON.stringify({ decision, reason }),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(extractErrorMsg(json, 'Application review failed'));
+  return json;
+}

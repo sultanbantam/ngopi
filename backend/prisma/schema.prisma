@@ -1501,4 +1501,23 @@ model GreenAuditLog {
   @@map("green_audit_logs")
 }
 
+model GreenAdminApplication {
+  id             String    @id @default(uuid())
+  user_id        String    @map("user_id")
+  deposit_method String    @map("deposit_method") // "points" | "bmc"
+  deposit_amount Float     @map("deposit_amount") // 500000 for points, 500 for bmc
+  points_tx_id   String?   @map("points_tx_id")
+  bmc_tx_ref     String?   @map("bmc_tx_ref")
+  notes          String?
+  status         String    @default("pending") // "pending" | "approved" | "rejected"
+  reviewed_by    String?   @map("reviewed_by")
+  review_reason  String?   @map("review_reason")
+  reviewed_at    DateTime? @map("reviewed_at")
+  created_at     DateTime  @default(now()) @map("created_at")
+
+  @@index([user_id, created_at])
+  @@index([status, created_at])
+  @@map("green_admin_applications")
+}
+
 
