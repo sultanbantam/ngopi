@@ -3,7 +3,7 @@
  * Fondasi Offline untuk Akses Tanpa Internet & HT (Handy Talky)
  */
 
-const CACHE_NAME = 'ngopi-v4';
+const CACHE_NAME = 'ngopi-v5';
 const OFFLINE_FALLBACK_URL = '/offline.html';
 
 const URLS_TO_CACHE = [
@@ -98,7 +98,23 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static assets (JS, CSS, Images, Fonts): Stale-While-Revalidate
+  // JS bundles & _expo assets: Network-First so new deployments take effect immediately
+  if (url.pathname.startsWith('/_expo/') || url.pathname.endsWith('.js')) {
+    event.respondWith(
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request))
+    );
+    return;
+  }
+
+  // Other static assets (Images, Fonts, CSS): Stale-While-Revalidate
   event.respondWith(
     caches.match(request).then((cachedResponse) => {
       const fetchPromise = fetch(request)
