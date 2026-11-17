@@ -266,6 +266,8 @@ export default function BambupediaRoom() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const isCompact = width < 720;
+  const quickChipsScrollRef = useRef<ScrollView | null>(null);
+  const quickChipsScrollXRef = useRef(0);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
@@ -1596,11 +1598,44 @@ export default function BambupediaRoom() {
           )}
 
           {/* Quick Action Chips Bar (HT Radio, Album Mixtape, Tebak-tebakan, Poin, Sapa) */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickChipsBar}
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: Platform.OS === 'web' ? 6 : 0 }}
+            {...(Platform.OS === 'web'
+              ? {
+                  onWheel: (e: any) => {
+                    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+                    if (!delta) return;
+                    const nextX = Math.max(0, quickChipsScrollXRef.current + delta);
+                    quickChipsScrollXRef.current = nextX;
+                    quickChipsScrollRef.current?.scrollTo({ x: nextX, animated: false });
+                  },
+                }
+              : {})}
           >
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { paddingHorizontal: 8, marginRight: 4, marginBottom: 6 }]}
+                onPress={() => {
+                  const nextX = Math.max(0, quickChipsScrollXRef.current - 240);
+                  quickChipsScrollXRef.current = nextX;
+                  quickChipsScrollRef.current?.scrollTo({ x: nextX, animated: true });
+                }}
+                accessibilityLabel="Geser tombol ke kiri"
+              >
+                <Text style={styles.quickChipText}>◀</Text>
+              </TouchableOpacity>
+            )}
+            <ScrollView
+              ref={quickChipsScrollRef}
+              horizontal
+              showsHorizontalScrollIndicator={Platform.OS === 'web'}
+              scrollEventThrottle={16}
+              onScroll={(e) => {
+                quickChipsScrollXRef.current = e.nativeEvent.contentOffset.x;
+              }}
+              style={{ flex: 1 }}
+              contentContainerStyle={styles.quickChipsBar}
+            >
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}
               onPress={() => setHtModalVisible(true)}
@@ -1708,6 +1743,20 @@ export default function BambupediaRoom() {
               <Text style={styles.quickChipText}>☕ Sapa Warung</Text>
             </TouchableOpacity>
           </ScrollView>
+          {Platform.OS === 'web' && (
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { paddingHorizontal: 8, marginLeft: 4, marginBottom: 6 }]}
+              onPress={() => {
+                const nextX = quickChipsScrollXRef.current + 240;
+                quickChipsScrollXRef.current = nextX;
+                quickChipsScrollRef.current?.scrollTo({ x: nextX, animated: true });
+              }}
+              accessibilityLabel="Geser tombol ke kanan"
+            >
+              <Text style={styles.quickChipText}>▶</Text>
+            </TouchableOpacity>
+          )}
+          </View>
 
           {/* Modern Unified Single-Row Input Bar */}
           <View style={styles.inputBarRow}>
