@@ -771,9 +771,15 @@ export default function ActiveScanner({
 
       {selectedModule === 'ppg' && (
         <View style={styles.card}>
-          <Text style={styles.modTitle}>👆 Sentuhan Jari (Nadi PPG & Uji Ketuk 15 Detik)</Text>
+          <Text style={styles.modTitle}>
+            {lang === 'en'
+              ? '👆 Finger Touch (PPG Pulse & 15s Tap Test)'
+              : '👆 Sentuhan Jari (Nadi PPG & Uji Ketuk 15 Detik)'}
+          </Text>
           <Text style={styles.mutedText}>
-            Tempelkan ujung jari telunjuk di kamera belakang HP (atau uji kecepatan ketuk layar 15 detik).
+            {lang === 'en'
+              ? 'Place your index fingertip over the rear camera (or run the 15-second screen tap speed test).'
+              : 'Tempelkan ujung jari telunjuk di kamera belakang HP (atau uji kecepatan ketuk layar 15 detik).'}
           </Text>
           {/* Live PPG Waveform Bars */}
           <View style={styles.waveBox}>
@@ -784,7 +790,13 @@ export default function ActiveScanner({
           <View style={styles.rowGap}>
             <TouchableOpacity style={styles.cyanBtn} onPress={runPpgScan} disabled={ppgRunning}>
               <Text style={styles.cyanBtnText}>
-                {ppgRunning ? `Memindai (${ppgProgress}%)...` : 'Ukur PPG Kamera (8d)'}
+                {ppgRunning
+                  ? lang === 'en'
+                    ? `Scanning (${ppgProgress}%)...`
+                    : `Memindai (${ppgProgress}%)...`
+                  : lang === 'en'
+                    ? 'Measure Camera PPG (8s)'
+                    : 'Ukur PPG Kamera (8d)'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -796,12 +808,20 @@ export default function ActiveScanner({
               }}
             >
               <Text style={styles.secBtnText}>
-                {tapRunning ? `Ketuk (${tapSeconds}s)` : 'Uji Ketuk 15s'}
+                {tapRunning
+                  ? lang === 'en'
+                    ? `Tap (${tapSeconds}s)`
+                    : `Ketuk (${tapSeconds}s)`
+                  : lang === 'en'
+                    ? '15s Tap Test'
+                    : 'Uji Ketuk 15s'}
               </Text>
             </TouchableOpacity>
             {tapRunning && (
               <TouchableOpacity style={styles.goldBtn} onPress={() => setTapCount((c) => c + 1)}>
-                <Text style={styles.goldBtnText}>KETUK ({tapCount})</Text>
+                <Text style={styles.goldBtnText}>
+                  {lang === 'en' ? `TAP (${tapCount})` : `KETUK (${tapCount})`}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -822,9 +842,13 @@ export default function ActiveScanner({
 
       {selectedModule === 'ocular' && (
         <View style={styles.card}>
-          <Text style={styles.modTitle}>👁️ Tatapan & Kelelahan Mata (TBUT)</Text>
+          <Text style={styles.modTitle}>
+            {lang === 'en' ? '👁️ Eye Gaze & Fatigue (TBUT)' : '👁️ Tatapan & Kelelahan Mata (TBUT)'}
+          </Text>
           <Text style={styles.mutedText}>
-            Tekan Mulai, tahan mata terbuka tanpa berkedip senyaman mungkin, lalu tekan Saya Berkedip.
+            {lang === 'en'
+              ? 'Press Start, keep your eyes open comfortably without blinking, then press I Blinked.'
+              : 'Tekan Mulai, tahan mata terbuka tanpa berkedip senyaman mungkin, lalu tekan Saya Berkedip.'}
           </Text>
           {!tbutRunning ? (
             <TouchableOpacity
@@ -834,11 +858,17 @@ export default function ActiveScanner({
                 setTbutRunning(true);
               }}
             >
-              <Text style={styles.cyanBtnText}>Mulai Uji Tahan Kedip</Text>
+              <Text style={styles.cyanBtnText}>
+                {lang === 'en' ? 'Start Blink Hold Test' : 'Mulai Uji Tahan Kedip'}
+              </Text>
             </TouchableOpacity>
           ) : (
             <TouchableOpacity style={styles.goldBtn} onPress={stopTbutTest}>
-              <Text style={styles.goldBtnText}>Saya Berkedip ({tbutSeconds} dtk) — Selesai</Text>
+              <Text style={styles.goldBtnText}>
+                {lang === 'en'
+                  ? `I Blinked (${tbutSeconds}s) — Finish`
+                  : `Saya Berkedip (${tbutSeconds} dtk) — Selesai`}
+              </Text>
             </TouchableOpacity>
           )}
           {ocularResult ? <Text style={styles.resultText}>{ocularResult}</Text> : null}
@@ -847,25 +877,45 @@ export default function ActiveScanner({
 
       {selectedModule === 'chest_abdomen' && (
         <View style={styles.card}>
-          <Text style={styles.modTitle}>❤️ Dada (SCG), Perut & Skrining Ginjal</Text>
+          <Text style={styles.modTitle}>
+            {lang === 'en'
+              ? '❤️ Chest (SCG), Abdomen & Kidney Screen'
+              : '❤️ Dada (SCG), Perut & Skrining Ginjal'}
+          </Text>
           <Text style={styles.mutedText}>
-            Tempelkan bagian belakang HP ke dada kiri (SCG) atau perut kanan bawah untuk bising usus.
+            {lang === 'en'
+              ? 'Place the back of your phone on your left chest (SCG) or lower-right abdomen for bowel sounds.'
+              : 'Tempelkan bagian belakang HP ke dada kiri (SCG) atau perut kanan bawah untuk bising usus.'}
           </Text>
           <View style={styles.eduBox}>
             <Ionicons name="information-circle" size={18} color="#38BDF8" />
             <Text style={styles.eduText}>
-              Catatan Medis Ginjal: Ginjal berada jauh di rongga retroperitoneal sehingga tidak memancarkan suara/getaran ke permukaan perut. Skrining awal dialihkan ke bengkak kelopak mata & pola urin.
+              {lang === 'en'
+                ? 'Kidney Medical Note: Kidneys sit deep in the retroperitoneal space and do not emit surface vibrations. Early screening uses eyelid swelling & urine patterns.'
+                : 'Catatan Medis Ginjal: Ginjal berada jauh di rongga retroperitoneal sehingga tidak memancarkan suara/getaran ke permukaan perut. Skrining awal dialihkan ke bengkak kelopak mata & pola urin.'}
             </Text>
           </View>
           <View style={styles.rowGap}>
             <TouchableOpacity style={styles.cyanBtn} onPress={runChestScgScan} disabled={scgRunning}>
               <Text style={styles.cyanBtnText}>
-                {scgRunning ? 'Mengukur Dada (8d)...' : 'Rekam SCG Dada (IMU 8d)'}
+                {scgRunning
+                  ? lang === 'en'
+                    ? 'Measuring Chest (8s)...'
+                    : 'Mengukur Dada (8d)...'
+                  : lang === 'en'
+                    ? 'Record Chest SCG (IMU 8s)'
+                    : 'Rekam SCG Dada (IMU 8d)'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryBtn} onPress={runAbdomenAudioScan} disabled={abdomenRunning}>
               <Text style={styles.secBtnText}>
-                {abdomenRunning ? 'Mendengarkan Perut (10d)...' : 'Rekam Bising Usus (10d)'}
+                {abdomenRunning
+                  ? lang === 'en'
+                    ? 'Listening to Abdomen (10s)...'
+                    : 'Mendengarkan Perut (10d)...'
+                  : lang === 'en'
+                    ? 'Record Bowel Sounds (10s)'
+                    : 'Rekam Bising Usus (10d)'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -876,17 +926,29 @@ export default function ActiveScanner({
                 if (next === 'edema_or_foamy') {
                   onUpsertFinding({
                     id: 'active-kidney-screen',
-                    title: 'Skrining Ginjal: Bengkak Kelopak Mata / Urin Berbusa',
+                    title:
+                      lang === 'en'
+                        ? 'Kidney Screen: Eyelid Swelling / Foamy Urine'
+                        : 'Skrining Ginjal: Bengkak Kelopak Mata / Urin Berbusa',
                     source: 'active',
                     severity: 'waspada',
                     category: 'kidney_screen',
-                    summary: 'Disarankan cek laboratorium urinalisis & ureum/kreatinin di faskes.',
+                    summary:
+                      lang === 'en'
+                        ? 'Recommended to check urinalysis & urea/creatinine labs at a clinic.'
+                        : 'Disarankan cek laboratorium urinalisis & ureum/kreatinin di faskes.',
                   });
                 }
               }}
             >
               <Text style={styles.secBtnText}>
-                {kidneySymptom === 'edema_or_foamy' ? '⚠ Ada Bengkak Mata/Urin Berbusa' : 'Kelopak Mata & Urin: Normal'}
+                {kidneySymptom === 'edema_or_foamy'
+                  ? lang === 'en'
+                    ? '⚠ Eyelid Swelling / Foamy Urine'
+                    : '⚠ Ada Bengkak Mata/Urin Berbusa'
+                  : lang === 'en'
+                    ? 'Eyelids & Urine: Normal'
+                    : 'Kelopak Mata & Urin: Normal'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -897,20 +959,36 @@ export default function ActiveScanner({
 
       {selectedModule === 'voice' && (
         <View style={styles.card}>
-          <Text style={styles.modTitle}>🗣️ Analisis Suara ("Aaaaa..." 5d) & Keluhan</Text>
+          <Text style={styles.modTitle}>
+            {lang === 'en'
+              ? '🗣️ Voice Analysis ("Aaaaa..." 5s) & Symptoms'
+              : '🗣️ Analisis Suara ("Aaaaa..." 5d) & Keluhan'}
+          </Text>
           <Text style={styles.mutedText}>
-            Tulis keluhan Anda lalu ucapkan "Aaaaa..." selama 5 detik untuk mengukur F0, energi & HNR pita suara.
+            {lang === 'en'
+              ? 'Type your symptoms then say "Aaaaa..." for 5 seconds to measure vocal F0, energy & HNR.'
+              : 'Tulis keluhan Anda lalu ucapkan "Aaaaa..." selama 5 detik untuk mengukur F0, energi & HNR pita suara.'}
           </Text>
           <TextInput
             value={symptomText}
             onChangeText={setSymptomText}
-            placeholder="Mis. suara serak, perut perih/maag, mata buram..."
+            placeholder={
+              lang === 'en'
+                ? 'e.g. hoarse voice, stomach ache, blurry eyes...'
+                : 'Mis. suara serak, perut perih/maag, mata buram...'
+            }
             placeholderTextColor="#8B735B"
             style={styles.input}
           />
           <TouchableOpacity style={styles.cyanBtn} onPress={runVoiceAndSymptomAnalysis} disabled={voiceActive}>
             <Text style={styles.cyanBtnText}>
-              {voiceActive ? 'Merekam Vokal 5 Detik...' : 'Rekam Vokal 5d & Analisis'}
+              {voiceActive
+                ? lang === 'en'
+                  ? 'Recording Vocal 5s...'
+                  : 'Merekam Vokal 5 Detik...'
+                : lang === 'en'
+                  ? 'Record 5s Vocal & Analyze'
+                  : 'Rekam Vokal 5d & Analisis'}
             </Text>
           </TouchableOpacity>
           {voiceError ? <Text style={styles.errorText}>{voiceError}</Text> : null}
@@ -920,19 +998,31 @@ export default function ActiveScanner({
 
       {selectedModule === 'vision' && (
         <View style={styles.card}>
-          <Text style={styles.modTitle}>📸 Kamera Klinis Mata, Mulut & Kulit</Text>
+          <Text style={styles.modTitle}>
+            {lang === 'en'
+              ? '📸 Clinical Camera: Eyes, Mouth & Skin'
+              : '📸 Kamera Klinis Mata, Mulut & Kulit'}
+          </Text>
           <Text style={styles.mutedText}>
-            Pilih target area, lalu ambil foto kamera atau unggah gambar untuk analisis warna klinis piksel.
+            {lang === 'en'
+              ? 'Select a target area, then capture a camera photo or upload an image for pixel color screening.'
+              : 'Pilih target area, lalu ambil foto kamera atau unggah gambar untuk analisis warna klinis piksel.'}
           </Text>
           <View style={styles.rowGap}>
-            {(['mata', 'mulut', 'kulit'] as const).map((m) => (
+            {(
+              [
+                { id: 'mata', label: lang === 'en' ? 'EYES' : 'MATA' },
+                { id: 'mulut', label: lang === 'en' ? 'MOUTH' : 'MULUT' },
+                { id: 'kulit', label: lang === 'en' ? 'SKIN' : 'KULIT' },
+              ] as const
+            ).map((m) => (
               <TouchableOpacity
-                key={m}
-                style={[styles.chip, visionMode === m && styles.chipActive]}
-                onPress={() => setVisionMode(m)}
+                key={m.id}
+                style={[styles.chip, visionMode === m.id && styles.chipActive]}
+                onPress={() => setVisionMode(m.id)}
               >
-                <Text style={[styles.secBtnText, visionMode === m && { color: '#1A120B' }]}>
-                  {m.toUpperCase()}
+                <Text style={[styles.secBtnText, visionMode === m.id && { color: '#1A120B' }]}>
+                  {m.label}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -942,16 +1032,26 @@ export default function ActiveScanner({
             <View style={styles.rowGap}>
               <TouchableOpacity style={styles.cyanBtn} onPress={toggleVisionCamera}>
                 <Text style={styles.cyanBtnText}>
-                  {visionCameraActive ? 'Tutup Kamera' : `Buka Kamera (${visionMode.toUpperCase()})`}
+                  {visionCameraActive
+                    ? lang === 'en'
+                      ? 'Close Camera'
+                      : 'Tutup Kamera'
+                    : lang === 'en'
+                      ? `Open Camera (${visionMode === 'mata' ? 'EYES' : visionMode === 'mulut' ? 'MOUTH' : 'SKIN'})`
+                      : `Buka Kamera (${visionMode.toUpperCase()})`}
                 </Text>
               </TouchableOpacity>
               {visionCameraActive && (
                 <TouchableOpacity style={styles.goldBtn} onPress={captureVisionSnapshot}>
-                  <Text style={styles.goldBtnText}>Ambil & Analisis Foto</Text>
+                  <Text style={styles.goldBtnText}>
+                    {lang === 'en' ? 'Capture & Analyze' : 'Ambil & Analisis Foto'}
+                  </Text>
                 </TouchableOpacity>
               )}
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => fileInputRef.current?.click()}>
-                <Text style={styles.secBtnText}>Unggah Foto</Text>
+                <Text style={styles.secBtnText}>
+                  {lang === 'en' ? 'Upload Photo' : 'Unggah Foto'}
+                </Text>
               </TouchableOpacity>
               {React.createElement('input', {
                 ref: fileInputRef,
@@ -974,28 +1074,40 @@ export default function ActiveScanner({
             </View>
           )}
 
-          <Text style={styles.mutedText}>Simulasi Uji Cepat (untuk demo desktop):</Text>
+          <Text style={styles.mutedText}>
+            {lang === 'en' ? 'Quick Test Simulation (desktop demo):' : 'Simulasi Uji Cepat (untuk demo desktop):'}
+          </Text>
           <View style={styles.rowGap}>
             {visionMode === 'mata' && (
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => runSimulationPreset('anemia')}>
-                <Text style={styles.secBtnText}>Simulasi Konjungtiva Pucat</Text>
+                <Text style={styles.secBtnText}>
+                  {lang === 'en' ? 'Simulate Pale Conjunctiva' : 'Simulasi Konjungtiva Pucat'}
+                </Text>
               </TouchableOpacity>
             )}
             {visionMode === 'mulut' && (
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => runSimulationPreset('dehidrasi')}>
-                <Text style={styles.secBtnText}>Simulasi Mukosa Kering</Text>
+                <Text style={styles.secBtnText}>
+                  {lang === 'en' ? 'Simulate Dry Mucosa' : 'Simulasi Mukosa Kering'}
+                </Text>
               </TouchableOpacity>
             )}
             {visionMode === 'kulit' && (
               <>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={() => runSimulationPreset('jamur')}>
-                  <Text style={styles.secBtnText}>Simulasi Jamur</Text>
+                  <Text style={styles.secBtnText}>
+                    {lang === 'en' ? 'Simulate Fungal' : 'Simulasi Jamur'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={() => runSimulationPreset('kutil')}>
-                  <Text style={styles.secBtnText}>Simulasi Kutil</Text>
+                  <Text style={styles.secBtnText}>
+                    {lang === 'en' ? 'Simulate Wart' : 'Simulasi Kutil'}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.secondaryBtn} onPress={() => runSimulationPreset('eksim')}>
-                  <Text style={styles.secBtnText}>Simulasi Eksim</Text>
+                  <Text style={styles.secBtnText}>
+                    {lang === 'en' ? 'Simulate Eczema' : 'Simulasi Eksim'}
+                  </Text>
                 </TouchableOpacity>
               </>
             )}

@@ -276,15 +276,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: coffee.border,
     marginBottom: 16,
+    overflow: 'hidden',
   },
   passwordInput: {
     flex: 1,
+    minWidth: 0,
     color: coffee.text,
     padding: 16,
     fontSize: 16,
   },
   eyeIcon: {
-    padding: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    flexShrink: 0,
   },
   button: {
     backgroundColor: coffee.button, // Emerald green

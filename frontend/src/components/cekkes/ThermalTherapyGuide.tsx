@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useLanguage } from '../../utils/i18n';
 
 export type SkinConditionFlag = 'none' | 'wart_clavus' | 'folliculitis' | 'eczema_acute' | 'bleeding_wound' | 'fungal_active';
 
@@ -13,6 +14,7 @@ export default function ThermalTherapyGuide({
   detectedSkinCondition,
   onSelectSkinCondition,
 }: ThermalTherapyGuideProps) {
+  const { t } = useLanguage();
   const [deviceTempC, setDeviceTempC] = useState(35.4);
   const [secondsLeft, setSecondsLeft] = useState(30 * 60);
   const [timerRunning, setTimerRunning] = useState(false);
@@ -44,38 +46,55 @@ export default function ThermalTherapyGuide({
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <Ionicons name="thermometer-outline" size={20} color="#F59E0B" />
-        <Text style={styles.title}>Modul 6: Asisten Terapi Termal Terukur & Keamanan Kulit</Text>
+        <Text style={styles.title}>
+          {t('Modul 6: Asisten Terapi Termal Terukur & Keamanan Kulit', 'Module 6: Guided Thermal Therapy & Skin Safety')}
+        </Text>
       </View>
 
       {/* Mandatory Medical & Device Safety Guardrail */}
       <View style={styles.warningBox}>
-        <Text style={styles.warningTitle}>GUARDRAIL KEAMANAN PERANGKAT & MEDIS (WAJIB)</Text>
-        <Text style={styles.warningText}>
-          • DILARANG KERAS memanaskan bodi HP/tablet dan menempelkannya langsung ke kulit yang luka, eksim, atau berjamur.
+        <Text style={styles.warningTitle}>
+          {t('GUARDRAIL KEAMANAN PERANGKAT & MEDIS (WAJIB)', 'DEVICE & MEDICAL SAFETY GUARDRAIL (MANDATORY)')}
         </Text>
         <Text style={styles.warningText}>
-          • Suhu di atas 44°C memicu luka bakar jaringan, memperparah inflamasi eksim, merusak baterai Lithium-Ion (risiko thermal burn), dan menyebarkan spora jamur/virus HPV ke layar HP.
+          •{' '}
+          {t(
+            'DILARANG KERAS memanaskan bodi HP/tablet dan menempelkannya langsung ke kulit yang luka, eksim, atau berjamur.',
+            'STRICTLY PROHIBITED to heat your phone/tablet body and press it onto wounded, eczematous, or fungal skin.'
+          )}
+        </Text>
+        <Text style={styles.warningText}>
+          •{' '}
+          {t(
+            'Suhu di atas 44°C memicu luka bakar jaringan, memperparah inflamasi eksim, merusak baterai Lithium-Ion (risiko thermal burn), dan menyebarkan spora jamur/virus HPV ke layar HP.',
+            'Temperatures above 44°C can cause tissue burns, worsen eczema inflammation, damage Lithium-Ion batteries, and spread fungal spores/HPV onto the screen.'
+          )}
         </Text>
       </View>
 
       {/* Device Thermal Monitor */}
       <View style={styles.tempRow}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Estimasi Suhu Perangkat (Batas Aman &lt; 40°C)</Text>
+          <Text style={styles.label}>
+            {t('Estimasi Suhu Perangkat (Batas Aman < 40°C)', 'Estimated Device Temp (Safe Limit < 40°C)')}
+          </Text>
           <Text style={[styles.tempVal, { color: deviceTempC >= 40 ? '#F43F5E' : '#10B981' }]}>
-            {deviceTempC.toFixed(1)} °C — {deviceTempC >= 40 ? 'TERLALU PANAS (Istirahatkan HP)' : 'AMAN'}
+            {deviceTempC.toFixed(1)} °C —{' '}
+            {deviceTempC >= 40
+              ? t('TERLALU PANAS (Istirahatkan HP)', 'TOO HOT (Rest Device)')
+              : t('AMAN', 'SAFE')}
           </Text>
         </View>
         <View style={styles.stepBtns}>
           <TouchableOpacity
             style={styles.smallBtn}
-            onPress={() => setDeviceTempC((t) => Math.max(30, Number((t - 1.5).toFixed(1))))}
+            onPress={() => setDeviceTempC((prev) => Math.max(30, Number((prev - 1.5).toFixed(1))))}
           >
             <Text style={styles.smallBtnText}>-</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.smallBtn}
-            onPress={() => setDeviceTempC((t) => Math.min(46, Number((t + 1.5).toFixed(1))))}
+            onPress={() => setDeviceTempC((prev) => Math.min(46, Number((prev + 1.5).toFixed(1))))}
           >
             <Text style={styles.smallBtnText}>+</Text>
           </TouchableOpacity>
@@ -83,14 +102,16 @@ export default function ThermalTherapyGuide({
       </View>
 
       {/* Skin Condition Selector */}
-      <Text style={styles.label}>Simulasi / Hasil Pemeriksaan Kondisi Kulit:</Text>
+      <Text style={styles.label}>
+        {t('Simulasi / Hasil Pemeriksaan Kondisi Kulit:', 'Skin Condition Screening / Simulation:')}
+      </Text>
       <View style={styles.chipWrap}>
         {[
-          { id: 'wart_clavus', label: 'Kutil / HPV (Aman 43°C)' },
-          { id: 'folliculitis', label: 'Bisul Ringan (Aman 42°C)' },
-          { id: 'eczema_acute', label: 'Eksim Meradang (Terkunci)' },
-          { id: 'bleeding_wound', label: 'Luka Berdarah (Terkunci)' },
-          { id: 'fungal_active', label: 'Jamur Aktif (Terkunci)' },
+          { id: 'wart_clavus', label: t('Kutil / HPV (Aman 43°C)', 'Wart / HPV (Safe 43°C)') },
+          { id: 'folliculitis', label: t('Bisul Ringan (Aman 42°C)', 'Mild Boil (Safe 42°C)') },
+          { id: 'eczema_acute', label: t('Eksim Meradang (Terkunci)', 'Acute Eczema (Locked)') },
+          { id: 'bleeding_wound', label: t('Luka Berdarah (Terkunci)', 'Bleeding Wound (Locked)') },
+          { id: 'fungal_active', label: t('Jamur Aktif (Terkunci)', 'Active Fungal (Locked)') },
         ].map((opt) => (
           <TouchableOpacity
             key={opt.id}
@@ -112,27 +133,40 @@ export default function ThermalTherapyGuide({
         <View style={styles.lockedBox}>
           <Ionicons name="lock-closed" size={18} color="#F43F5E" />
           <View style={{ flex: 1 }}>
-            <Text style={styles.lockedTitle}>KOMPRES PANAS DIKUNCI OTOMATIS</Text>
+            <Text style={styles.lockedTitle}>
+              {t('KOMPRES PANAS DIKUNCI OTOMATIS', 'HEAT COMPRESS AUTO-LOCKED')}
+            </Text>
             <Text style={styles.bodyText}>
-              Terdeteksi indikasi kontraindikasi ({detectedSkinCondition.replace('_', ' ')}). Agen mengalihkan penanganan ke kompres dingin bersih atau terapi antijamur/pelembap kering.
+              {t(
+                `Terdeteksi indikasi kontraindikasi (${detectedSkinCondition.replace('_', ' ')}). Agen mengalihkan penanganan ke kompres dingin bersih atau terapi antijamur/pelembap kering.`,
+                `Contraindication detected (${detectedSkinCondition.replace('_', ' ')}). Switched guidance to clean cool compress or targeted antifungal/dry moisturizer care.`
+              )}
             </Text>
           </View>
         </View>
       ) : (
         <View style={styles.timerBox}>
           <Text style={styles.timerTitle}>
-            Guided Local Hyperthermia Timer (Kompres Hangat Bersih / Medical Warming Patch 42°C–44°C)
+            {t(
+              'Guided Local Hyperthermia Timer (Kompres Hangat Bersih / Medical Warming Patch 42°C–44°C)',
+              'Guided Local Hyperthermia Timer (Clean Warm Compress / Medical Warming Patch 42°C–44°C)'
+            )}
           </Text>
           <Text style={styles.timerClock}>{timeFormatted}</Text>
           <Text style={styles.mutedText}>
-            Jadwal Klinis: 1 sesi 30 menit/hari (Pukul 20:30 WIB) menggunakan kompres hangat bersih atau medical patch — bukan bodi HP.
+            {t(
+              'Jadwal Klinis: 1 sesi 30 menit/hari (Pukul 20:30 WIB) menggunakan kompres hangat bersih atau medical patch — bukan bodi HP.',
+              'Clinical Schedule: 1 session 30 min/day (20:30 local time) using a clean warm compress or medical patch — never the phone body.'
+            )}
           </Text>
           <View style={styles.actionRow}>
             <TouchableOpacity
               style={styles.primaryBtn}
               onPress={() => setTimerRunning((v) => !v)}
             >
-              <Text style={styles.btnText}>{timerRunning ? 'Jeda Timer' : 'Mulai Sesi 30 Menit'}</Text>
+              <Text style={styles.btnText}>
+                {timerRunning ? t('Jeda Timer', 'Pause Timer') : t('Mulai Sesi 30 Menit', 'Start 30-Min Session')}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryBtn}
