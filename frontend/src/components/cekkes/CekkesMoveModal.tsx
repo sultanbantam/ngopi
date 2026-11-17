@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CekkesLang } from './DoctorVoicePlayer';
+import InteractiveStreetMap, { MapLatLng } from '../common/InteractiveStreetMap';
 import {
   MoveActivityMode,
   GpsTrackPoint,
@@ -53,8 +54,9 @@ export default function CekkesMoveModal({
   const [cadenceSpm, setCadenceSpm] = useState(0);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [routePoints, setRoutePoints] = useState<Array<{ x: number; y: number }>>([]);
+  const [latLngRoute, setLatLngRoute] = useState<MapLatLng[]>([]);
   const [currentLatLng, setCurrentLatLng] = useState<{ lat: number; lng: number } | null>(null);
-  const [showOsmMap, setShowOsmMap] = useState(false);
+  const [showOsmMap, setShowOsmMap] = useState(true);
   const [imuBars, setImuBars] = useState<number[]>([15, 22, 18, 25, 20, 16, 24, 19, 21, 17]);
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -82,6 +84,7 @@ export default function CekkesMoveModal({
         if (typeof saved.distanceKm === 'number') setDistanceKm(saved.distanceKm);
         if (typeof saved.cadenceSpm === 'number') setCadenceSpm(saved.cadenceSpm);
         if (Array.isArray(saved.routePoints)) setRoutePoints(saved.routePoints);
+        if (Array.isArray(saved.latLngRoute)) setLatLngRoute(saved.latLngRoute);
         if (saved.currentLatLng) setCurrentLatLng(saved.currentLatLng);
         if (saved.lastGps) prevGpsRef.current = saved.lastGps;
         if (typeof saved.simulating === 'boolean') setSimulating(saved.simulating);
@@ -112,6 +115,7 @@ export default function CekkesMoveModal({
           selectedMode,
           detectedMode,
           routePoints: routePoints.slice(-300),
+          latLngRoute: latLngRoute.slice(-300),
           currentLatLng,
           lastGps: prevGpsRef.current,
         })
@@ -119,7 +123,7 @@ export default function CekkesMoveModal({
     } catch {
       // Ignore storage quota errors
     }
-  }, [running, simulating, elapsedSec, steps, distanceKm, cadenceSpm, selectedMode, detectedMode, routePoints, currentLatLng]);
+  }, [running, simulating, elapsedSec, steps, distanceKm, cadenceSpm, selectedMode, detectedMode, routePoints, latLngRoute, currentLatLng]);
 
   const activeMode: MoveActivityMode =
     selectedMode === 'auto' ? detectedMode : selectedMode;
@@ -297,6 +301,7 @@ export default function CekkesMoveModal({
           }
           prevGpsRef.current = { lat, lng, t };
           setCurrentLatLng({ lat, lng });
+          setLatLngRoute((pts) => [...pts, { lat, lng }]);
           setRoutePoints((pts) => [
             ...pts,
             {
@@ -346,7 +351,10 @@ export default function CekkesMoveModal({
       const angle = tick * 0.14;
       const dx = Math.cos(angle) * 0.004 + Math.sin(angle * 2) * 0.001;
       const dy = Math.sin(angle) * 0.004;
-      setCurrentLatLng({ lat: -6.2088 + dy, lng: 106.8456 + dx });
+      const simLat = -6.2088 + dy;
+      const simLng = 106.8456 + dx;
+      setCurrentLatLng({ lat: simLat, lng: simLng });
+      setLatLngRoute((pts) => [...pts, { lat: simLat, lng: simLng }]);
       setRoutePoints((pts) => [
         ...pts,
         {
@@ -410,6 +418,7 @@ export default function CekkesMoveModal({
     setSteps(0);
     setDistanceKm(0);
     setRoutePoints([]);
+    setLatLngRoute([]);
     setCurrentLatLng(null);
     setStatusMsg(null);
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -493,16 +502,14 @@ export default function CekkesMoveModal({
               )}
               {Platform.OS === 'web' ? (
                 showOsmMap ? (
-                  (() => {
-                    const lat = currentLatLng?.lat ?? -6.2088;
-                    const lng = currentLatLng?.lng ?? 106.8456;
-                    const bbox = `${lng - 0.012},${lat - 0.01},${lng + 0.012},${lat + 0.01}`;
-                    return React.createElement('iframe', {
-                      title: 'ceKKes Move OSM Map',
-                      src: `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`,
-                      style: { width: '100%', height: 170, border: 'none', borderRadius: 12 },
-                    });
-                  })()
+                  <InteractiveStreetMap
+                    centerLat={currentLatLng?.lat ?? -6.2088}
+                    centerLng={currentLatLng?.lng ?? 106.8456}
+                    zoom={16}
+                    height={180}
+                    routePoints={latLngRoute}
+                    routeColor={activeMode === 'running' ? '#FC4C02' : '#2563EB'}
+                  />
                 ) : (
                   React.createElement('canvas', {
                     ref: canvasRef,

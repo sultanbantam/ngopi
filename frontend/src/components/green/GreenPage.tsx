@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { useLanguage } from '../../utils/i18n';
 import * as SecureStore from '../../utils/storage';
+import InteractiveStreetMap from '../common/InteractiveStreetMap';
 import {
   deleteGreenSubmission,
   fetchAdminGreenQueue,
@@ -1063,18 +1064,29 @@ export default function GreenPage({ initialTab = 'dashboard' }: { initialTab?: G
                     : reports.find((r) => r.approx_lat && r.approx_lng);
                 const lat = Number(focus?.approx_lat ?? -6.2088);
                 const lng = Number(focus?.approx_lng ?? 106.8456);
-                const bbox = `${lng - 0.03},${lat - 0.025},${lng + 0.03},${lat + 0.025}`;
-                const mapUrl = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
-                return React.createElement('iframe', {
-                  title: 'NGOPI GREEN Eco Map',
-                  src: mapUrl,
-                  style: {
-                    width: '100%',
-                    height: 240,
-                    border: '1px solid #3D2B1F',
-                    borderRadius: 12,
-                  },
-                });
+                const reportPins = reports
+                  .filter((r) => r.approx_lat && r.approx_lng)
+                  .map((r) => ({
+                    id: String(r.id),
+                    lat: Number(r.approx_lat),
+                    lng: Number(r.approx_lng),
+                    label: `${r.title} (${r.severity})`,
+                    color: r.severity === 'high' ? '#EF4444' : r.severity === 'medium' ? '#F59E0B' : '#10B981',
+                    selected: selectedReport?.id === r.id,
+                  }));
+                return (
+                  <InteractiveStreetMap
+                    centerLat={lat}
+                    centerLng={lng}
+                    zoom={13}
+                    height={240}
+                    pins={reportPins}
+                    onPinPress={(id) => {
+                      const found = reports.find((r) => String(r.id) === id);
+                      if (found) setSelectedReport(found);
+                    }}
+                  />
+                );
               })()}
               {reports.length === 0 ? (
                 <Text style={styles.mutedText}>
