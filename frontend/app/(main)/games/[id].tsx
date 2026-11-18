@@ -1827,7 +1827,13 @@ export default function GameTableScreen() {
           const isMe = player.user_id === currentUserId;
           const cardCount = isMe
             ? (table.game_type === 'gapleh' ? myHand.length : myCards.length)
-            : gameState?.opponents?.[player.user_id]?.cardCount ?? 7;
+            : (
+                gameState?.opponents?.[player.user_id]?.cardCount ??
+                gameState?.handCounts?.[player.user_id] ??
+                gameState?.playersSummary?.find((p: any) => p.user_id === player.user_id)?.cardCount ??
+                gameState?.players?.[player.user_id]?.cardCount ??
+                7
+              );
 
           const isPartnership = table.game_type === 'gapleh' && (table.config?.gaplehMode === 'partnership' || gameState?.gameMode === 'partnership');
           const playerTeam = isPartnership ? (player.team || (player.seat_number % 2 === 0 ? 'A' : 'B')) : null;

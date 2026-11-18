@@ -335,6 +335,30 @@ export default function NgopiWebViewContainer() {
         Linking.openURL(data.url).catch(() => {
           Alert.alert('Info', 'Tidak dapat membuka tautan ini.');
         });
+      } else if (data.type === 'NGOPI_NATIVE_NOTIFY') {
+        const mod = NativeModules?.CekkesBackgroundModule;
+        if (mod && typeof mod.showPushNotification === 'function') {
+          mod.showPushNotification(
+            String(data.title || 'Ngopi'),
+            String(data.body || ''),
+            String(data.channelType || 'message'),
+            String(data.routePath || '/warkop')
+          ).catch(() => {});
+        }
+      } else if (data.type === 'NGOPI_INCOMING_CALL') {
+        const mod = NativeModules?.CekkesBackgroundModule;
+        if (mod && typeof mod.startIncomingCallAlert === 'function') {
+          mod.startIncomingCallAlert(
+            String(data.callerName || 'Seseorang'),
+            Boolean(data.isVideo),
+            String(data.routePath || '/warkop')
+          ).catch(() => {});
+        }
+      } else if (data.type === 'NGOPI_CALL_ENDED') {
+        const mod = NativeModules?.CekkesBackgroundModule;
+        if (mod && typeof mod.stopIncomingCallAlert === 'function') {
+          mod.stopIncomingCallAlert().catch(() => {});
+        }
       } else if (data.type === 'CEKKES_NATIVE_CALL' && data.id && data.method) {
         const mod = NativeModules?.CekkesBackgroundModule;
         const fn = mod && typeof mod[data.method] === 'function' ? mod[data.method] : null;

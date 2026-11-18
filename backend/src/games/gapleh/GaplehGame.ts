@@ -379,11 +379,14 @@ export class GaplehGame extends BaseGame {
   getStateForPlayer(userId: string): any {
     const myHand = this.state.hands[userId] || [];
     const opponents: Record<string, { cardCount: number }> = {};
+    const handCounts: Record<string, number> = {};
 
     for (const player of this.players) {
+      const count = (this.state.hands[player.user_id] || []).length;
+      handCounts[player.user_id] = count;
       if (player.user_id !== userId) {
         opponents[player.user_id] = {
-          cardCount: (this.state.hands[player.user_id] || []).length,
+          cardCount: count,
         };
       }
     }
@@ -397,6 +400,7 @@ export class GaplehGame extends BaseGame {
       board: this.state.board,
       myHand,
       opponents,
+      handCounts,
       currentTurn: this.state.currentTurn,
       turnOrder: this.state.turnOrder,
       validMoves,

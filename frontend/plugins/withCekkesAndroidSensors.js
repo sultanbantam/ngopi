@@ -12,6 +12,8 @@ const PERMISSIONS = [
   'android.permission.HIGH_SAMPLING_RATE_SENSORS',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.POST_NOTIFICATIONS',
+  'android.permission.USE_FULL_SCREEN_INTENT',
+  'android.permission.WAKE_LOCK',
 ];
 
 function withCekkesAndroidSensors(config) {

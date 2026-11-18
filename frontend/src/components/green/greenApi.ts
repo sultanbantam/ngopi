@@ -21,11 +21,39 @@ async function authHeaders(isJson = true): Promise<Record<string, string>> {
   return headers;
 }
 
+/** Convert any serialized Decimal object ({ s, e, d }) into a plain JS number. */
+function sanitizeDecimals(val: any): any {
+  if (val === null || val === undefined || typeof val !== 'object') return val;
+  if ('s' in val && 'e' in val && Array.isArray(val.d)) {
+    const sign = val.s === -1 ? -1 : 1;
+    const digits: number[] = val.d;
+    if (digits.length === 0) return 0;
+    const rawStr = digits.map((chunk, idx) => (idx === 0 ? String(chunk) : String(chunk).padStart(7, '0'))).join('');
+    const dotPos = (val.e as number) + 1;
+    let numStr: string;
+    if (dotPos <= 0) {
+      numStr = '0.' + '0'.repeat(-dotPos) + rawStr;
+    } else if (dotPos >= rawStr.length) {
+      numStr = rawStr + '0'.repeat(dotPos - rawStr.length);
+    } else {
+      numStr = rawStr.slice(0, dotPos) + '.' + rawStr.slice(dotPos);
+    }
+    const parsed = sign * Number(numStr);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  if (Array.isArray(val)) return val.map(sanitizeDecimals);
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(val)) {
+    out[k] = sanitizeDecimals(v);
+  }
+  return out;
+}
+
 export async function fetchGreenCatalog() {
   const res = await fetch(`${GREEN_API_BASE}/catalog`);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMsg(json, 'Failed to load catalog'));
-  return json;
+  return sanitizeDecimals(json);
 }
 
 export async function fetchGreenDashboard() {
@@ -34,7 +62,7 @@ export async function fetchGreenDashboard() {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMsg(json, `HTTP ${res.status}`));
-  return json;
+  return sanitizeDecimals(json);
 }
 
 export async function fetchGreenSubmissions(category = 'all', status = 'all') {
@@ -44,7 +72,7 @@ export async function fetchGreenSubmissions(category = 'all', status = 'all') {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMsg(json, `HTTP ${res.status}`));
-  return json.items || [];
+  return sanitizeDecimals(json.items || []);
 }
 
 export async function submitGreenActivity(payload: any) {
@@ -103,7 +131,7 @@ export async function fetchGreenReports(category = 'all', status = 'all') {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMsg(json, 'Failed to load reports'));
-  return json.reports || [];
+  return sanitizeDecimals(json.reports || []);
 }
 
 export async function monitorGreenPlant(plantId: string, healthStatus: string, notes: string) {
@@ -134,7 +162,7 @@ export async function fetchAdminGreenQueue(status = 'pending') {
   });
   const json = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(extractErrorMsg(json, `HTTP ${res.status}`));
-  return json.items || [];
+  return sanitizeDecimals(json.items || []);
 }
 
 export async function verifyAdminGreenSubmission(

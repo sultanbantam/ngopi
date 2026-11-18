@@ -12,6 +12,25 @@ import {
 
 const router = Router();
 
+/** Convert Prisma Decimal ({ s, e, d }) objects into plain JS numbers recursively. */
+function serializeDecimals<T>(val: T): T {
+  if (val === null || val === undefined || typeof val !== 'object') return val;
+  if (val instanceof Date) return val;
+  const anyVal = val as any;
+  if (typeof anyVal.toNumber === 'function' && 's' in anyVal && 'e' in anyVal && Array.isArray(anyVal.d)) {
+    return Number(anyVal.toString()) as unknown as T;
+  }
+  if ('s' in anyVal && 'e' in anyVal && Array.isArray(anyVal.d) && Object.keys(anyVal).length <= 4) {
+    return Number(String(anyVal)) as unknown as T;
+  }
+  if (Array.isArray(val)) return val.map((item) => serializeDecimals(item)) as unknown as T;
+  const out: Record<string, any> = {};
+  for (const [k, v] of Object.entries(anyVal)) {
+    out[k] = serializeDecimals(v);
+  }
+  return out as T;
+}
+
 router.get('/catalog', async (_req, res: Response) => {
   try {
     await ensureGreenSeeded(prisma);
@@ -38,14 +57,16 @@ router.get('/catalog', async (_req, res: Response) => {
       }),
     ]);
 
-    return res.json({
-      ok: true,
-      categories,
-      activityTypes,
-      emissionFactors,
-      rewardRules,
-      challenges,
-    });
+    return res.json(
+      serializeDecimals({
+        ok: true,
+        categories,
+        activityTypes,
+        emissionFactors,
+        rewardRules,
+        challenges,
+      })
+    );
   } catch (err: any) {
     console.error('GET /api/green/catalog error:', err);
     return res.status(500).json({ error: 'Failed to load NGOPI GREEN catalog' });
@@ -162,7 +183,7 @@ router.get('/submissions', verifyJWT, async (req: AuthRequest, res: Response) =>
       take: 100,
     });
 
-    return res.json({ ok: true, items });
+    return res.json({ ok: true, items: serializeDecimals(items) });
   } catch (err: any) {
     console.error('GET /api/green/submissions error:', err);
     return res.status(500).json({ error: 'Failed to load submissions' });
@@ -258,8 +279,8 @@ router.get('/reports', verifyJWT, async (req: AuthRequest, res: Response) => {
       status: r.status,
       is_anonymous: r.is_anonymous,
       public_area_label: r.public_area_label,
-      approx_lat: r.approx_lat,
-      approx_lng: r.approx_lng,
+      approx_lat: r.approx_lat != null ? Number(r.approx_lat) : null,
+      approx_lng: r.approx_lng != null ? Number(r.approx_lng) : null,
       created_at: r.created_at,
     }));
 
@@ -362,7 +383,7 @@ router.get(
         user: userMap.get(item.user_id) || { id: item.user_id, username: 'unknown', display_name: 'User' },
       }));
 
-      return res.json({ ok: true, items: enriched });
+      return res.json({ ok: true, items: serializeDecimals(enriched) });
     } catch (err: any) {
       console.error('GET /api/green/admin/submissions error:', err);
       return res.status(500).json({ error: 'Failed to load admin queue' });

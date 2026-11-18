@@ -269,6 +269,20 @@ export default function MainLayout() {
     setTimeout(() => setToastMessage(null), 4500);
     playNotificationSound();
 
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).ReactNativeWebView?.postMessage) {
+      try {
+        (window as any).ReactNativeWebView.postMessage(
+          JSON.stringify({
+            type: 'NGOPI_NATIVE_NOTIFY',
+            title,
+            body,
+            channelType: 'message',
+            routePath: target?.pathname || '/warkop',
+          })
+        );
+      } catch {}
+    }
+
     if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
       const browserNotification = new Notification(title, { body, tag: notification.id });
       browserNotification.onclick = () => {
@@ -310,6 +324,11 @@ export default function MainLayout() {
       clearTimeout(pending.timeout);
       pending.browserNotification?.close();
       if (Platform.OS === 'web') navigator.vibrate?.(0);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).ReactNativeWebView?.postMessage) {
+        try {
+          (window as any).ReactNativeWebView.postMessage(JSON.stringify({ type: 'NGOPI_CALL_ENDED' }));
+        } catch {}
+      }
       delete pendingCallsRef.current[callId];
       setTimeout(() => {
         handledCallIdsRef.current.delete(callId);
@@ -399,6 +418,19 @@ export default function MainLayout() {
         target,
         data,
       });
+
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && (window as any).ReactNativeWebView?.postMessage) {
+        try {
+          (window as any).ReactNativeWebView.postMessage(
+            JSON.stringify({
+              type: 'NGOPI_INCOMING_CALL',
+              callerName,
+              isVideo: Boolean(data?.isVideo),
+              routePath: '/warkop',
+            })
+          );
+        } catch {}
+      }
 
       if (Platform.OS === 'web' && 'Notification' in window && Notification.permission === 'granted') {
         const browserNotification = new Notification(data?.isVideo ? 'Video Call Ngopi' : 'Panggilan Ngopi', {

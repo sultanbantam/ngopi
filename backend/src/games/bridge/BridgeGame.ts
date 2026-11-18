@@ -88,9 +88,13 @@ export class BridgeGame extends BaseGame {
   }
 
   public getStateForPlayer(userId: string) {
+    const handCounts = Object.fromEntries(
+      this.players.map((p) => [p.user_id, (this.state.hands[p.user_id] || []).length])
+    );
     return {
       gameType: 'bridge',
       myHand: this.state.hands[userId] || [],
+      handCounts,
       trumpSuit: this.state.trumpSuit,
       currentTrick: this.state.currentTrick,
       tricksWon: this.state.tricksWon,
