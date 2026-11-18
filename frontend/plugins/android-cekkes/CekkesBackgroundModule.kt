@@ -100,26 +100,27 @@ class CekkesBackgroundModule(private val reactCtx: ReactApplicationContext) :
   @ReactMethod
   fun startForegroundImuService(promise: Promise) {
     try {
-      val intent = Intent(reactCtx, CekkesForegroundService::class.java)
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-        reactCtx.startForegroundService(intent)
-      } else {
-        reactCtx.startService(intent)
-      }
+      reactCtx.getSharedPreferences(CekkesForegroundService.PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("running", true)
+        .putLong("updatedAtMs", System.currentTimeMillis())
+        .apply()
       promise.resolve(true)
     } catch (e: Exception) {
-      promise.reject("CEKKES_SERVICE_ERR", e.message, e)
+      promise.resolve(false)
     }
   }
 
   @ReactMethod
   fun stopForegroundImuService(promise: Promise) {
     try {
-      val intent = Intent(reactCtx, CekkesForegroundService::class.java)
-      reactCtx.stopService(intent)
+      reactCtx.getSharedPreferences(CekkesForegroundService.PREFS_NAME, Context.MODE_PRIVATE)
+        .edit()
+        .putBoolean("running", false)
+        .apply()
       promise.resolve(true)
     } catch (e: Exception) {
-      promise.reject("CEKKES_SERVICE_STOP_ERR", e.message, e)
+      promise.resolve(false)
     }
   }
 

@@ -58,7 +58,8 @@
       [
         "expo-audio",
         {
-          "microphonePermission": "Izinkan Ngopi mengakses mikrofon untuk merekam pesan suara dan berkomunikasi di warkop."
+          "microphonePermission": "Izinkan Ngopi mengakses mikrofon untuk merekam pesan suara dan berkomunikasi di warkop.",
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-font",

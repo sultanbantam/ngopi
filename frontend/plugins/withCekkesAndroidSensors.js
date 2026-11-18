@@ -7,8 +7,6 @@ const {
 } = require('@expo/config-plugins');
 
 const PERMISSIONS = [
-  'android.permission.FOREGROUND_SERVICE',
-  'android.permission.FOREGROUND_SERVICE_HEALTH',
   'android.permission.HIGH_SAMPLING_RATE_SENSORS',
   'android.permission.PACKAGE_USAGE_STATS',
   'android.permission.POST_NOTIFICATIONS',
@@ -17,7 +15,7 @@ const PERMISSIONS = [
 ];
 
 function withCekkesAndroidSensors(config) {
-  // 1. Add permissions & ForegroundService declaration to AndroidManifest.xml
+  // 1. Add permissions to AndroidManifest.xml (no FOREGROUND_SERVICE_HEALTH declaration)
   config = withAndroidManifest(config, (cfg) => {
     const manifest = cfg.modResults.manifest;
     if (!manifest.$['xmlns:tools']) {
@@ -37,26 +35,6 @@ function withCekkesAndroidSensors(config) {
           entry.$['tools:ignore'] = 'ProtectedPermissions';
         }
         manifest['uses-permission'].push(entry);
-      }
-    }
-
-    const app = manifest.application && manifest.application[0];
-    if (app) {
-      if (!Array.isArray(app.service)) {
-        app.service = [];
-      }
-      const serviceName = 'top.ngopi.app.cekkes.CekkesForegroundService';
-      const hasService = app.service.some(
-        (s) => s.$ && s.$['android:name'] === serviceName
-      );
-      if (!hasService) {
-        app.service.push({
-          $: {
-            'android:name': serviceName,
-            'android:exported': 'false',
-            'android:foregroundServiceType': 'health',
-          },
-        });
       }
     }
 
