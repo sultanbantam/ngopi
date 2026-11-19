@@ -38,6 +38,22 @@ function withCekkesAndroidSensors(config) {
       }
     }
 
+    // Mark portrait screen hardware optional so screenOrientation="portrait" does not restrict Play Store devices
+    if (!Array.isArray(manifest['uses-feature'])) {
+      manifest['uses-feature'] = [];
+    }
+    const hasPortraitFeature = manifest['uses-feature'].some(
+      (f) => f.$ && f.$['android:name'] === 'android.hardware.screen.portrait'
+    );
+    if (!hasPortraitFeature) {
+      manifest['uses-feature'].push({
+        $: {
+          'android:name': 'android.hardware.screen.portrait',
+          'android:required': 'false',
+        },
+      });
+    }
+
     return cfg;
   });
 
