@@ -1695,6 +1695,23 @@ export default function BambupediaRoom() {
             )}
 
             <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.18)', borderColor: '#059669' }]}
+              onPress={() => router.push('/(main)/boomboom' as any)}
+              accessibilityLabel="Buka BoomBoom"
+            >
+              <Text style={[styles.quickChipText, { color: '#34D399', fontWeight: '800' }]}>🛵 BoomBoom</Text>
+            </TouchableOpacity>
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.1)', borderColor: '#059669' }]}
+                onPress={() => typeof window !== 'undefined' && window.open('/boomboom', '_blank')}
+                accessibilityLabel="Buka BoomBoom di Jendela Baru"
+              >
+                <Text style={[styles.quickChipText, { color: '#34D399', fontWeight: '800' }]}>↗</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(217, 119, 6, 0.2)', borderColor: '#d97706' }]}
               onPress={() => setAlbumModalVisible(true)}
               accessibilityLabel="Buka Album Kompilasi Mixtape"

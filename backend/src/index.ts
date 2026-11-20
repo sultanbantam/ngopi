@@ -38,6 +38,7 @@ import telecomRoutes from './routes/telecom.routes';
 import ngopinomicRoutes from './routes/ngopinomic.routes';
 import cekkesRoutes from './routes/cekkes.routes';
 import greenRoutes from './routes/green.routes';
+import boomboomRoutes from './routes/boomboom.routes';
 import { setupSocket } from './sockets';
 import { apiLimiter } from './middleware/rateLimiter';
 import { corsOrigin, encodeJsonResponse, sanitizeRequest } from './middleware/security.middleware';
@@ -136,6 +137,7 @@ app.use('/api/telecom', telecomRoutes);
 app.use('/api/ngopinomic', ngopinomicRoutes);
 app.use('/api/cekkes', cekkesRoutes);
 app.use('/api/green', greenRoutes);
+app.use('/api/boomboom', boomboomRoutes);
 
 // Health check endpoint
 app.get('/api/health', (_req, res) => {

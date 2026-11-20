@@ -1520,4 +1520,59 @@ model GreenAdminApplication {
   @@map("green_admin_applications")
 }
 
+// ============================================================================
+// BOOMBOOM — Green Community Mobility Integration (Ngopi x BaMbooChain)
+// ============================================================================
+
+model BoomBoomDriverProfile {
+  id                  String   @id @default(uuid())
+  user_id             String   @unique @map("user_id")
+  ngopi_id            String   @map("ngopi_id")
+  vehicle_type        String   @default("motor_ev") @map("vehicle_type") // "motor_ev" | "car_ev" | "car_green" | "bike_ev"
+  vehicle_plate       String   @map("vehicle_plate")
+  vehicle_model       String?  @map("vehicle_model")
+  service_area        String   @default("Jabodetabek") @map("service_area")
+  is_ev               Boolean  @default(true) @map("is_ev")
+  is_online           Boolean  @default(true) @map("is_online")
+  rating              Float    @default(5.0)
+  total_trips         Int      @default(0) @map("total_trips")
+  total_points_earned Int      @default(0) @map("total_points_earned")
+  status              String   @default("active")
+  created_at          DateTime @default(now()) @map("created_at")
+  updated_at          DateTime @updatedAt @map("updated_at")
+
+  @@map("boomboom_driver_profiles")
+}
+
+model BoomBoomTrip {
+  id                  String    @id @default(uuid())
+  passenger_id        String    @map("passenger_id")
+  driver_id           String?   @map("driver_id")
+  service_type        String    @map("service_type") // "BoomRide" | "BoomCar" | "BoomSend" | "BoomSchedule" | "BoomTogether"
+  pickup_address      String    @map("pickup_address")
+  destination_address String    @map("destination_address")
+  pickup_lat          Float?    @map("pickup_lat")
+  pickup_lng          Float?    @map("pickup_lng")
+  dest_lat            Float?    @map("dest_lat")
+  dest_lng            Float?    @map("dest_lng")
+  distance_km         Float     @default(3.0) @map("distance_km")
+  estimated_fare_idr  Int       @default(0) @map("estimated_fare_idr")
+  is_ev               Boolean   @default(true) @map("is_ev")
+  passenger_points    Int       @default(0) @map("passenger_points")
+  driver_points       Int       @default(0) @map("driver_points")
+  passenger_tx_id     String?   @map("passenger_tx_id")
+  driver_tx_id        String?   @map("driver_tx_id")
+  notes               String?
+  scheduled_at        DateTime? @map("scheduled_at")
+  status              String    @default("requested") // "requested" | "accepted" | "in_progress" | "completed" | "cancelled"
+  completed_at        DateTime? @map("completed_at")
+  created_at          DateTime  @default(now()) @map("created_at")
+  updated_at          DateTime  @updatedAt @map("updated_at")
+
+  @@index([passenger_id, created_at])
+  @@index([driver_id, created_at])
+  @@index([status, created_at])
+  @@map("boomboom_trips")
+}
+
 
