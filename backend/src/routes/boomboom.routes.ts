@@ -2,11 +2,10 @@ import { Router, Response } from 'express';
 import { verifyJWT, AuthRequest } from '../middleware/auth.middleware';
 import { prisma } from '../utils/prisma';
 import { pointsEconomyService } from '../services/points.service';
-import { earnPoints } from '../services/ngopinomic/ngopinomicEconomy.service';
+import { earnPoints, ensureUserIdentity } from '../services/ngopinomic/ngopinomicEconomy.service';
 import {
   authorizeBoomBoomIdentity,
   ensureEcosystemApps,
-  ensureUserIdentity,
   setEcosystemConsent,
 } from '../services/ngopinomic/ngopinomicEcosystem.service';
 
