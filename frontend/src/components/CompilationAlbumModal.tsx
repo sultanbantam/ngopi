@@ -64,6 +64,7 @@ const COVER_EMOJIS = ['💿', '☕', '🎸', '📼', '📻', '🎶', '🎧', '�
 
 export const ERA_CATEGORIES = [
   { id: 'all', label: 'Semua Koleksi', icon: '🎵' },
+  { id: 'ai', label: 'Lagu AI / Komunitas', icon: '🤖' },
   { id: 'west', label: '80-90s Rock Barat', icon: '🎸' },
   { id: '90s', label: '90s Pop-Rock Indo', icon: '☕' },
   { id: '2000s', label: '2000s Hits Indo', icon: '💿' },
@@ -97,6 +98,58 @@ export default function CompilationAlbumModal({
   const [isSearching, setIsSearching] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [aiUploadTitle, setAiUploadTitle] = useState('');
+  const [aiUploadArtist, setAiUploadArtist] = useState('');
+  const [isUploadingAi, setIsUploadingAi] = useState(false);
+  const [showAiUploadBox, setShowAiUploadBox] = useState(false);
+
+  const handleUploadAiTrackWeb = async () => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      Alert.alert('Info', 'Upload file MP3 AI saat ini tersedia melalui browser Web ngopi.top.');
+      return;
+    }
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.mp3,audio/mpeg,audio/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setIsUploadingAi(true);
+      try {
+        const token = await getValidAccessToken();
+        const formData = new FormData();
+        formData.append('audio', file);
+        formData.append('title', aiUploadTitle.trim() || file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('artist', aiUploadArtist.trim() || currentUsername || 'AI Creator');
+        formData.append('genre', 'AI Music');
+
+        const res = await axios.post(`${API_URL}/albums/upload-track`, formData, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+          timeout: 60000,
+        });
+        const uploadedTrack: CompilationTrack | undefined = res.data?.track;
+        if (uploadedTrack) {
+          setSearchResults((prev) => [uploadedTrack, ...prev]);
+          setSelectedTracks((prev) => {
+            if (prev.length >= capacity || prev.some((t) => t.id === uploadedTrack.id)) return prev;
+            return [...prev, uploadedTrack];
+          });
+          setAiUploadTitle('');
+          setAiUploadArtist('');
+          setShowAiUploadBox(false);
+          Alert.alert('Berhasil!', 'Lagu AI (.mp3) berhasil diunggah dan langsung dimasukkan ke daftar lagu album!');
+        }
+      } catch (err: any) {
+        Alert.alert('Gagal Upload', err?.response?.data?.error || 'Gagal mengunggah file audio MP3.');
+      } finally {
+        setIsUploadingAi(false);
+      }
+    };
+    input.click();
+  };
 
   // Share Modal state
   const [shareAlbum, setShareAlbum] = useState<CompilationAlbum | null>(null);
@@ -131,9 +184,9 @@ export default function CompilationAlbumModal({
     const qClean = (query || '').trim();
     const targetEra = eraFilter !== undefined ? eraFilter : selectedEra;
 
-    // 1. Instant local curated search (0ms, no network delay, anti-spinner hang)
+    // 1. Instant local curated search (skip local-only short-circuit for 'ai' era so uploaded AI tracks load from backend)
     const localMatches = searchLocalCuratedTracks(qClean, targetEra);
-    if (localMatches.length > 0 || !qClean) {
+    if (targetEra !== 'ai' && (localMatches.length > 0 || !qClean)) {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
         abortControllerRef.current = null;
@@ -747,6 +800,72 @@ export default function CompilationAlbumModal({
                     <Text style={styles.searchSubmitBtnText}>Cari</Text>
                   </TouchableOpacity>
                 </View>
+
+                <TouchableOpacity
+                  onPress={() => setShowAiUploadBox((v) => !v)}
+                  style={{
+                    backgroundColor: 'rgba(139, 92, 246, 0.16)',
+                    borderWidth: 1,
+                    borderColor: '#8B5CF6',
+                    borderRadius: 10,
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    marginBottom: 10,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <Text style={{ color: '#C4B5FD', fontSize: 12, fontWeight: '800' }}>
+                    🤖 Upload Lagu Buatan AI (.mp3 disarankan)
+                  </Text>
+                  <Text style={{ color: '#A78BFA', fontSize: 12, fontWeight: '700' }}>
+                    {showAiUploadBox ? 'Tutup ▲' : '+ Upload ▼'}
+                  </Text>
+                </TouchableOpacity>
+
+                {showAiUploadBox && (
+                  <View
+                    style={{
+                      backgroundColor: '#1E1510',
+                      borderWidth: 1,
+                      borderColor: '#4A3728',
+                      borderRadius: 10,
+                      padding: 12,
+                      marginBottom: 12,
+                      gap: 8,
+                    }}
+                  >
+                    <TextInput
+                      style={[styles.searchInput, { backgroundColor: '#120D0A', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#3A2A1E' }]}
+                      placeholder="Judul Lagu AI (opsional, default nama file)"
+                      placeholderTextColor="#786050"
+                      value={aiUploadTitle}
+                      onChangeText={setAiUploadTitle}
+                    />
+                    <TextInput
+                      style={[styles.searchInput, { backgroundColor: '#120D0A', padding: 8, borderRadius: 8, borderWidth: 1, borderColor: '#3A2A1E' }]}
+                      placeholder="Nama Artis / Kreator AI"
+                      placeholderTextColor="#786050"
+                      value={aiUploadArtist}
+                      onChangeText={setAiUploadArtist}
+                    />
+                    <TouchableOpacity
+                      onPress={handleUploadAiTrackWeb}
+                      disabled={isUploadingAi}
+                      style={{
+                        backgroundColor: '#8B5CF6',
+                        borderRadius: 8,
+                        paddingVertical: 10,
+                        alignItems: 'center',
+                      }}
+                    >
+                      <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 12 }}>
+                        {isUploadingAi ? 'Mengunggah MP3...' : '📁 Pilih File .MP3 & Masukkan ke Katalog'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
 
                 {/* Quick Suggestion Chips */}
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickSearchScroll}>

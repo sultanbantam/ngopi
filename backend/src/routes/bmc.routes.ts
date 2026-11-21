@@ -5,6 +5,9 @@ import { verifyJWT } from '../middleware/auth.middleware';
 import { validateRequest } from '../middleware/validation';
 import { walletParamsSchema } from '../utils/validation';
 import { pointsEconomyService, PREMIUM_CATALOG } from '../services/points.service';
+import { telecomService } from '../services/telecom.service';
+import { PointsManager } from '../utils/pointsManager';
+import { prisma } from '../utils/prisma';
 
 const router = Router();
 
@@ -161,6 +164,109 @@ router.post('/points/convert', (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message || 'Conversion failed' });
+  }
+});
+
+// POST /api/bmc/points/transfer — Peer-to-peer Ngopi Points transfer (terpisah dari BMC)
+router.post('/points/transfer', async (req: Request, res: Response) => {
+  try {
+    const senderId = (req as any).user?.id;
+    const senderUsername = (req as any).user?.username;
+    if (!senderId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const rawRecipient = String(req.body?.recipient || req.body?.to || '').trim();
+    const amount = Math.floor(Number(req.body?.amount || 0));
+    const note = String(req.body?.note || '').trim().slice(0, 120);
+
+    if (!rawRecipient) {
+      res.status(400).json({ error: 'Masukkan username, Nomor ID Ngopi, atau email @ngopi.top penerima.' });
+      return;
+    }
+    if (!Number.isFinite(amount) || amount < 10 || amount > 100000) {
+      res.status(400).json({ error: 'Jumlah transfer minimal 10 Poin dan maksimal 100.000 Poin per transaksi.' });
+      return;
+    }
+
+    let recipientUser = await telecomService.resolveUserByIdentifier(rawRecipient);
+    if (!recipientUser) {
+      const cleanU = rawRecipient.replace(/^@/, '').replace(/@ngopi\.top$/i, '').trim();
+      const dbUser = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { id: rawRecipient },
+            { username: { equals: cleanU, mode: 'insensitive' } },
+          ],
+        },
+        select: { id: true, username: true, display_name: true, role: true, bmc_id: true },
+      });
+      if (dbUser) {
+        recipientUser = await telecomService.resolveUserByIdentifier(dbUser.id);
+      }
+    }
+
+    if (!recipientUser) {
+      res.status(404).json({ error: `Penerima "${rawRecipient}" tidak ditemukan.` });
+      return;
+    }
+    if (recipientUser.id === senderId) {
+      res.status(400).json({ error: 'Tidak dapat mentransfer Poin Ngopi ke akun sendiri.' });
+      return;
+    }
+
+    pointsEconomyService.syncWithPointsManager(senderId, senderUsername);
+    const senderStats = pointsEconomyService.getOrCreateUserPoints(senderId);
+    const currentBalance = senderStats?.balance ?? 0;
+
+    if (currentBalance < amount) {
+      res.status(400).json({
+        error: `Saldo Poin Ngopi tidak mencukupi. Saldo Anda: ${currentBalance.toLocaleString('id-ID')} Poin.`,
+      });
+      return;
+    }
+
+    const reference = `TRF-${Date.now().toString(36).toUpperCase()}`;
+    const noteSuffix = note ? ` — "${note}"` : '';
+
+    const senderNewBalance = pointsEconomyService.addDirectPoints(
+      senderId,
+      -amount,
+      'purchase_badge' as any,
+      `Transfer Poin ke @${recipientUser.username} (#${recipientUser.ngopi_number})${noteSuffix}`,
+      reference
+    );
+    PointsManager.setPoints(senderId, senderNewBalance, true, true);
+    if (senderUsername) PointsManager.setPoints(senderUsername, senderNewBalance, true, true);
+
+    pointsEconomyService.syncWithPointsManager(recipientUser.id, recipientUser.username);
+    const recipientNewBalance = pointsEconomyService.addDirectPoints(
+      recipientUser.id,
+      amount,
+      'daily_mission',
+      `Terima Poin dari @${senderUsername || senderId}${noteSuffix}`,
+      reference
+    );
+    PointsManager.setPoints(recipientUser.id, recipientNewBalance, true, true);
+    PointsManager.setPoints(recipientUser.username, recipientNewBalance, true, true);
+
+    res.json({
+      success: true,
+      reference,
+      amount,
+      sender_balance: senderNewBalance,
+      recipient: {
+        id: recipientUser.id,
+        username: recipientUser.username,
+        display_name: recipientUser.display_name,
+        ngopi_number: recipientUser.ngopi_number,
+        ngopi_email: recipientUser.ngopi_email,
+      },
+      message: `Berhasil mengirim ${amount.toLocaleString('id-ID')} Poin Ngopi ke @${recipientUser.username}!`,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'Gagal melakukan transfer poin.' });
   }
 });
 

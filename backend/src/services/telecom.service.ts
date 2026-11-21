@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import axios from 'axios';
 import { prisma } from '../utils/prisma';
 
 export interface MailAttachment {
@@ -1061,23 +1062,76 @@ export class TelecomService {
       : [];
 
     if (!cleanTo) {
-      return { success: false, error: 'Alamat tujuan (Email @ngopi.top atau Nomor Ngopi) wajib diisi.' };
+      return { success: false, error: 'Alamat tujuan (Email @ngopi.top, Email Luar, atau Nomor Ngopi) wajib diisi.' };
     }
     if (!cleanBody && sanitizedAttachments.length === 0) {
       return { success: false, error: 'Isi pesan email atau lampiran berkas tidak boleh kosong.' };
     }
 
-    const recipient = await this.resolveUserByIdentifier(cleanTo);
+    const senderResolved = await this.resolveUserByIdentifier(senderUser.id);
+    const senderNumber = senderResolved?.ngopi_number || this.getNumberForUser(senderUser);
+    const senderEmail = senderResolved?.ngopi_email || this.formatEmail(senderUser.username, senderUser.id);
+
+    const isExternalEmail =
+      cleanTo.includes('@') &&
+      !/@(ngopi\.top|mail\.ngopi\.top)$/i.test(cleanTo);
+
+    if (isExternalEmail) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanTo)) {
+        return { success: false, error: 'Format alamat email eksternal tidak valid.' };
+      }
+
+      const extRes = await this.sendExternalEmailDirect({
+        to: cleanTo.toLowerCase(),
+        subject: cleanSubject,
+        body: cleanBody || `(Melampirkan ${sanitizedAttachments.length} berkas)`,
+        fromEmail: senderEmail,
+        fromName: senderUser.display_name || senderUser.username,
+        replyTo: senderEmail,
+      });
+
+      if (!extRes.sent) {
+        return {
+          success: false,
+          error:
+            extRes.error === 'SMTP_NOT_CONFIGURED'
+              ? 'Gateway email eksternal (RESEND_API_KEY / BREVO_API_KEY / SMTP_HOST) belum dikonfigurasi di server. Email internal @ngopi.top tetap aktif.'
+              : `Gagal mengirim email eksternal: ${extRes.error || 'Unknown error'}`,
+        };
+      }
+
+      const sentExternalMail: NgopiMailMessage = {
+        id: `mail-ext-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+        from_user_id: senderUser.id,
+        from_username: senderUser.username,
+        from_display_name: senderUser.display_name || senderUser.username,
+        from_email: senderEmail,
+        from_number: senderNumber,
+        to_user_id: `external:${cleanTo.toLowerCase()}`,
+        to_username: cleanTo.toLowerCase(),
+        to_email: cleanTo.toLowerCase(),
+        to_number: 'EXT',
+        subject: cleanSubject,
+        body: cleanBody || `(Melampirkan ${sanitizedAttachments.length} berkas)`,
+        attachments: sanitizedAttachments.length > 0 ? sanitizedAttachments : undefined,
+        is_read: true,
+        read_at: new Date().toISOString(),
+        created_at: new Date().toISOString(),
+      };
+
+      this.mails.unshift(sentExternalMail);
+      this.saveToDisk();
+      return { success: true, mail: sentExternalMail };
+    }
+
+    const normalizedInternalTarget = cleanTo.replace(/@mail\.ngopi\.top$/i, '@ngopi.top');
+    const recipient = await this.resolveUserByIdentifier(normalizedInternalTarget);
     if (!recipient) {
       return {
         success: false,
         error: `Tujuan "${cleanTo}" tidak ditemukan. Coba periksa kembali alamat atau Nomor Ngopi tujuan.`,
       };
     }
-
-    const senderResolved = await this.resolveUserByIdentifier(senderUser.id);
-    const senderNumber = senderResolved?.ngopi_number || this.getNumberForUser(senderUser);
-    const senderEmail = senderResolved?.ngopi_email || this.formatEmail(senderUser.username, senderUser.id);
 
     const newMail: NgopiMailMessage = {
       id: `mail-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
@@ -1102,6 +1156,175 @@ export class TelecomService {
     this.saveToDisk();
 
     return { success: true, mail: newMail };
+  }
+
+  public async deliverSystemRecoveryMail(
+    user: { id: string; username: string; display_name?: string | null },
+    ngopiNumber: string,
+    ngopiEmail: string,
+    subject: string,
+    body: string
+  ): Promise<NgopiMailMessage> {
+    const recoveryMail: NgopiMailMessage = {
+      id: `mail-sec-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      from_user_id: 'system_security',
+      from_username: 'security',
+      from_display_name: 'Ngopi Security',
+      from_email: 'security@ngopi.top',
+      from_number: '0',
+      to_user_id: user.id,
+      to_username: user.username,
+      to_email: ngopiEmail,
+      to_number: ngopiNumber,
+      subject: this.sanitizePlainText(subject),
+      body: this.sanitizePlainText(body),
+      is_read: false,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+    this.mails.unshift(recoveryMail);
+    this.saveToDisk();
+    return recoveryMail;
+  }
+
+  public async sendExternalEmailDirect(params: {
+    to: string;
+    subject: string;
+    body: string;
+    fromEmail?: string;
+    fromName?: string;
+    replyTo?: string;
+  }): Promise<{ sent: boolean; provider?: string; error?: string }> {
+    const { to, subject, body, fromEmail, fromName, replyTo } = params;
+    const senderDomain = process.env.EXTERNAL_EMAIL_DOMAIN || 'ngopi.top';
+    const configuredFrom =
+      process.env.EMAIL_FROM ||
+      (fromEmail && fromEmail.endsWith(`@${senderDomain}`) ? fromEmail : `noreply@${senderDomain}`);
+    const fromHeader = fromName ? `${fromName} <${configuredFrom}>` : configuredFrom;
+
+    // 1. Resend HTTP API
+    if (process.env.RESEND_API_KEY) {
+      try {
+        await axios.post(
+          'https://api.resend.com/emails',
+          {
+            from: fromHeader,
+            to: [to],
+            subject,
+            text: body,
+            reply_to: replyTo || fromEmail || configuredFrom,
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          }
+        );
+        return { sent: true, provider: 'resend' };
+      } catch (err: any) {
+        return { sent: false, provider: 'resend', error: err?.response?.data?.message || err?.message };
+      }
+    }
+
+    // 2. Brevo HTTP API
+    if (process.env.BREVO_API_KEY) {
+      try {
+        await axios.post(
+          'https://api.brevo.com/v3/smtp/email',
+          {
+            sender: { name: fromName || 'Ngopi.top', email: configuredFrom },
+            to: [{ email: to }],
+            subject,
+            textContent: body,
+            replyTo: replyTo ? { email: replyTo } : undefined,
+          },
+          {
+            headers: {
+              'api-key': process.env.BREVO_API_KEY,
+              'Content-Type': 'application/json',
+            },
+            timeout: 10000,
+          }
+        );
+        return { sent: true, provider: 'brevo' };
+      } catch (err: any) {
+        return { sent: false, provider: 'brevo', error: err?.response?.data?.message || err?.message };
+      }
+    }
+
+    // 3. Standard SMTP via nodemailer (if installed & SMTP_HOST configured)
+    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const nodemailer = require('nodemailer');
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT || 587),
+          secure: Number(process.env.SMTP_PORT) === 465,
+          auth: {
+            user: process.env.SMTP_USER,
+            pass: process.env.SMTP_PASS,
+          },
+        });
+        await transporter.sendMail({
+          from: fromHeader,
+          to,
+          replyTo: replyTo || fromEmail,
+          subject,
+          text: body,
+        });
+        return { sent: true, provider: 'smtp' };
+      } catch (err: any) {
+        return { sent: false, provider: 'smtp', error: err?.message };
+      }
+    }
+
+    return { sent: false, error: 'SMTP_NOT_CONFIGURED' };
+  }
+
+  public async receiveInboundExternalMail(params: {
+    from: string;
+    to: string;
+    subject?: string;
+    text?: string;
+  }): Promise<{ success: boolean; mail?: NgopiMailMessage; error?: string }> {
+    const rawTo = String(params.to || '').trim().toLowerCase();
+    const match = rawTo.match(/<([^>]+)>/);
+    const cleanTo = (match?.[1] || rawTo).replace(/@mail\.ngopi\.top$/i, '@ngopi.top');
+
+    const recipient = await this.resolveUserByIdentifier(cleanTo);
+    if (!recipient) {
+      return { success: false, error: `Penerima ${cleanTo} tidak ditemukan di ngopi.top.` };
+    }
+
+    const rawFrom = String(params.from || '').trim();
+    const fromMatch = rawFrom.match(/^(.*?)<([^>]+)>$/);
+    const fromEmail = (fromMatch?.[2] || rawFrom).trim();
+    const fromName = (fromMatch?.[1] || fromEmail.split('@')[0] || fromEmail).replace(/["']/g, '').trim() || fromEmail;
+
+    const inboundMail: NgopiMailMessage = {
+      id: `mail-in-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`,
+      from_user_id: `external:${fromEmail.toLowerCase()}`,
+      from_username: fromEmail.toLowerCase(),
+      from_display_name: fromName,
+      from_email: fromEmail.toLowerCase(),
+      from_number: 'EXT',
+      to_user_id: recipient.id,
+      to_username: recipient.username,
+      to_email: recipient.ngopi_email,
+      to_number: recipient.ngopi_number,
+      subject: this.sanitizePlainText(params.subject || '(Tanpa Subjek)'),
+      body: this.sanitizePlainText(params.text || ''),
+      is_read: false,
+      read_at: null,
+      created_at: new Date().toISOString(),
+    };
+
+    this.mails.unshift(inboundMail);
+    this.saveToDisk();
+    return { success: true, mail: inboundMail };
   }
 
   public markMailRead(

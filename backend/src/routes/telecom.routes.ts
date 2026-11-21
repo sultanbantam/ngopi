@@ -171,6 +171,43 @@ router.post('/number/claim', verifyJWT, async (req: Request, res: Response): Pro
   }
 });
 
+// POST /api/telecom/email/inbound - Inbound external email webhook (Cloudflare / Resend / Mailgun / Postfix)
+router.post('/email/inbound', async (req: Request, res: Response): Promise<void> => {
+  try {
+    const expectedSecret = process.env.EMAIL_INBOUND_SECRET;
+    if (expectedSecret) {
+      const provided = String(req.headers['x-inbound-secret'] || req.query.secret || '');
+      if (provided !== expectedSecret) {
+        res.status(401).json({ error: 'Invalid inbound email secret' });
+        return;
+      }
+    }
+    const { from, to, subject, text, body } = req.body || {};
+    const result = await telecomService.receiveInboundExternalMail({
+      from: String(from || ''),
+      to: String(to || ''),
+      subject: String(subject || ''),
+      text: String(text || body || ''),
+    });
+    if (!result.success) {
+      res.status(404).json({ error: result.error });
+      return;
+    }
+    if (result.mail) {
+      try {
+        const io = getSocketIO();
+        if (io) {
+          io.to(result.mail.to_user_id).emit('telecom_new_mail', result.mail);
+        }
+      } catch (_) {}
+    }
+    res.status(200).json({ success: true, mail_id: result.mail?.id });
+  } catch (err) {
+    console.error('[TelecomRoutes] /email/inbound error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // POST /api/telecom/email/check
 router.post('/email/check', verifyJWT, async (req: Request, res: Response): Promise<void> => {
   try {

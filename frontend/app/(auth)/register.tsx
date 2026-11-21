@@ -25,6 +25,26 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [recoveryPin, setRecoveryPin] = useState('');
+  const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [captchaToken, setCaptchaToken] = useState('');
+  const [captchaQuestion, setCaptchaQuestion] = useState('');
+  const [captchaAnswer, setCaptchaAnswer] = useState('');
+
+  const loadCaptcha = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/auth/captcha`);
+      setCaptchaToken(res.data?.captcha_token || '');
+      setCaptchaQuestion(res.data?.question || 'Verifikasi Manusia: Berapa 2 + 3?');
+      setCaptchaAnswer('');
+    } catch {
+      setCaptchaQuestion('Gagal memuat verifikasi anti-bot. Ketuk Muat Ulang.');
+    }
+  };
+
+  useEffect(() => {
+    loadCaptcha();
+  }, []);
 
   useEffect(() => {
     const initRef = async () => {
@@ -66,6 +86,14 @@ export default function RegisterScreen() {
       setError('Nama tampilan maksimal 50 karakter.');
       return;
     }
+    if (!captchaToken || !captchaAnswer.trim()) {
+      setError('Harap jawab verifikasi anti-bot (bukan robot) terlebih dahulu.');
+      return;
+    }
+    if (recoveryPin.trim() && (recoveryPin.trim().length < 4 || recoveryPin.trim().length > 12)) {
+      setError('PIN Pemulihan opsional harus 4-12 karakter.');
+      return;
+    }
     setLoading(true);
     setError('');
 
@@ -83,6 +111,10 @@ export default function RegisterScreen() {
         display_name: normalizedDisplayName,
         public_key: deviceKeys.publicKey,
         referral_code: referralCode ? referralCode.trim() : undefined,
+        recovery_pin: recoveryPin.trim() || undefined,
+        recovery_email: recoveryEmail.trim() || undefined,
+        captcha_token: captchaToken,
+        captcha_answer: captchaAnswer.trim(),
       }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
       const { token, refresh_token: refreshToken, user } = response.data;
 
@@ -106,7 +138,7 @@ export default function RegisterScreen() {
       await afterProfileLogin();
     } catch (err: any) {
       setError(explainAuthError(err, 'register'));
-
+      loadCaptcha();
     } finally {
       setLoading(false);
     }
@@ -202,6 +234,56 @@ export default function RegisterScreen() {
         <Text style={{ color: coffee.secondary, fontSize: 12, marginTop: -8, marginBottom: 12 }}>
           {t('Minimal 8 karakter', 'Minimum 8 characters')}
         </Text>
+
+        <TextInput
+          style={styles.input}
+          placeholder={t('PIN Pemulihan 4-12 digit (opsional, untuk lupa password)', 'Recovery PIN 4-12 chars (optional, for password reset)')}
+          placeholderTextColor={coffee.muted}
+          value={recoveryPin}
+          onChangeText={setRecoveryPin}
+          maxLength={12}
+          autoCapitalize="none"
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder={t('Email Pemulihan luar (opsional, misal Gmail)', 'External Recovery Email (optional, e.g. Gmail)')}
+          placeholderTextColor={coffee.muted}
+          value={recoveryEmail}
+          onChangeText={setRecoveryEmail}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <View
+          style={{
+            backgroundColor: '#261C15',
+            borderWidth: 1,
+            borderColor: '#4A3728',
+            borderRadius: 10,
+            padding: 12,
+            marginBottom: 14,
+          }}
+        >
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '700' }}>
+              🛡️ {captchaQuestion || t('Memuat tantangan anti-bot...', 'Loading human verification...')}
+            </Text>
+            <TouchableOpacity onPress={loadCaptcha}>
+              <Text style={{ color: '#38BDF8', fontSize: 12, fontWeight: '700' }}>↻ {t('Ganti', 'Refresh')}</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={[styles.input, { marginBottom: 0 }]}
+            placeholder={t('Jawaban Anda (buktikan bukan robot)', 'Your answer (prove you are human)')}
+            placeholderTextColor={coffee.muted}
+            value={captchaAnswer}
+            onChangeText={setCaptchaAnswer}
+            keyboardType="number-pad"
+            maxLength={10}
+          />
+        </View>
 
         <TouchableOpacity style={styles.button} onPress={handleRegister} disabled={loading}>
           {loading ? (

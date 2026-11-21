@@ -1,5 +1,18 @@
 import { Router } from 'express';
-import { register, login, getUsers, updateProfile, bamboochainLogin, bamboochainCallback, refreshSession, logout } from '../controllers/auth.controller';
+import {
+  register,
+  login,
+  getUsers,
+  updateProfile,
+  bamboochainLogin,
+  bamboochainCallback,
+  refreshSession,
+  logout,
+  getCaptchaChallenge,
+  forgotPassword,
+  resetPassword,
+  setRecoveryOptions,
+} from '../controllers/auth.controller';
 import { setupMfa, verifyMfaSetup, disableMfa, verifyMfaLogin } from '../controllers/mfa.controller';
 import { verifyJWT } from '../middleware/auth.middleware';
 import { authLimiter } from '../middleware/rateLimiter';
@@ -8,8 +21,12 @@ import { loginSchema, mfaCodeSchema, mfaLoginSchema, profileUpdateSchema, refres
 
 const router = Router();
 
+router.get('/captcha', getCaptchaChallenge);
 router.post('/register', authLimiter, validateRequest({ body: registerSchema }), register);
 router.post('/login', authLimiter, validateRequest({ body: loginSchema }), login);
+router.post('/forgot-password', authLimiter, forgotPassword);
+router.post('/reset-password', authLimiter, resetPassword);
+router.post('/recovery-settings', verifyJWT, setRecoveryOptions);
 router.post('/refresh', validateRequest({ body: refreshTokenSchema }), refreshSession);
 router.post('/logout', validateRequest({ body: refreshTokenSchema }), logout);
 router.post('/mfa/login/verify', authLimiter, validateRequest({ body: mfaLoginSchema }), verifyMfaLogin);

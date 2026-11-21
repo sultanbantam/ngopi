@@ -13,7 +13,28 @@ export const registerSchema = Joi.object({
   wallet_address: Joi.string().trim().max(120).allow(null, ''),
   public_key: Joi.string().trim().max(2048).required(),
   referral_code: Joi.string().trim().max(100).allow(null, '').optional(),
+  recovery_pin: Joi.string().trim().min(4).max(12).allow(null, '').optional(),
+  recovery_email: Joi.string().trim().email().max(160).allow(null, '').optional(),
+  captcha_token: Joi.string().trim().max(512).allow(null, '').optional(),
+  captcha_answer: Joi.alternatives().try(Joi.string().trim().max(32), Joi.number()).optional(),
+  cf_turnstile_token: Joi.string().trim().max(2048).allow(null, '').optional(),
 });
+
+export const forgotPasswordSchema = Joi.object({
+  identifier: Joi.string().trim().min(1).max(160).required(),
+});
+
+export const resetPasswordSchema = Joi.object({
+  identifier: Joi.string().trim().min(1).max(160).required(),
+  new_password: Joi.string().min(8).max(128).required(),
+  otp: Joi.string().trim().min(4).max(16).allow(null, '').optional(),
+  recovery_pin: Joi.string().trim().min(4).max(12).allow(null, '').optional(),
+});
+
+export const recoverySettingsSchema = Joi.object({
+  recovery_pin: Joi.string().trim().min(4).max(12).allow(null, '').optional(),
+  recovery_email: Joi.string().trim().email().max(160).allow(null, '').optional(),
+}).min(1);
 
 export const loginSchema = Joi.object({
   username: Joi.string().trim().min(2).max(100).required(),

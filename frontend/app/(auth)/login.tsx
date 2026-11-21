@@ -1,7 +1,7 @@
 import { afterProfileLogin } from '../../src/utils/profileLink';
 import { coffee } from '../../src/theme/coffee';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView, Modal } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
@@ -22,7 +22,68 @@ export default function LoginScreen() {
   const [error, setError] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [challengeToken, setChallengeToken] = useState('');
+  const [forgotVisible, setForgotVisible] = useState(false);
+  const [forgotStep, setForgotStep] = useState<'request' | 'reset'>('request');
+  const [forgotIdentifier, setForgotIdentifier] = useState('');
+  const [forgotOtpOrPin, setForgotOtpOrPin] = useState('');
+  const [forgotNewPassword, setForgotNewPassword] = useState('');
+  const [forgotInfo, setForgotInfo] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [hasRecoveryPin, setHasRecoveryPin] = useState(false);
   const params = useLocalSearchParams();
+
+  const handleRequestPasswordReset = async () => {
+    if (!forgotIdentifier.trim()) {
+      setForgotError('Masukkan Email @ngopi.top, Username, atau Nomor ID Ngopi Anda.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    setForgotInfo('');
+    try {
+      const res = await axios.post(`${API_URL}/auth/forgot-password`, {
+        identifier: forgotIdentifier.trim(),
+      });
+      setHasRecoveryPin(Boolean(res.data?.has_recovery_pin));
+      setForgotInfo(
+        res.data?.message ||
+          `Permintaan pemulihan untuk ${res.data?.ngopi_email || forgotIdentifier} berhasil diproses.`
+      );
+      setForgotStep('reset');
+    } catch (err: any) {
+      setForgotError(err?.response?.data?.error || 'Gagal memproses permintaan lupa kata sandi.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  const handleConfirmPasswordReset = async () => {
+    if (!forgotOtpOrPin.trim() || forgotNewPassword.length < 8) {
+      setForgotError('Masukkan Kode OTP / PIN Pemulihan dan kata sandi baru minimal 8 karakter.');
+      return;
+    }
+    setForgotLoading(true);
+    setForgotError('');
+    try {
+      const res = await axios.post(`${API_URL}/auth/reset-password`, {
+        identifier: forgotIdentifier.trim(),
+        new_password: forgotNewPassword,
+        otp: forgotOtpOrPin.trim(),
+        recovery_pin: forgotOtpOrPin.trim(),
+      });
+      setForgotVisible(false);
+      setForgotStep('request');
+      setForgotOtpOrPin('');
+      setForgotNewPassword('');
+      setError('');
+      alert(res.data?.message || 'Kata sandi berhasil diperbarui! Silakan login.');
+    } catch (err: any) {
+      setForgotError(err?.response?.data?.error || 'Kode OTP atau PIN Pemulihan tidak valid.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleSSO = async () => {
@@ -190,14 +251,13 @@ export default function LoginScreen() {
         ) : null}
 
         <TouchableOpacity
-          onPress={() =>
-            alert(
-              t(
-                'Karena ini aplikasi desentralisasi tanpa email, reset password otomatis tidak tersedia. Silakan hubungi admin untuk bantuan lebih lanjut.',
-                'Since this is a decentralized app without email recovery, automatic password reset is unavailable. Please contact an admin for assistance.'
-              )
-            )
-          }
+          onPress={() => {
+            setForgotIdentifier(username.trim());
+            setForgotStep('request');
+            setForgotError('');
+            setForgotInfo('');
+            setForgotVisible(true);
+          }}
         >
           <Text style={styles.forgotPasswordText}>{t('Lupa Kata Sandi?', 'Forgot Password?')}</Text>
         </TouchableOpacity>
@@ -228,6 +288,86 @@ export default function LoginScreen() {
         </View>
 
       </View>
+
+      <Modal visible={forgotVisible} transparent animationType="fade" onRequestClose={() => setForgotVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={[styles.card, { maxWidth: 420, width: '100%' }]}>
+            <Text style={{ color: '#D4AF37', fontSize: 18, fontWeight: '800', marginBottom: 6 }}>
+              🔑 {t('Pemulihan Kata Sandi', 'Password Recovery')}
+            </Text>
+            <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 14 }}>
+              {t(
+                'Pulihkan akun menggunakan Email @ngopi.top, Username, atau Nomor ID Ngopi Anda.',
+                'Recover your account via @ngopi.top Email, Username, or Ngopi ID Number.'
+              )}
+            </Text>
+
+            {forgotError ? <Text style={[styles.errorText, { marginBottom: 10 }]}>{forgotError}</Text> : null}
+            {forgotInfo ? (
+              <Text style={{ color: '#22C55E', fontSize: 12, marginBottom: 10, backgroundColor: 'rgba(34,197,94,0.1)', padding: 8, borderRadius: 8 }}>
+                {forgotInfo}
+              </Text>
+            ) : null}
+
+            <TextInput
+              style={styles.input}
+              placeholder={t('Email @ngopi.top / Username / Nomor ID Ngopi', '@ngopi.top Email / Username / Ngopi ID')}
+              placeholderTextColor={coffee.muted}
+              value={forgotIdentifier}
+              onChangeText={setForgotIdentifier}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
+            {forgotStep === 'reset' ? (
+              <>
+                <TextInput
+                  style={styles.input}
+                  placeholder={
+                    hasRecoveryPin
+                      ? t('PIN Pemulihan atau Kode OTP 6 digit', 'Recovery PIN or 6-digit OTP')
+                      : t('Kode OTP 6 digit dari Inbox / Email', '6-digit OTP from Inbox / Email')
+                  }
+                  placeholderTextColor={coffee.muted}
+                  value={forgotOtpOrPin}
+                  onChangeText={setForgotOtpOrPin}
+                  autoCapitalize="none"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('Kata Sandi Baru (min. 8 karakter)', 'New Password (min. 8 chars)')}
+                  placeholderTextColor={coffee.muted}
+                  value={forgotNewPassword}
+                  onChangeText={setForgotNewPassword}
+                  secureTextEntry
+                />
+              </>
+            ) : null}
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity
+                style={[styles.button, { flex: 1, backgroundColor: '#261C15', borderWidth: 1, borderColor: '#4A3728' }]}
+                onPress={() => setForgotVisible(false)}
+              >
+                <Text style={[styles.buttonText, { color: coffee.secondary }]}>{t('Batal', 'Cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, { flex: 1.5 }]}
+                onPress={forgotStep === 'request' ? handleRequestPasswordReset : handleConfirmPasswordReset}
+                disabled={forgotLoading}
+              >
+                {forgotLoading ? (
+                  <ActivityIndicator color={coffee.text} />
+                ) : (
+                  <Text style={styles.buttonText}>
+                    {forgotStep === 'request' ? t('Kirim Kode / Cek', 'Send Code / Next') : t('Reset Sandi', 'Reset Password')}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }

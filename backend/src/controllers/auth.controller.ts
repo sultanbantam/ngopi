@@ -2,7 +2,8 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import axios from 'axios';
 import { prisma } from '../utils/prisma';
-import { registerSchema, loginSchema } from '../utils/validation';
+import { registerSchema, loginSchema, forgotPasswordSchema, resetPasswordSchema, recoverySettingsSchema } from '../utils/validation';
+import crypto from 'crypto';
 import { isPrivilegedRole, normalizeRole } from '../middleware/rbac.middleware';
 import { verifyMfaCode } from '../services/mfa.service';
 import { PointsService } from '../services/points.service';
@@ -79,6 +80,68 @@ const completeLogin = async (req: Request, res: Response, user: { id: string; us
   });
 };
 
+const CAPTCHA_SECRET = process.env.JWT_SECRET || 'ngopi_captcha_fallback_secret';
+const usedCaptchaNonces = new Map<string, number>();
+
+const signCaptchaPayload = (answer: number, exp: number, nonce: string): string => {
+  const payload = `${answer}:${exp}:${nonce}`;
+  const sig = crypto.createHmac('sha256', CAPTCHA_SECRET).update(payload).digest('hex');
+  return Buffer.from(`${payload}:${sig}`).toString('base64url');
+};
+
+const verifyCaptchaToken = (token: string, userAnswer: string | number): boolean => {
+  try {
+    const decoded = Buffer.from(token, 'base64url').toString('utf8');
+    const parts = decoded.split(':');
+    if (parts.length !== 4) return false;
+    const [ansStr = '', expStr = '', nonce = '', sig = ''] = parts;
+    if (!ansStr || !expStr || !nonce || !sig) return false;
+    const exp = Number(expStr);
+    if (!Number.isFinite(exp) || Date.now() > exp) return false;
+    if (usedCaptchaNonces.has(nonce)) return false;
+
+    const expectedSig = crypto
+      .createHmac('sha256', CAPTCHA_SECRET)
+      .update(`${ansStr}:${expStr}:${nonce}`)
+      .digest('hex');
+    if (sig.length !== expectedSig.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expectedSig))) {
+      return false;
+    }
+    if (String(userAnswer ?? '').trim() !== ansStr) return false;
+
+    usedCaptchaNonces.set(nonce, exp);
+    if (usedCaptchaNonces.size > 5000) {
+      const now = Date.now();
+      for (const [k, v] of usedCaptchaNonces.entries()) {
+        if (v < now) usedCaptchaNonces.delete(k);
+      }
+    }
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const getCaptchaChallenge = async (_req: Request, res: Response): Promise<void> => {
+  const a = Math.floor(Math.random() * 9) + 2;
+  const b = Math.floor(Math.random() * 9) + 1;
+  const ops = ['+', '-'] as const;
+  const op = ops[Math.floor(Math.random() * ops.length)];
+  const left = op === '-' && a < b ? b : a;
+  const right = op === '-' && a < b ? a : b;
+  const answer = op === '+' ? left + right : left - right;
+  const exp = Date.now() + 5 * 60 * 1000;
+  const nonce = crypto.randomBytes(8).toString('hex');
+  const token = signCaptchaPayload(answer, exp, nonce);
+
+  res.status(200).json({
+    captcha_token: token,
+    question: `Verifikasi Manusia: Berapa ${left} ${op} ${right}?`,
+    turnstile_site_key: process.env.TURNSTILE_SITE_KEY || null,
+    expires_in_seconds: 300,
+  });
+};
+
 export const register = async (req: Request, res: Response): Promise<void> => {
   try {
     const { error, value } = registerSchema.validate(req.body);
@@ -87,7 +150,31 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { username, password, display_name, wallet_address, public_key, referral_code } = value;
+    const { username, password, display_name, wallet_address, public_key, referral_code, recovery_pin, recovery_email, captcha_token, captcha_answer, cf_turnstile_token } = value;
+
+    const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
+    let humanVerified = false;
+    if (turnstileSecret && cf_turnstile_token) {
+      try {
+        const verifyRes = await axios.post(
+          'https://challenges.cloudflare.com/turnstile/v0/siteverify',
+          { secret: turnstileSecret, response: cf_turnstile_token, remoteip: req.ip },
+          { timeout: 6000 }
+        );
+        humanVerified = Boolean(verifyRes.data?.success);
+      } catch {
+        humanVerified = false;
+      }
+    } else if (captcha_token && captcha_answer !== undefined && captcha_answer !== '') {
+      humanVerified = verifyCaptchaToken(String(captcha_token), captcha_answer);
+    }
+
+    if (!humanVerified) {
+      res.status(400).json({
+        error: 'Verifikasi anti-bot gagal atau kedaluwarsa. Silakan jawab tantangan verifikasi manusia dengan benar.',
+      });
+      return;
+    }
     if (telecomService.isEmailPrefixLocked(username)) {
       res.status(403).json({
         error: `Username / alamat "${String(username).toLowerCase()}@ngopi.top" dikunci khusus oleh Founder Ngopi. Silakan pilih username lain.`,
@@ -109,6 +196,8 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         display_name,
         wallet_address,
         public_key,
+        recovery_pin_hash: recovery_pin ? await bcrypt.hash(String(recovery_pin).trim(), 10) : null,
+        recovery_email: recovery_email ? String(recovery_email).trim().toLowerCase() : null,
         role: 'user',
       },
     });
@@ -414,5 +503,201 @@ export const bamboochainCallback = async (req: Request, res: Response): Promise<
   } catch (error: any) {
     console.error('BambooChain SSO Callback Error:', error?.response?.data || error.message);
     res.redirect(buildFrontendRedirect('/login', { error: 'sso_failed' }));
+  }
+};
+
+
+const resolveAuthRecoveryUser = async (identifier: string) => {
+  const clean = String(identifier || '').trim();
+  if (!clean) return null;
+
+  const resolved = await telecomService.resolveUserByIdentifier(clean);
+  if (resolved) {
+    return prisma.user.findUnique({ where: { id: resolved.id } });
+  }
+
+  const stripped = clean.replace(/^@/, '').replace(/@ngopi\.top$/i, '').replace(/@mail\.ngopi\.top$/i, '').trim();
+  return prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: clean },
+        { username: { equals: stripped, mode: 'insensitive' } },
+        { recovery_email: { equals: clean.toLowerCase(), mode: 'insensitive' } },
+      ],
+    },
+  });
+};
+
+export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { error, value } = forgotPasswordSchema.validate(req.body);
+    if (error) {
+      res.status(400).json({ error: error.details[0]?.message });
+      return;
+    }
+
+    const user = await resolveAuthRecoveryUser(value.identifier);
+    if (!user) {
+      res.status(404).json({
+        error: 'Akun dengan Email Ngopi, Username, atau Nomor ID Ngopi tersebut tidak ditemukan.',
+      });
+      return;
+    }
+
+    const otp = String(crypto.randomInt(100000, 999999));
+    const tokenHash = crypto.createHash('sha256').update(otp).digest('hex');
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.passwordResetToken.create({
+      data: {
+        user_id: user.id,
+        token_hash: tokenHash,
+        channel: user.recovery_email ? 'external_email' : 'ngopi_inbox',
+        expires_at: expiresAt,
+      },
+    });
+
+    const resolvedIdentity = await telecomService.resolveUserByIdentifier(user.id);
+    const ngopiNumber = resolvedIdentity?.ngopi_number || telecomService.getNumberForUser(user);
+    const ngopiEmail = resolvedIdentity?.ngopi_email || `${user.username}@ngopi.top`;
+
+    try {
+      await telecomService.deliverSystemRecoveryMail(
+        user,
+        ngopiNumber,
+        ngopiEmail,
+        'Kode Reset Kata Sandi Ngopi',
+        `Halo ${user.display_name || user.username},\n\nKode OTP reset kata sandi Anda adalah: ${otp}\nBerlaku selama 15 menit.\n\nJika Anda tidak meminta reset password, abaikan pesan ini.`
+      );
+    } catch (mailErr) {
+      console.warn('[Auth] Failed delivering recovery OTP to Ngopi inbox:', mailErr);
+    }
+
+    let sentExternal = false;
+    if (user.recovery_email) {
+      const extResult = await telecomService.sendExternalEmailDirect({
+        to: user.recovery_email,
+        subject: '[Ngopi.top] Kode Reset Kata Sandi Akun Anda',
+        body: `Halo ${user.display_name || user.username},\n\nKode OTP reset kata sandi akun Ngopi (#${ngopiNumber} / ${ngopiEmail}) Anda adalah:\n\n${otp}\n\nKode berlaku selama 15 menit.`,
+        fromEmail: ngopiEmail,
+        fromName: 'Ngopi Security',
+      });
+      sentExternal = extResult.sent;
+    }
+
+    res.status(200).json({
+      success: true,
+      ngopi_number: ngopiNumber,
+      ngopi_email: ngopiEmail,
+      has_recovery_pin: Boolean(user.recovery_pin_hash),
+      sent_to_external_email: sentExternal,
+      sent_to_ngopi_inbox: true,
+      message: sentExternal
+        ? 'Kode OTP reset kata sandi telah dikirim ke Email Pemulihan dan Inbox Ngopi Anda.'
+        : user.recovery_pin_hash
+          ? 'Permintaan reset dibuat. Masukkan PIN Pemulihan Anda atau kode OTP dari Inbox Ngopi.'
+          : 'Kode OTP reset telah dikirim ke Inbox Ngopi Anda.',
+    });
+  } catch (err) {
+    console.error('forgotPassword error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { error, value } = resetPasswordSchema.validate(req.body);
+    if (error) {
+      res.status(400).json({ error: error.details[0]?.message });
+      return;
+    }
+
+    const { identifier, new_password, otp, recovery_pin } = value;
+    const user = await resolveAuthRecoveryUser(identifier);
+    if (!user) {
+      res.status(404).json({ error: 'Akun tidak ditemukan.' });
+      return;
+    }
+
+    let verified = false;
+    let usedTokenId: string | null = null;
+
+    if (recovery_pin && user.recovery_pin_hash) {
+      verified = await bcrypt.compare(String(recovery_pin).trim(), user.recovery_pin_hash);
+    }
+
+    if (!verified && otp) {
+      const tokenHash = crypto.createHash('sha256').update(String(otp).trim()).digest('hex');
+      const tokenRecord = await prisma.passwordResetToken.findFirst({
+        where: {
+          user_id: user.id,
+          token_hash: tokenHash,
+          used_at: null,
+          expires_at: { gt: new Date() },
+        },
+        orderBy: { created_at: 'desc' },
+      });
+      if (tokenRecord) {
+        verified = true;
+        usedTokenId = tokenRecord.id;
+      }
+    }
+
+    if (!verified) {
+      res.status(400).json({ error: 'Kode OTP atau PIN Pemulihan tidak valid / sudah kedaluwarsa.' });
+      return;
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const password_hash = await bcrypt.hash(new_password, salt);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password_hash },
+    });
+
+    if (usedTokenId) {
+      await prisma.passwordResetToken.update({
+        where: { id: usedTokenId },
+        data: { used_at: new Date() },
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Kata sandi berhasil diperbarui! Silakan login dengan kata sandi baru Anda.',
+    });
+  } catch (err) {
+    console.error('resetPassword error:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
+export const setRecoveryOptions = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = (req as any).user?.id;
+    if (!userId) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+    const { error, value } = recoverySettingsSchema.validate(req.body);
+    if (error) {
+      res.status(400).json({ error: error.details[0]?.message });
+      return;
+    }
+
+    const data: Record<string, any> = {};
+    if (value.recovery_pin) {
+      data.recovery_pin_hash = await bcrypt.hash(String(value.recovery_pin).trim(), 10);
+    }
+    if (value.recovery_email !== undefined) {
+      data.recovery_email = value.recovery_email ? String(value.recovery_email).trim().toLowerCase() : null;
+    }
+
+    await prisma.user.update({ where: { id: userId }, data });
+    res.status(200).json({ success: true, message: 'Pengaturan pemulihan akun berhasil disimpan.' });
+  } catch (err) {
+    console.error('setRecoveryOptions error:', err);
+    res.status(500).json({ error: 'Internal server error' });
   }
 };

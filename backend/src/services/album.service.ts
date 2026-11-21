@@ -10,11 +10,13 @@ export interface CompilationTrack {
   title: string;
   artist: string;
   genre?: string;
-  era?: '80s' | '90s' | '2000s' | 'west' | 'warkop';
+  era?: '80s' | '90s' | '2000s' | 'west' | 'warkop' | 'ai';
   uri: string;
   duration: number; // in seconds
   thumbnail?: string | null;
   is_full: boolean;
+  uploaded_by?: string;
+  is_ai_generated?: boolean;
 }
 
 export interface CompilationAlbum {
@@ -34,6 +36,7 @@ export interface CompilationAlbum {
 }
 
 const ALBUMS_FILE = path.join(__dirname, '../../uploads/warkop_compilation_albums.json');
+const CUSTOM_TRACKS_FILE = path.join(__dirname, '../../uploads/custom_mixtape_tracks.json');
 
 // Master Catalog: Koleksi Lengkap Lagu Utuh Era 80an, 90an, 2000an (Luar Negeri & Dalam Negeri)
 export const CURATED_FULL_TRACKS: CompilationTrack[] = [
@@ -1938,14 +1941,45 @@ export class AlbumService {
    * Search for full-length tracks across curated library and Archive.org
    * Supports era filtering ('80s', '90s', '2000s', 'west', 'warkop')
    */
+  private static loadCustomTracks(): CompilationTrack[] {
+    try {
+      if (fs.existsSync(CUSTOM_TRACKS_FILE)) {
+        const raw = fs.readFileSync(CUSTOM_TRACKS_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed) ? parsed : [];
+      }
+    } catch (e) {
+      console.warn('Failed to load custom mixtape tracks:', e);
+    }
+    return [];
+  }
+
+  private static saveCustomTracks(tracks: CompilationTrack[]): void {
+    try {
+      const dir = path.dirname(CUSTOM_TRACKS_FILE);
+      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(CUSTOM_TRACKS_FILE, JSON.stringify(tracks, null, 2), 'utf-8');
+    } catch (e) {
+      console.warn('Failed to save custom mixtape tracks:', e);
+    }
+  }
+
+  public static addCustomTrack(track: CompilationTrack): CompilationTrack {
+    const tracks = this.loadCustomTracks();
+    tracks.unshift(track);
+    this.saveCustomTracks(tracks);
+    return track;
+  }
+
   public static async searchFullTracks(query: string, era?: string): Promise<CompilationTrack[]> {
     const rawQ = (query || '').trim();
     const targetEra = (era || '').trim().toLowerCase();
 
-    // 1. Filter local catalog by era first if specified
-    let pool = CURATED_FULL_TRACKS;
+    // 1. Merge custom uploaded tracks (including AI songs) + curated catalog
+    const customTracks = this.loadCustomTracks();
+    let pool = [...customTracks, ...CURATED_FULL_TRACKS];
     if (targetEra && targetEra !== 'all') {
-      pool = CURATED_FULL_TRACKS.filter((t) => t.era === targetEra);
+      pool = pool.filter((t) => t.era === targetEra);
     }
 
     if (!rawQ) {

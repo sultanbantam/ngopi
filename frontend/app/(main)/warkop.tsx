@@ -33,6 +33,7 @@ import {
 import axios from 'axios';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
+import { getValidAccessToken } from '../../src/utils/session';
 import * as SecureStore from '../../src/utils/storage';
 import { getMimeType } from '../../src/utils/fileHelpers';
 import { AmbientPlayer } from '../../src/components/AmbientPlayer';
@@ -286,6 +287,54 @@ export default function BambupediaRoom() {
   const [cafePartnerVisible, setCafePartnerVisible] = useState(false);
   const [selectedCafeToken, setSelectedCafeToken] = useState<string>('NGOPI_WARKOP_SEDUH');
   const [merchantDashboardVisible, setMerchantDashboardVisible] = useState(false);
+  const [transferModalVisible, setTransferModalVisible] = useState(false);
+  const [transferRecipient, setTransferRecipient] = useState('');
+  const [transferAmount, setTransferAmount] = useState('');
+  const [transferNote, setTransferNote] = useState('');
+  const [transferSending, setTransferSending] = useState(false);
+  const [transferError, setTransferError] = useState('');
+
+  const handleTransferPoints = async () => {
+    const amt = Math.floor(Number(transferAmount || 0));
+    if (!transferRecipient.trim() || amt < 10) {
+      setTransferError('Masukkan penerima (Username / Nomor Ngopi / @ngopi.top) dan jumlah minimal 10 Poin.');
+      return;
+    }
+    setTransferSending(true);
+    setTransferError('');
+    try {
+      const token = await getValidAccessToken();
+      const res = await fetch(`${API_URL}/bmc/points/transfer`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          recipient: transferRecipient.trim(),
+          amount: amt,
+          note: transferNote.trim(),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setTransferError(data?.error || 'Gagal melakukan transfer poin.');
+        return;
+      }
+      if (typeof data?.sender_balance === 'number') {
+        setUserPoints(data.sender_balance);
+      }
+      setTransferModalVisible(false);
+      setTransferRecipient('');
+      setTransferAmount('');
+      setTransferNote('');
+      Alert.alert('Transfer Berhasil!', data?.message || `${amt} Poin Ngopi berhasil dikirim.`);
+    } catch {
+      setTransferError('Terjadi kesalahan jaringan saat mengirim poin.');
+    } finally {
+      setTransferSending(false);
+    }
+  };
 
   useEffect(() => {
     if (album) {
@@ -1720,6 +1769,25 @@ export default function BambupediaRoom() {
             </TouchableOpacity>
 
             <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(139, 92, 246, 0.18)', borderColor: '#8B5CF6' }]}
+              onPress={() => router.push('/(main)/pustaka' as any)}
+              accessibilityLabel="Buka Ngopi Pustaka"
+            >
+              <Text style={[styles.quickChipText, { color: '#C4B5FD', fontWeight: '800' }]}>📚 Pustaka</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.quickChipBtn, { backgroundColor: 'rgba(56, 189, 248, 0.16)', borderColor: '#0284C7' }]}
+              onPress={() => {
+                setTransferError('');
+                setTransferModalVisible(true);
+              }}
+              accessibilityLabel="Transfer Poin Ngopi"
+            >
+              <Text style={[styles.quickChipText, { color: '#38BDF8', fontWeight: '800' }]}>💸 Kirim Poin</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(212, 163, 115, 0.22)', borderColor: coffee.accent }]}
               onPress={() => setCafeCheckinVisible(true)}
               accessibilityLabel="Check-in Cafe Partner"
@@ -1904,6 +1972,71 @@ export default function BambupediaRoom() {
         onClose={() => setMerchantDashboardVisible(false)}
         currentUserId={currentUserId || undefined}
       />
+
+      {/* Peer-to-Peer Ngopi Points Transfer Modal */}
+      <Modal
+        visible={transferModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setTransferModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#1B130E', borderRadius: 14, padding: 18, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#4A3728' }}>
+            <Text style={{ color: '#D4AF37', fontSize: 17, fontWeight: '800', marginBottom: 4 }}>
+              💸 Transfer Poin Ngopi
+            </Text>
+            <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 12 }}>
+              Kirim Poin Ngopi langsung antar pengguna (terpisah dari BMC). Saldo Anda: {userPoints.toLocaleString('id-ID')} Poin.
+            </Text>
+
+            {transferError ? (
+              <Text style={{ color: '#F87171', fontSize: 12, marginBottom: 10 }}>{transferError}</Text>
+            ) : null}
+
+            <TextInput
+              style={{ backgroundColor: '#120D0A', borderWidth: 1, borderColor: '#3A2A1E', borderRadius: 10, padding: 10, color: '#F5ECE2', marginBottom: 10 }}
+              placeholder="Username, Nomor ID Ngopi, atau @ngopi.top penerima"
+              placeholderTextColor={coffee.muted}
+              value={transferRecipient}
+              onChangeText={setTransferRecipient}
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={{ backgroundColor: '#120D0A', borderWidth: 1, borderColor: '#3A2A1E', borderRadius: 10, padding: 10, color: '#F5ECE2', marginBottom: 10 }}
+              placeholder="Jumlah Poin (min. 10)"
+              placeholderTextColor={coffee.muted}
+              value={transferAmount}
+              onChangeText={setTransferAmount}
+              keyboardType="number-pad"
+            />
+            <TextInput
+              style={{ backgroundColor: '#120D0A', borderWidth: 1, borderColor: '#3A2A1E', borderRadius: 10, padding: 10, color: '#F5ECE2', marginBottom: 14 }}
+              placeholder="Catatan (opsional)"
+              placeholderTextColor={coffee.muted}
+              value={transferNote}
+              onChangeText={setTransferNote}
+            />
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setTransferModalVisible(false)}
+                style={{ flex: 1, paddingVertical: 11, borderRadius: 10, backgroundColor: '#261C15', alignItems: 'center', borderWidth: 1, borderColor: '#4A3728' }}
+              >
+                <Text style={{ color: coffee.secondary, fontWeight: '700' }}>Batal</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleTransferPoints}
+                disabled={transferSending}
+                style={{ flex: 1.4, paddingVertical: 11, borderRadius: 10, backgroundColor: '#D4AF37', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#1B130E', fontWeight: '800' }}>
+                  {transferSending ? 'Mengirim...' : 'Kirim Poin'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

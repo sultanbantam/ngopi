@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import axios from 'axios';
+import multer from 'multer';
+import crypto from 'crypto';
 import { AlbumService } from '../services/album.service';
 import { PointsManager } from '../utils/pointsManager';
 import { pointsEconomyService } from '../services/points.service';
@@ -10,6 +12,84 @@ import { requireDbUser } from '../middleware/rbac.middleware';
 import { prisma } from '../utils/prisma';
 
 const router = Router();
+
+const mixtapeUploadDir = path.join(__dirname, '../../uploads/mixtape_songs');
+const audioUpload = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      if (!fs.existsSync(mixtapeUploadDir)) fs.mkdirSync(mixtapeUploadDir, { recursive: true });
+      cb(null, mixtapeUploadDir);
+    },
+    filename: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      const safeExt = ['.mp3', '.m4a', '.wav', '.ogg'].includes(ext) ? ext : '.mp3';
+      const trackId = `trk_ai_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+      cb(null, `${trackId}${safeExt}`);
+    },
+  }),
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max per audio track
+  fileFilter: (_req, file, cb) => {
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const mime = (file.mimetype || '').toLowerCase();
+    if (
+      ['.mp3', '.m4a', '.wav', '.ogg'].includes(ext) ||
+      mime.startsWith('audio/')
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Format file audio harus MP3 (disarankan), M4A, WAV, atau OGG.'));
+    }
+  },
+});
+
+// POST /api/albums/upload-track - Upload AI / Indie song to mixtape catalog
+router.post(
+  '/upload-track',
+  verifyJWT,
+  requireDbUser,
+  audioUpload.single('audio'),
+  async (req: Request, res: Response) => {
+    try {
+      const authUser = (req as AuthRequest).user;
+      if (!authUser?.id) {
+        return res.status(401).json({ success: false, error: 'Unauthorized' });
+      }
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ success: false, error: 'File audio (.mp3) wajib diunggah.' });
+      }
+
+      const title = String(req.body?.title || '').trim() || path.parse(file.originalname || 'Lagu AI').name;
+      const artist = String(req.body?.artist || '').trim() || authUser.username || 'AI Creator';
+      const genre = String(req.body?.genre || '').trim() || 'AI Music';
+      const duration = Math.max(10, Math.min(3600, Number(req.body?.duration) || 180));
+      const trackId = path.parse(file.filename).name;
+      const baseUrl = process.env.PUBLIC_API_URL || 'https://api.ngopi.top';
+
+      const track = AlbumService.addCustomTrack({
+        id: trackId,
+        title: title.slice(0, 120),
+        artist: artist.slice(0, 80),
+        genre: genre.slice(0, 50),
+        era: 'ai',
+        uri: `${baseUrl.replace(/\/$/, '')}/uploads/mixtape_songs/${file.filename}`,
+        duration,
+        thumbnail: null,
+        is_full: true,
+        uploaded_by: authUser.username,
+        is_ai_generated: true,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: 'Lagu AI berhasil diunggah dan masuk ke katalog Album Mixtape!',
+        track,
+      });
+    } catch (e: any) {
+      return res.status(500).json({ success: false, error: e?.message || 'Gagal mengunggah lagu.' });
+    }
+  }
+);
 
 // GET /api/albums/stream?url=...&trackId=... - Audio stream proxy & local cache server
 router.get('/stream', async (req: Request, res: Response): Promise<void> => {

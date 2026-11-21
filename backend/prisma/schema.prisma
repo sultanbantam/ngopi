@@ -12,6 +12,8 @@ model User {
   password_hash        String
   display_name         String
   role                 String    @default("user")
+  recovery_pin_hash    String?
+  recovery_email       String?
   mfa_secret_encrypted String?
   mfa_enabled          Boolean   @default(false)
   mfa_verified_at      DateTime?
@@ -1574,5 +1576,74 @@ model BoomBoomTrip {
   @@index([status, created_at])
   @@map("boomboom_trips")
 }
+
+// ============================================================================
+// AUTH RECOVERY & NGOPI PUSTAKA (PERPUSTAKAAN & STUDIO PENULIS)
+// ============================================================================
+
+model PasswordResetToken {
+  id         String    @id @default(uuid())
+  user_id    String    @map("user_id")
+  token_hash String    @map("token_hash")
+  channel    String    @default("ngopi_inbox") // "ngopi_inbox" | "external_email" | "recovery_pin"
+  expires_at DateTime  @map("expires_at")
+  used_at    DateTime? @map("used_at")
+  created_at DateTime  @default(now()) @map("created_at")
+
+  @@index([user_id, created_at])
+  @@map("password_reset_tokens")
+}
+
+model LibraryWork {
+  id               String           @id @default(uuid())
+  author_id        String           @map("author_id")
+  author_username  String           @map("author_username")
+  author_name      String           @map("author_name")
+  title            String
+  synopsis         String
+  category         String           @default("fiksi") // "fiksi" | "esai" | "puisi" | "edukasi" | "komunitas"
+  cover_emoji      String           @default("📚") @map("cover_emoji")
+  status           String           @default("published") // "draft" | "published"
+  views_count      Int              @default(0) @map("views_count")
+  total_tip_points Int              @default(0) @map("total_tip_points")
+  created_at       DateTime         @default(now()) @map("created_at")
+  updated_at       DateTime         @updatedAt @map("updated_at")
+  chapters         LibraryChapter[]
+  tips             LibraryTip[]
+
+  @@index([status, created_at])
+  @@index([author_id, created_at])
+  @@map("library_works")
+}
+
+model LibraryChapter {
+  id             String      @id @default(uuid())
+  work_id        String      @map("work_id")
+  chapter_number Int         @map("chapter_number")
+  title          String
+  content        String
+  word_count     Int         @default(0) @map("word_count")
+  created_at     DateTime    @default(now()) @map("created_at")
+  updated_at     DateTime    @updatedAt @map("updated_at")
+  work           LibraryWork @relation(fields: [work_id], references: [id], onDelete: Cascade)
+
+  @@unique([work_id, chapter_number])
+  @@map("library_chapters")
+}
+
+model LibraryTip {
+  id           String      @id @default(uuid())
+  work_id      String      @map("work_id")
+  from_user_id String      @map("from_user_id")
+  to_user_id   String      @map("to_user_id")
+  amount       Int
+  message      String?
+  created_at   DateTime    @default(now()) @map("created_at")
+  work         LibraryWork @relation(fields: [work_id], references: [id], onDelete: Cascade)
+
+  @@index([work_id, created_at])
+  @@map("library_tips")
+}
+
 
 
