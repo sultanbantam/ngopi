@@ -1,0 +1,4 @@
+ALTER TABLE "library_works" ADD COLUMN IF NOT EXISTS "ai_score" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "library_works" ADD COLUMN IF NOT EXISTS "ai_grade" TEXT;
+ALTER TABLE "library_works" ADD COLUMN IF NOT EXISTS "ai_feedback" TEXT;
+ALTER TABLE "library_works" ADD COLUMN IF NOT EXISTS "points_awarded" INTEGER NOT NULL DEFAULT 0;

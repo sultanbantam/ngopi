@@ -4,6 +4,7 @@ import { verifyJWT, AuthRequest } from '../middleware/auth.middleware';
 import { requireDbUser } from '../middleware/rbac.middleware';
 import { pointsEconomyService } from '../services/points.service';
 import { PointsManager } from '../utils/pointsManager';
+import { evaluateLiteraryWork } from '../services/libraryEvaluator.service';
 
 const router = Router();
 
@@ -99,9 +100,31 @@ router.post('/works', verifyJWT, requireDbUser, async (req: Request, res: Respon
     if (!synopsis || synopsis.length < 10) {
       return res.status(400).json({ success: false, error: 'Sinopsis atau deskripsi karya minimal 10 karakter.' });
     }
+    if (!firstChapterContent || firstChapterContent.length < 40) {
+      return res.status(400).json({
+        success: false,
+        error: 'Isi Bab 1 minimal 40 karakter agar AI kurator dapat menilai kualitas tulisan secara objektif.',
+      });
+    }
 
     const allowedCategories = ['fiksi', 'esai', 'puisi', 'edukasi', 'komunitas'];
     const safeCategory = allowedCategories.includes(category) ? category : 'fiksi';
+
+    const evaluation = await evaluateLiteraryWork({
+      title,
+      synopsis,
+      content: firstChapterContent,
+      category: safeCategory,
+      isChapterOnly: false,
+    });
+
+    if (evaluation.isSpam) {
+      return res.status(400).json({
+        success: false,
+        error: `Validasi AI: ${evaluation.feedback}`,
+        evaluation,
+      });
+    }
 
     const work = await prisma.libraryWork.create({
       data: {
@@ -113,6 +136,10 @@ router.post('/works', verifyJWT, requireDbUser, async (req: Request, res: Respon
         category: safeCategory,
         cover_emoji: coverEmoji,
         status: 'published',
+        ai_score: evaluation.score,
+        ai_grade: evaluation.grade,
+        ai_feedback: evaluation.feedback,
+        points_awarded: evaluation.pointsAwarded,
         chapters: firstChapterContent
           ? {
               create: {
@@ -127,20 +154,27 @@ router.post('/works', verifyJWT, requireDbUser, async (req: Request, res: Respon
       include: { chapters: true },
     });
 
-    // Author writing reward (+25 Ngopi Points)
-    try {
-      pointsEconomyService.syncWithPointsManager(dbUser.id, dbUser.username);
-      const newBal = pointsEconomyService.addDirectPoints(
-        dbUser.id,
-        25,
-        'daily_mission',
-        `Menerbitkan karya di Ngopi Pustaka: ${work.title}`
-      );
-      PointsManager.setPoints(dbUser.id, newBal, true, true);
-      PointsManager.setPoints(dbUser.username, newBal, true, true);
-    } catch (_) {}
+    // Proportional AI-validated author reward (0 - 1,500 Ngopi Points)
+    if (evaluation.pointsAwarded > 0) {
+      try {
+        pointsEconomyService.syncWithPointsManager(dbUser.id, dbUser.username);
+        const newBal = pointsEconomyService.addDirectPoints(
+          dbUser.id,
+          evaluation.pointsAwarded,
+          'daily_mission',
+          `Apresiasi AI (${evaluation.grade} • ${evaluation.score}/100) Karya: ${work.title}`
+        );
+        PointsManager.setPoints(dbUser.id, newBal, true, true);
+        PointsManager.setPoints(dbUser.username, newBal, true, true);
+      } catch (_) {}
+    }
 
-    return res.status(201).json({ success: true, work, message: 'Karya berhasil diterbitkan di Perpustakaan Ngopi! (+25 Poin)' });
+    return res.status(201).json({
+      success: true,
+      work,
+      evaluation,
+      message: `Karya terbit! Validasi AI: Grade ${evaluation.grade} (${evaluation.score}/100 • ${evaluation.tierLabel}) → +${evaluation.pointsAwarded.toLocaleString('id-ID')} Poin Ngopi!`,
+    });
   } catch (err: any) {
     console.error('[LibraryRoutes] POST /works error:', err);
     return res.status(500).json({ success: false, error: err?.message || 'Gagal menerbitkan karya.' });
@@ -169,6 +203,22 @@ router.post('/works/:id/chapters', verifyJWT, requireDbUser, async (req: Request
       return res.status(400).json({ success: false, error: 'Judul bab dan isi tulisan wajib diisi.' });
     }
 
+    const evaluation = await evaluateLiteraryWork({
+      title: `${work.title} - ${title}`,
+      synopsis: work.synopsis,
+      content,
+      category: work.category,
+      isChapterOnly: true,
+    });
+
+    if (evaluation.isSpam) {
+      return res.status(400).json({
+        success: false,
+        error: `Validasi AI: ${evaluation.feedback}`,
+        evaluation,
+      });
+    }
+
     const nextNumber = (work.chapters[0]?.chapter_number || 0) + 1;
     const chapter = await prisma.libraryChapter.create({
       data: {
@@ -185,7 +235,26 @@ router.post('/works/:id/chapters', verifyJWT, requireDbUser, async (req: Request
       data: { updated_at: new Date() },
     });
 
-    return res.status(201).json({ success: true, chapter, message: `Bab ${nextNumber} berhasil ditambahkan!` });
+    if (evaluation.pointsAwarded > 0) {
+      try {
+        pointsEconomyService.syncWithPointsManager(authUser.id, authUser.username);
+        const newBal = pointsEconomyService.addDirectPoints(
+          authUser.id,
+          evaluation.pointsAwarded,
+          'daily_mission',
+          `Apresiasi AI Bab ${nextNumber} (${evaluation.grade} • ${evaluation.score}/100): ${work.title}`
+        );
+        PointsManager.setPoints(authUser.id, newBal, true, true);
+        if (authUser.username) PointsManager.setPoints(authUser.username, newBal, true, true);
+      } catch (_) {}
+    }
+
+    return res.status(201).json({
+      success: true,
+      chapter,
+      evaluation,
+      message: `Bab ${nextNumber} terbit! Validasi AI: Grade ${evaluation.grade} (${evaluation.score}/100) → +${evaluation.pointsAwarded.toLocaleString('id-ID')} Poin Ngopi!`,
+    });
   } catch (err: any) {
     console.error('[LibraryRoutes] POST /works/:id/chapters error:', err);
     return res.status(500).json({ success: false, error: err?.message || 'Gagal menambah bab.' });

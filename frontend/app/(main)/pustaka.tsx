@@ -27,6 +27,10 @@ interface LibraryWork {
   cover_emoji: string;
   views_count: number;
   total_tip_points: number;
+  ai_score?: number;
+  ai_grade?: string | null;
+  ai_feedback?: string | null;
+  points_awarded?: number;
   created_at: string;
   _count?: { chapters: number; tips: number };
   chapters?: LibraryChapter[];
@@ -142,7 +146,11 @@ export default function PustakaScreen() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      showAlert('Berhasil Terbit!', res.data?.message || 'Karya Anda kini tersedia di Perpustakaan Ngopi.');
+      const ev = res.data?.evaluation;
+      const evalDetail = ev
+        ? `\n\n🤖 Rapor AI (${ev.evaluatorMode === 'llm_verified' ? 'LLM + Rubrik Objektif' : 'Rubrik Objektif'}):\n• Skor: ${ev.score}/100 (Grade ${ev.grade} — ${ev.tierLabel})\n• Substansi: ${ev.breakdown?.substance}/25 | Diksi: ${ev.breakdown?.vocabulary}/20 | Struktur: ${ev.breakdown?.structure}/20\n• Koherensi: ${ev.breakdown?.coherence}/20 | Kedalaman: ${ev.breakdown?.depth}/15\n• Reward: +${ev.pointsAwarded} Poin Ngopi\n• Catatan: ${ev.feedback}`
+        : '';
+      showAlert('Karya Terbit & Tervalidasi AI!', `${res.data?.message || 'Karya Anda kini tersedia di Perpustakaan Ngopi.'}${evalDetail}`);
       setNewTitle('');
       setNewSynopsis('');
       setFirstChapterTitle('Bab 1');
@@ -293,6 +301,7 @@ export default function PustakaScreen() {
                     </Text>
                     <Text style={styles.workStats}>
                       📖 {w._count?.chapters ?? 0} Bab  •  👁 {w.views_count} Dibaca  •  ⭐ {w.total_tip_points} Poin Tip
+                      {w.ai_score ? `  •  🤖 AI ${w.ai_grade || ''} (${w.ai_score}/100)` : ''}
                     </Text>
                   </View>
                 </View>
@@ -303,9 +312,9 @@ export default function PustakaScreen() {
       ) : (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }}>
           <View style={styles.studioCard}>
-            <Text style={styles.studioHeading}>✍️ Terbitkan Karya Baru (+25 Poin Ngopi)</Text>
+            <Text style={styles.studioHeading}>✍️ Terbitkan Karya (Validasi AI: 50 – 1.500 Poin Ngopi)</Text>
             <Text style={styles.studioSub}>
-              Bagikan novel berseri, cerpen, esai kopi, puisi, atau catatan edukasi kepada komunitas Ngopi.
+              Setiap naskah dinilai otomatis & objektif oleh AI berdasarkan substansi, kekayaan diksi, struktur, koherensi, dan kedalaman. Grade S (90–100): 800–1.500 Poin • Grade A (75–89): 400–750 Poin • Grade B (55–74): 150–350 Poin • Grade C (35–54): 50–120 Poin. Tulisan spam/asal mendapat 0 Poin.
             </Text>
 
             <TextInput

@@ -1606,6 +1606,10 @@ model LibraryWork {
   status           String           @default("published") // "draft" | "published"
   views_count      Int              @default(0) @map("views_count")
   total_tip_points Int              @default(0) @map("total_tip_points")
+  ai_score         Int              @default(0) @map("ai_score")
+  ai_grade         String?          @map("ai_grade")
+  ai_feedback      String?          @map("ai_feedback")
+  points_awarded   Int              @default(0) @map("points_awarded")
   created_at       DateTime         @default(now()) @map("created_at")
   updated_at       DateTime         @updatedAt @map("updated_at")
   chapters         LibraryChapter[]
