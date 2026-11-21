@@ -25,7 +25,7 @@ import {
   toggleBoomBoomDriverOnline,
 } from './boomboomApi';
 
-type BoomTab = 'book' | 'trips' | 'driver' | 'rewards';
+type BoomTab = 'live' | 'book' | 'trips' | 'driver' | 'rewards';
 
 const SERVICES = [
   { id: 'BoomRide', label: 'BoomRide', badgeId: 'Motor EV', badgeEn: 'EV Bike', icon: '🛵', color: '#10B981' },
@@ -40,7 +40,7 @@ export default function BoomBoomPage() {
   const { lang, toggleLang, t } = useLanguage();
   const isEn = lang === 'en';
 
-  const [tab, setTab] = useState<BoomTab>('book');
+  const [tab, setTab] = useState<BoomTab>('live');
   const [loading, setLoading] = useState(true);
   const [dash, setDash] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -270,6 +270,41 @@ export default function BoomBoomPage() {
         {loading && !dash ? (
           <ActivityIndicator color="#10B981" size="large" style={{ marginTop: 28 }} />
         ) : null}
+
+        {/* TAB 0: LIVE BAMBOOCHAIN BOOMBOOM EMBED (AUTO-SYNCS WITH BAMBOOCHAIN.ID) */}
+        {tab === 'live' && (
+          <View style={[styles.card, { padding: 8 }]}>
+            <View style={[styles.rowBetween, { paddingHorizontal: 6 }]}>
+              <Text style={styles.sectionTitle}>
+                🌐 {t('BoomBoom Live (BaMbooChain)', 'BoomBoom Live (BaMbooChain)')}
+              </Text>
+              <TouchableOpacity style={styles.smallBtn} onPress={handleOpenExternalBoomBoom}>
+                <Text style={styles.smallBtnText}>{t('Buka Penuh ↗', 'Open Full ↗')}</Text>
+              </TouchableOpacity>
+            </View>
+            {Platform.OS === 'web' ? (
+              React.createElement('iframe', {
+                title: 'BoomBoom — BaMbooChain Live',
+                src: 'https://www.bamboochain.id/#/boomboom',
+                allow: 'geolocation; microphone; camera; clipboard-write',
+                style: {
+                  width: '100%',
+                  height: '72vh',
+                  minHeight: 540,
+                  border: '1px solid #3D2B1F',
+                  borderRadius: 12,
+                  backgroundColor: '#FFFFFF',
+                },
+              })
+            ) : (
+              <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenExternalBoomBoom}>
+                <Text style={styles.primaryBtnText}>
+                  {t('Buka BoomBoom Live (BaMbooChain)', 'Open BoomBoom Live (BaMbooChain)')} ↗
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         {/* TAB 1: BOOK RIDE / DELIVERY */}
         {tab === 'book' && (
@@ -635,6 +670,7 @@ export default function BoomBoomPage() {
       <View style={styles.bottomNav}>
         {(
           [
+            { id: 'live', icon: 'globe', label: t('Live', 'Live') },
             { id: 'book', icon: 'navigate', label: t('Pesan', 'Book') },
             { id: 'trips', icon: 'list', label: t('Perjalanan', 'Trips') },
             { id: 'driver', icon: 'bicycle', label: t('Pengemudi', 'Driver') },
