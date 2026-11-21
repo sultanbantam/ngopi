@@ -46,6 +46,8 @@ class GlobalAudioPlayer {
   private nativePlayer: AudioPlayer | null = null;
   private statusSubscription: { remove: () => void } | null = null;
   private onEndCallback: (() => void) | null = null;
+  private queue: GlobalTrack[] = [];
+  private queueIndex: number = -1;
   private intervalTimer: any = null;
   private resolvedUrlCache: Map<string, string> = new Map();
 
@@ -210,16 +212,7 @@ class GlobalAudioPlayer {
     };
 
     audio.onended = () => {
-      this.state.isPlaying = false;
-      this.state.progress = 100;
-      this.notify();
-      if (this.onEndCallback) {
-        try {
-          this.onEndCallback();
-        } catch (e) {
-          console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
-        }
-      }
+      this.handleTrackEnded();
     };
 
     audio.onerror = async (e) => {
@@ -304,11 +297,52 @@ class GlobalAudioPlayer {
     });
   }
 
+  private handleTrackEnded() {
+    this.state.isPlaying = false;
+    this.state.progress = 100;
+    this.notify();
+
+    if (this.queue.length > 0 && this.queueIndex + 1 < this.queue.length) {
+      const nextIdx = this.queueIndex + 1;
+      const nextTrack = this.queue[nextIdx];
+      if (nextTrack) {
+        this.queueIndex = nextIdx;
+        this.playInternal(nextTrack).catch(() => {});
+        return;
+      }
+    }
+
+    if (this.onEndCallback) {
+      try {
+        this.onEndCallback();
+      } catch (e) {
+        console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
+      }
+    }
+  }
+
   public setOnEndCallback(cb: (() => void) | null) {
     this.onEndCallback = cb;
   }
 
+  public async playQueue(tracks: GlobalTrack[], startIndex = 0): Promise<void> {
+    if (!Array.isArray(tracks) || tracks.length === 0) return;
+    const safeIdx = Math.max(0, Math.min(startIndex, tracks.length - 1));
+    this.queue = tracks.slice();
+    this.queueIndex = safeIdx;
+    const target = this.queue[safeIdx];
+    if (target) {
+      await this.playInternal(target);
+    }
+  }
+
   public async play(track: GlobalTrack): Promise<void> {
+    this.queue = [];
+    this.queueIndex = -1;
+    await this.playInternal(track);
+  }
+
+  private async playInternal(track: GlobalTrack): Promise<void> {
     if (!track || !track.track_uri) return;
 
     // Check if it's a synthesizer track (synth:lofi or synth:malam)
@@ -449,16 +483,7 @@ class GlobalAudioPlayer {
           this.notify();
 
           if (dur > 0 && cur >= dur - 0.5) {
-            this.state.isPlaying = false;
-            this.state.progress = 100;
-            this.notify();
-            if (this.onEndCallback) {
-              try {
-                this.onEndCallback();
-              } catch (e) {
-                console.warn('[GlobalAudioPlayer] onEnded callback error:', e);
-              }
-            }
+            this.handleTrackEnded();
           }
         });
 

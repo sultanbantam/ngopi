@@ -596,7 +596,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#D4AF37',
     borderRadius: 10,
     paddingVertical: 12,
+    paddingHorizontal: 22,
+    minWidth: 160,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   primaryBtnText: { color: '#1B130E', fontWeight: '800', fontSize: 14 },
 });

@@ -391,37 +391,22 @@ export default function CompilationAlbumModal({
     axios.post(`${API_URL}/albums/${album.id}/play`, {
       listenerId: currentUserId,
       listenerUsername: currentUsername,
-    }).catch(() => {});
+    }).catch(() => { });
 
-    // Set onEndCallback on globalAudioPlayer to automatically chain tracks
-    let currentIndex = startIndex;
-    const playTrackAtIndex = (idx: number) => {
-      if (idx < 0 || idx >= album.tracks.length) return;
-      currentIndex = idx;
-      const t = album.tracks[idx];
-      const trackId = t.id || `comp_${album.id}_${idx}`;
-      const gTrack: GlobalTrack = {
-        id: trackId,
-        title: `${t.title} [${album.cover_emoji} ${album.title} #${idx + 1}]`,
-        artist: t.artist,
-        track_uri: t.uri,
-        thumbnail: t.thumbnail || null,
-        duration: t.duration || 240,
-        added_by: album.creator_display_name,
-        is_playing: true,
-        is_full: true,
-      };
+    // Build full album queue so globalAudioPlayer auto-advances across all pages/modals
+    const queue: GlobalTrack[] = album.tracks.map((t, idx) => ({
+      id: t.id || `comp_${album.id}_${idx}`,
+      title: `${t.title} [${album.cover_emoji} ${album.title} #${idx + 1}]`,
+      artist: t.artist,
+      track_uri: t.uri,
+      thumbnail: t.thumbnail || null,
+      duration: t.duration || 240,
+      added_by: album.creator_display_name,
+      is_playing: true,
+      is_full: true,
+    }));
 
-      globalAudioPlayer.play(gTrack);
-
-      globalAudioPlayer.setOnEndCallback(() => {
-        if (currentIndex + 1 < album.tracks.length) {
-          playTrackAtIndex(currentIndex + 1);
-        }
-      });
-    };
-
-    playTrackAtIndex(startIndex);
+    globalAudioPlayer.playQueue(queue, startIndex);
   };
 
   // Share Album Actions with catchy hook
@@ -775,7 +760,7 @@ export default function CompilationAlbumModal({
               {/* Search Song Section */}
               <View style={{ marginTop: 6 }}>
                 <Text style={styles.fieldLabel}>Atau Cari Lagu / Artis Favorit:</Text>
-                
+
                 {/* Search Input Row with Clear & Submit Action */}
                 <View style={styles.searchBoxRow}>
                   <View style={styles.searchBox}>
@@ -985,7 +970,7 @@ export default function CompilationAlbumModal({
                 style={[
                   styles.submitAlbumBtn,
                   (!canAfford || selectedTracks.length === 0 || !albumTitle.trim() || isCreating) &&
-                    styles.submitAlbumBtnDisabled,
+                  styles.submitAlbumBtnDisabled,
                 ]}
                 disabled={!canAfford || selectedTracks.length === 0 || !albumTitle.trim() || isCreating}
                 onPress={handleCreateAlbum}
