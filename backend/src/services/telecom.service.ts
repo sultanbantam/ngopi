@@ -773,6 +773,35 @@ export class TelecomService {
     return { success: true, email: check.normalizedEmail };
   }
 
+  public async activatePaidIdentityViaPi(
+    user: { id: string; username: string; role?: string | null; bmc_id?: number | null },
+    params: { desiredNumber?: string; desiredEmail?: string }
+  ): Promise<{ success: boolean; number?: string; email?: string; error?: string }> {
+    let activatedNumber: string | undefined;
+    let activatedEmail: string | undefined;
+
+    if (params.desiredNumber && params.desiredNumber.trim()) {
+      const checkNum = await this.checkNumberAvailability(params.desiredNumber, user);
+      if (!checkNum.available) {
+        return { success: false, error: checkNum.reason || 'Nomor tidak tersedia.' };
+      }
+      this.customNumbers.set(user.id, checkNum.normalized);
+      activatedNumber = checkNum.normalized;
+    }
+
+    if (params.desiredEmail && params.desiredEmail.trim()) {
+      const checkEmail = await this.checkEmailAvailability(params.desiredEmail, user);
+      if (!checkEmail.available) {
+        return { success: false, error: checkEmail.reason || 'Email tidak tersedia.' };
+      }
+      this.customEmails.set(user.id, checkEmail.prefix);
+      activatedEmail = checkEmail.normalizedEmail;
+    }
+
+    this.saveToDisk();
+    return { success: true, number: activatedNumber, email: activatedEmail };
+  }
+
   public async assignVipNumberByFounder(
     founderUser: { id: string; username: string; role?: string | null; bmc_id?: number | null },
     targetUsernameOrId: string,

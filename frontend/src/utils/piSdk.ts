@@ -95,9 +95,11 @@ export async function payWithPi(params: {
         onReadyForServerApproval: async (paymentId: string) => {
           onStatus?.('Menyetujui transaksi di server Ngopi...');
           try {
-            await axios.post(`${API_URL}/payments/approve`, { paymentId });
+            await axios.post(`${API_URL}/payments/approve`, { paymentId }, { timeout: 12000 });
           } catch (err: any) {
-            reject(new Error(err?.response?.data?.error || 'Server approval gagal.'));
+            const msg = err?.response?.data?.error || err?.message || 'Server approval gagal.';
+            onStatus?.(`Gagal Approve: ${msg}`);
+            reject(new Error(msg));
           }
         },
         onReadyForServerCompletion: async (paymentId: string, txid: string) => {

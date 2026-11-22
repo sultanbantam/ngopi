@@ -297,6 +297,94 @@ export default function BambupediaRoom() {
   const [piModalVisible, setPiModalVisible] = useState(false);
   const [piPaying, setPiPaying] = useState(false);
   const [piStatus, setPiStatus] = useState('');
+  const [piTab, setPiTab] = useState<'points' | 'identity'>('points');
+  const [piIdentityMode, setPiIdentityMode] = useState<'number' | 'email' | 'bundle'>('number');
+  const [piDesiredNumber, setPiDesiredNumber] = useState('');
+  const [piDesiredEmail, setPiDesiredEmail] = useState('');
+
+  const handlePiBuyIdentity = async () => {
+    const cleanNum = piDesiredNumber.trim();
+    const cleanEmail = piDesiredEmail.trim().replace(/@ngopi\.top$/i, '');
+    if ((piIdentityMode === 'number' || piIdentityMode === 'bundle') && !cleanNum) {
+      setPiStatus('Masukkan Nomor Cantik Ngopi yang Anda inginkan.');
+      return;
+    }
+    if ((piIdentityMode === 'email' || piIdentityMode === 'bundle') && !cleanEmail) {
+      setPiStatus('Masukkan nama Email @ngopi.top yang Anda inginkan.');
+      return;
+    }
+
+    setPiPaying(true);
+    setPiStatus('Memeriksa ketersediaan identitas Ngopi...');
+    try {
+      const token = await getValidAccessToken();
+      if (piIdentityMode === 'number' || piIdentityMode === 'bundle') {
+        const chkNum = await axios.post(
+          `${API_URL}/telecom/number/check`,
+          { number: cleanNum },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!chkNum.data?.available) {
+          setPiStatus(chkNum.data?.reason || 'Nomor tersebut tidak tersedia atau sudah dipakai.');
+          setPiPaying(false);
+          return;
+        }
+      }
+      if (piIdentityMode === 'email' || piIdentityMode === 'bundle') {
+        const chkEmail = await axios.post(
+          `${API_URL}/telecom/email/check`,
+          { email: cleanEmail },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (!chkEmail.data?.available) {
+          setPiStatus(chkEmail.data?.reason || 'Alamat email tersebut tidak tersedia.');
+          setPiPaying(false);
+          return;
+        }
+      }
+
+      const piPrice = piIdentityMode === 'bundle' ? 8 : 5;
+      const paymentType =
+        piIdentityMode === 'bundle'
+          ? 'ngopi_identity_bundle'
+          : piIdentityMode === 'email'
+            ? 'ngopi_identity_email'
+            : 'ngopi_identity_number';
+
+      const memoLabel =
+        piIdentityMode === 'bundle'
+          ? `Bundling Nomor ${cleanNum} + ${cleanEmail}@ngopi.top`
+          : piIdentityMode === 'email'
+            ? `Email Pilihan ${cleanEmail}@ngopi.top`
+            : `Nomor Cantik Ngopi ${cleanNum}`;
+
+      await payWithPi({
+        amount: piPrice,
+        memo: memoLabel,
+        metadata: {
+          type: paymentType,
+          desired_number: piIdentityMode !== 'email' ? cleanNum : undefined,
+          desired_email: piIdentityMode !== 'number' ? cleanEmail : undefined,
+          userId: currentUserId || undefined,
+          username: currentUsername || undefined,
+        },
+        onStatus: (msg) => setPiStatus(msg),
+      });
+
+      setPiStatus('');
+      setPiDesiredNumber('');
+      setPiDesiredEmail('');
+      setPiModalVisible(false);
+      Alert.alert(
+        'Identitas Ngopi Aktif!',
+        `${memoLabel} berhasil dibeli dengan ${piPrice} Test-Pi dan langsung aktif di akun Anda.`
+      );
+    } catch (err: any) {
+      setPiStatus(err?.response?.data?.error || err?.message || 'Pembelian identitas via Pi gagal.');
+    } finally {
+      setPiPaying(false);
+    }
+  };
 
   const handlePiTopup = async (piAmount: number, pointsAmount: number) => {
     setPiPaying(true);
@@ -1722,6 +1810,19 @@ export default function BambupediaRoom() {
               style={{ flex: 1 }}
               contentContainerStyle={styles.quickChipsBar}
             >
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { backgroundColor: 'rgba(168, 85, 247, 0.22)', borderColor: '#A855F7' }]}
+                onPress={() => {
+                  setPiStatus('');
+                  setPiModalVisible(true);
+                }}
+                accessibilityLabel="Bayar atau Top-up dengan Pi Network"
+              >
+                <Text style={[styles.quickChipText, { color: '#FDE047', fontWeight: '800' }]}>π Top-up Pi</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderColor: '#10b981' }]}
               onPress={() => setHtModalVisible(true)}
@@ -1823,19 +1924,6 @@ export default function BambupediaRoom() {
             >
               <Text style={[styles.quickChipText, { color: '#38BDF8', fontWeight: '800' }]}>💸 Kirim Poin</Text>
             </TouchableOpacity>
-
-            {Platform.OS === 'web' && (
-              <TouchableOpacity
-                style={[styles.quickChipBtn, { backgroundColor: 'rgba(168, 85, 247, 0.18)', borderColor: '#9333EA' }]}
-                onPress={() => {
-                  setPiStatus('');
-                  setPiModalVisible(true);
-                }}
-                accessibilityLabel="Top-up Poin dengan Pi Network"
-              >
-                <Text style={[styles.quickChipText, { color: '#E9D5FF', fontWeight: '800' }]}>π Top-up Pi</Text>
-              </TouchableOpacity>
-            )}
 
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(212, 163, 115, 0.22)', borderColor: coffee.accent }]}
@@ -2088,7 +2176,7 @@ export default function BambupediaRoom() {
         </View>
       </Modal>
 
-      {/* Pi Network Testnet Top-Up Modal */}
+      {/* Pi Network Testnet Payment Modal (Points + Identitas Ngopi) */}
       <Modal
         visible={piModalVisible}
         transparent
@@ -2096,13 +2184,49 @@ export default function BambupediaRoom() {
         onRequestClose={() => !piPaying && setPiModalVisible(false)}
       >
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: '#1B130E', borderRadius: 14, padding: 18, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#7E22CE' }}>
+          <View style={{ backgroundColor: '#1B130E', borderRadius: 14, padding: 18, width: '100%', maxWidth: 440, borderWidth: 1, borderColor: '#7E22CE' }}>
             <Text style={{ color: '#FDE047', fontSize: 17, fontWeight: '800', marginBottom: 4 }}>
-              π Top-up Poin via Pi Network (Testnet)
+              π Pembayaran Pi Network (Testnet)
             </Text>
-            <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 14 }}>
-              Gunakan Test-Pi di Pi Browser / Pi Sandbox untuk mengisi Poin Ngopi secara instan.
+            <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 12 }}>
+              Beli Poin Ngopi atau aktifkan Nomor Cantik & Email @ngopi.top pilihan menggunakan Test-Pi.
             </Text>
+
+            {/* Tabs */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+              <TouchableOpacity
+                onPress={() => { setPiTab('points'); setPiStatus(''); }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: piTab === 'points' ? '#7E22CE' : '#261C15',
+                  borderWidth: 1,
+                  borderColor: piTab === 'points' ? '#A855F7' : '#4A3728',
+                }}
+              >
+                <Text style={{ color: piTab === 'points' ? '#FDE047' : coffee.secondary, fontWeight: '800', fontSize: 12 }}>
+                  🪙 Beli Poin Ngopi
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setPiTab('identity'); setPiStatus(''); }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: piTab === 'identity' ? '#7E22CE' : '#261C15',
+                  borderWidth: 1,
+                  borderColor: piTab === 'identity' ? '#A855F7' : '#4A3728',
+                }}
+              >
+                <Text style={{ color: piTab === 'identity' ? '#FDE047' : coffee.secondary, fontWeight: '800', fontSize: 12 }}>
+                  📞 Beli Identitas Ngopi
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {piStatus ? (
               <Text style={{ color: '#E9D5FF', fontSize: 12, marginBottom: 12, backgroundColor: 'rgba(147,51,234,0.2)', padding: 8, borderRadius: 8 }}>
@@ -2110,32 +2234,106 @@ export default function BambupediaRoom() {
               </Text>
             ) : null}
 
-            {[
-              { pi: 1, pts: 1000, label: 'Paket Seduh (1 Test-Pi → 1.000 Poin)' },
-              { pi: 5, pts: 5500, label: 'Paket Barista (5 Test-Pi → 5.500 Poin)' },
-              { pi: 10, pts: 12000, label: 'Paket Sultan (10 Test-Pi → 12.000 Poin)' },
-            ].map((pkg) => (
-              <TouchableOpacity
-                key={pkg.pi}
-                disabled={piPaying}
-                onPress={() => handlePiTopup(pkg.pi, pkg.pts)}
-                style={{
-                  backgroundColor: '#2E1065',
-                  borderWidth: 1,
-                  borderColor: '#A855F7',
-                  borderRadius: 10,
-                  paddingVertical: 12,
-                  paddingHorizontal: 14,
-                  marginBottom: 10,
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#F5ECE2', fontWeight: '700', fontSize: 13 }}>{pkg.label}</Text>
-                <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 13 }}>Bayar →</Text>
-              </TouchableOpacity>
-            ))}
+            {piTab === 'points' ? (
+              <>
+                {[
+                  { pi: 1, pts: 1000, label: 'Paket Seduh (1 Test-Pi → 1.000 Poin)' },
+                  { pi: 5, pts: 5500, label: 'Paket Barista (5 Test-Pi → 5.500 Poin)' },
+                  { pi: 10, pts: 12000, label: 'Paket Sultan (10 Test-Pi → 12.000 Poin)' },
+                ].map((pkg) => (
+                  <TouchableOpacity
+                    key={pkg.pi}
+                    disabled={piPaying}
+                    onPress={() => handlePiTopup(pkg.pi, pkg.pts)}
+                    style={{
+                      backgroundColor: '#2E1065',
+                      borderWidth: 1,
+                      borderColor: '#A855F7',
+                      borderRadius: 10,
+                      paddingVertical: 12,
+                      paddingHorizontal: 14,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#F5ECE2', fontWeight: '700', fontSize: 13 }}>{pkg.label}</Text>
+                    <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 13 }}>Bayar →</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <View>
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                  {[
+                    { key: 'number', label: 'Nomor (5 Pi)' },
+                    { key: 'email', label: 'Email (5 Pi)' },
+                    { key: 'bundle', label: 'Bundling (8 Pi)' },
+                  ].map((m) => (
+                    <TouchableOpacity
+                      key={m.key}
+                      onPress={() => setPiIdentityMode(m.key as any)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        backgroundColor: piIdentityMode === m.key ? '#4C1D95' : '#120D0A',
+                        borderWidth: 1,
+                        borderColor: piIdentityMode === m.key ? '#A855F7' : '#3A2A1E',
+                      }}
+                    >
+                      <Text style={{ color: piIdentityMode === m.key ? '#FDE047' : coffee.secondary, fontSize: 11, fontWeight: '700' }}>
+                        {m.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {(piIdentityMode === 'number' || piIdentityMode === 'bundle') && (
+                  <TextInput
+                    style={{ backgroundColor: '#120D0A', borderWidth: 1, borderColor: '#3A2A1E', borderRadius: 10, padding: 10, color: '#F5ECE2', marginBottom: 10 }}
+                    placeholder="Nomor Cantik pilihan (misal: 8888 / 081234)"
+                    placeholderTextColor={coffee.muted}
+                    value={piDesiredNumber}
+                    onChangeText={setPiDesiredNumber}
+                    keyboardType="number-pad"
+                  />
+                )}
+
+                {(piIdentityMode === 'email' || piIdentityMode === 'bundle') && (
+                  <TextInput
+                    style={{ backgroundColor: '#120D0A', borderWidth: 1, borderColor: '#3A2A1E', borderRadius: 10, padding: 10, color: '#F5ECE2', marginBottom: 10 }}
+                    placeholder="Nama Email pilihan (tanpa @ngopi.top, misal: sultan)"
+                    placeholderTextColor={coffee.muted}
+                    value={piDesiredEmail}
+                    onChangeText={setPiDesiredEmail}
+                    autoCapitalize="none"
+                  />
+                )}
+
+                <TouchableOpacity
+                  disabled={piPaying}
+                  onPress={handlePiBuyIdentity}
+                  style={{
+                    backgroundColor: '#7E22CE',
+                    borderWidth: 1,
+                    borderColor: '#A855F7',
+                    borderRadius: 10,
+                    paddingVertical: 12,
+                    alignItems: 'center',
+                    marginBottom: 10,
+                  }}
+                >
+                  <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 13 }}>
+                    {piPaying
+                      ? 'Memproses Pembayaran Pi...'
+                      : `Cek & Beli dengan ${piIdentityMode === 'bundle' ? '8' : '5'} Test-Pi`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
             <TouchableOpacity
               disabled={piPaying}
