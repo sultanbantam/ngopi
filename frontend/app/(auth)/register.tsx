@@ -13,6 +13,7 @@ const API_URL = 'https://api.ngopi.top/api';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 import { useLanguage } from '../../src/utils/i18n';
+import { detectPiBrowserAsync } from '../../src/utils/piSdk';
 
 
 export default function RegisterScreen() {
@@ -44,6 +45,13 @@ export default function RegisterScreen() {
 
   useEffect(() => {
     loadCaptcha();
+    if (Platform.OS === 'web') {
+      detectPiBrowserAsync().then((inPi) => {
+        if (inPi) {
+          router.replace('/(auth)/login');
+        }
+      });
+    }
   }, []);
 
   useEffect(() => {

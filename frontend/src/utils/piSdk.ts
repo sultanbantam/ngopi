@@ -44,6 +44,39 @@ export function isRunningInPiBrowser(): boolean {
   return hasPiUaOrSandbox || hasGlobalPi;
 }
 
+/**
+ * Official Pi SDK v2.0 async environment check:
+ * Loads pi-sdk.js on Web, initializes Pi, and checks Pi.nativeFeaturesList()
+ * with a short timeout so normal browsers (Chrome/Safari) resolve false quickly
+ * while Pi Browser / Pi Sandbox resolves true.
+ */
+export async function detectPiBrowserAsync(): Promise<boolean> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return false;
+  }
+  if (isRunningInPiBrowser()) {
+    try {
+      await ensurePiSdk();
+    } catch {}
+    return true;
+  }
+  try {
+    const pi = (await ensurePiSdk()) as any;
+    if (typeof pi.nativeFeaturesList === 'function') {
+      const features = await Promise.race([
+        pi.nativeFeaturesList(),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 900)),
+      ]);
+      if (Array.isArray(features)) {
+        return true;
+      }
+    }
+  } catch {
+    // Not in Pi Browser
+  }
+  return false;
+}
+
 export async function ensurePiSdk(): Promise<PiSdkInstance> {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
     throw new Error('Pi Network SDK hanya tersedia di Web / Pi Browser.');

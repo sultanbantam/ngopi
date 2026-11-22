@@ -11,7 +11,7 @@ import { deriveKeyPairFromSeed } from '../../src/utils/e2ee';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 import { useLanguage } from '../../src/utils/i18n';
-import { authenticateWithPi, isRunningInPiBrowser } from '../../src/utils/piSdk';
+import { authenticateWithPi, detectPiBrowserAsync, isRunningInPiBrowser } from '../../src/utils/piSdk';
 
 
 export default function LoginScreen() {
@@ -37,16 +37,17 @@ export default function LoginScreen() {
   const params = useLocalSearchParams();
 
   useEffect(() => {
+    let active = true;
     if (Platform.OS !== 'web') {
       setIsPiBrowser(false);
       return;
     }
-    setIsPiBrowser(isRunningInPiBrowser());
-    // Re-check shortly in case Pi Browser injects window.Pi asynchronously
-    const timer = setTimeout(() => {
-      setIsPiBrowser(isRunningInPiBrowser());
-    }, 350);
-    return () => clearTimeout(timer);
+    detectPiBrowserAsync().then((detected) => {
+      if (active) setIsPiBrowser(detected);
+    });
+    return () => {
+      active = false;
+    };
   }, []);
 
   const handlePiLogin = async () => {
