@@ -22,6 +22,28 @@ interface PiSdkInstance {
 const PI_SANDBOX = process.env.EXPO_PUBLIC_PI_SANDBOX !== 'false'; // Staging (Testnet / Sandbox) by default
 let piInitPromise: Promise<void> | null = null;
 
+/**
+ * Detects whether the app is running inside Pi Browser or Pi Sandbox.
+ * Always returns false on native Android/iOS (Play Store builds).
+ */
+export function isRunningInPiBrowser(): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    return false;
+  }
+  const win = window as any;
+  const ua = String(window.navigator?.userAgent || '').toLowerCase();
+  const ref = String(typeof document !== 'undefined' ? document.referrer || '' : '').toLowerCase();
+  const ancestor = String(window.location?.ancestorOrigins?.[0] || '').toLowerCase();
+
+  const hasPiUaOrSandbox =
+    ua.includes('pibrowser') ||
+    ref.includes('minepi.com') ||
+    ancestor.includes('minepi.com');
+
+  const hasGlobalPi = typeof win.Pi !== 'undefined' && win.Pi !== null;
+  return hasPiUaOrSandbox || hasGlobalPi;
+}
+
 export async function ensurePiSdk(): Promise<PiSdkInstance> {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
     throw new Error('Pi Network SDK hanya tersedia di Web / Pi Browser.');

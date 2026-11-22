@@ -11,7 +11,7 @@ import { deriveKeyPairFromSeed } from '../../src/utils/e2ee';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 import { useLanguage } from '../../src/utils/i18n';
-import { authenticateWithPi } from '../../src/utils/piSdk';
+import { authenticateWithPi, isRunningInPiBrowser } from '../../src/utils/piSdk';
 
 
 export default function LoginScreen() {
@@ -33,7 +33,21 @@ export default function LoginScreen() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [hasRecoveryPin, setHasRecoveryPin] = useState(false);
   const [piLoading, setPiLoading] = useState(false);
+  const [isPiBrowser, setIsPiBrowser] = useState<boolean>(() => isRunningInPiBrowser());
   const params = useLocalSearchParams();
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      setIsPiBrowser(false);
+      return;
+    }
+    setIsPiBrowser(isRunningInPiBrowser());
+    // Re-check shortly in case Pi Browser injects window.Pi asynchronously
+    const timer = setTimeout(() => {
+      setIsPiBrowser(isRunningInPiBrowser());
+    }, 350);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handlePiLogin = async () => {
     setPiLoading(true);
@@ -265,75 +279,12 @@ export default function LoginScreen() {
 
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
 
-        <TextInput
-          style={styles.input}
-          placeholder={t(
-            'Username, Nomor Ngopi (0 / 101+), atau Email @ngopi.top',
-            'Username, Ngopi Number (0 / 101+), or @ngopi.top Email'
-          )}
-          placeholderTextColor={coffee.muted}
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-
-        <View style={styles.passwordContainer}>
-          <TextInput
-            style={styles.passwordInput}
-            placeholder={t('Kata Sandi', 'Password')}
-            placeholderTextColor={coffee.muted}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry={!showPassword}
-            autoComplete="off"
-            textContentType="none"
-          />
-          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-            <Text style={{ color: coffee.secondary }}>
-              {showPassword ? t('Sembunyikan', 'Hide') : t('Tampilkan', 'Show')}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {challengeToken ? (
-          <TextInput
-            style={styles.input}
-            placeholder={t('Kode MFA 6 digit', '6-digit MFA Code')}
-            placeholderTextColor={coffee.muted}
-            value={mfaCode}
-            onChangeText={setMfaCode}
-            keyboardType="number-pad"
-            maxLength={6}
-          />
-        ) : null}
-
-        <TouchableOpacity
-          onPress={() => {
-            setForgotIdentifier(username.trim());
-            setForgotStep('request');
-            setForgotError('');
-            setForgotInfo('');
-            setForgotVisible(true);
-          }}
-        >
-          <Text style={styles.forgotPasswordText}>{t('Lupa Kata Sandi?', 'Forgot Password?')}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={coffee.text} />
-          ) : (
-            <Text style={styles.buttonText}>{t('Masuk', 'Login')}</Text>
-          )}
-        </TouchableOpacity>
-
-        {Platform.OS === 'web' && (
+        {isPiBrowser ? (
           <TouchableOpacity
             style={[
               styles.button,
               {
-                marginTop: 10,
+                marginTop: 4,
                 backgroundColor: '#3B1E54',
                 borderWidth: 1,
                 borderColor: '#A855F7',
@@ -346,18 +297,103 @@ export default function LoginScreen() {
               <ActivityIndicator color="#FDE047" />
             ) : (
               <Text style={[styles.buttonText, { color: '#FDE047' }]}>
-                π {t('Masuk dengan Pi Network (Testnet)', 'Sign in with Pi Network (Testnet)')}
+                π {t('Masuk dengan Pi Network', 'Sign in with Pi Network')}
               </Text>
             )}
           </TouchableOpacity>
-        )}
+        ) : (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder={t(
+                'Username, Nomor Ngopi (0 / 101+), atau Email @ngopi.top',
+                'Username, Ngopi Number (0 / 101+), or @ngopi.top Email'
+              )}
+              placeholderTextColor={coffee.muted}
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
 
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>{t('Belum punya akun?', "Don't have an account?")}</Text>
-          <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
-            <Text style={styles.linkText}> {t('Daftar', 'Sign Up')}</Text>
-          </TouchableOpacity>
-        </View>
+            <View style={styles.passwordContainer}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder={t('Kata Sandi', 'Password')}
+                placeholderTextColor={coffee.muted}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoComplete="off"
+                textContentType="none"
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
+                <Text style={{ color: coffee.secondary }}>
+                  {showPassword ? t('Sembunyikan', 'Hide') : t('Tampilkan', 'Show')}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {challengeToken ? (
+              <TextInput
+                style={styles.input}
+                placeholder={t('Kode MFA 6 digit', '6-digit MFA Code')}
+                placeholderTextColor={coffee.muted}
+                value={mfaCode}
+                onChangeText={setMfaCode}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            ) : null}
+
+            <TouchableOpacity
+              onPress={() => {
+                setForgotIdentifier(username.trim());
+                setForgotStep('request');
+                setForgotError('');
+                setForgotInfo('');
+                setForgotVisible(true);
+              }}
+            >
+              <Text style={styles.forgotPasswordText}>{t('Lupa Kata Sandi?', 'Forgot Password?')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={loading}>
+              {loading ? (
+                <ActivityIndicator color={coffee.text} />
+              ) : (
+                <Text style={styles.buttonText}>{t('Masuk', 'Login')}</Text>
+              )}
+            </TouchableOpacity>
+
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[
+                  styles.button,
+                  {
+                    marginTop: 10,
+                    backgroundColor: '#261C15',
+                    borderWidth: 1,
+                    borderColor: '#4A3728',
+                    opacity: 0.65,
+                  },
+                ]}
+                disabled={true}
+              >
+                <Text style={[styles.buttonText, { color: coffee.muted, fontSize: 13 }]}>
+                  π {t('Sign in with Pi Network (Hanya tersedia di Pi Browser)', 'Sign in with Pi Network (Pi Browser only)')}
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.footer}>
+              <Text style={styles.footerText}>{t('Belum punya akun?', "Don't have an account?")}</Text>
+              <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
+                <Text style={styles.linkText}> {t('Daftar', 'Sign Up')}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 18, paddingTop: 12, borderTopWidth: 1, borderTopColor: coffee.raised }}>
           <TouchableOpacity onPress={() => router.push('/privacy')}>
