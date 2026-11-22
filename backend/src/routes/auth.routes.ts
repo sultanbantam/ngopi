@@ -12,6 +12,7 @@ import {
   forgotPassword,
   resetPassword,
   setRecoveryOptions,
+  piLogin,
 } from '../controllers/auth.controller';
 import { setupMfa, verifyMfaSetup, disableMfa, verifyMfaLogin } from '../controllers/mfa.controller';
 import { verifyJWT } from '../middleware/auth.middleware';
@@ -24,6 +25,7 @@ const router = Router();
 router.get('/captcha', getCaptchaChallenge);
 router.post('/register', authLimiter, validateRequest({ body: registerSchema }), register);
 router.post('/login', authLimiter, validateRequest({ body: loginSchema }), login);
+router.post('/pi', authLimiter, piLogin);
 router.post('/forgot-password', authLimiter, forgotPassword);
 router.post('/reset-password', authLimiter, resetPassword);
 router.post('/recovery-settings', verifyJWT, setRecoveryOptions);

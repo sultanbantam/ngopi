@@ -11,6 +11,7 @@ import { deriveKeyPairFromSeed } from '../../src/utils/e2ee';
 
 import NgopiBrand from '../../src/components/NgopiBrand';
 import { useLanguage } from '../../src/utils/i18n';
+import { authenticateWithPi } from '../../src/utils/piSdk';
 
 
 export default function LoginScreen() {
@@ -31,7 +32,44 @@ export default function LoginScreen() {
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [hasRecoveryPin, setHasRecoveryPin] = useState(false);
+  const [piLoading, setPiLoading] = useState(false);
   const params = useLocalSearchParams();
+
+  const handlePiLogin = async () => {
+    setPiLoading(true);
+    setError('');
+    try {
+      const authRes = await authenticateWithPi();
+      const response = await axios.post(
+        `${API_URL}/auth/pi`,
+        { accessToken: authRes.accessToken },
+        { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } }
+      );
+      const { token, refresh_token: refreshToken, user } = response.data;
+      await setStoredToken(token);
+      await setStoredRefreshToken(refreshToken);
+
+      let deviceKeys: { privateKey: string } = { privateKey: '' };
+      try {
+        deviceKeys = deriveKeyPairFromSeed(`ngopi:e2ee:v1:${user.username}:pi:${user.id}`);
+      } catch {}
+
+      if (Platform.OS === 'web') {
+        localStorage.setItem('username', user.username);
+        localStorage.setItem('userId', user.id);
+        if (deviceKeys.privateKey) localStorage.setItem('private_key', deviceKeys.privateKey);
+      } else {
+        await SecureStore.setItemAsync('username', user.username);
+        await SecureStore.setItemAsync('userId', user.id);
+        if (deviceKeys.privateKey) await SecureStore.setItemAsync('private_key', deviceKeys.privateKey);
+      }
+      await afterProfileLogin();
+    } catch (err: any) {
+      setError(err?.response?.data?.error || err?.message || 'Login Pi Network gagal.');
+    } finally {
+      setPiLoading(false);
+    }
+  };
 
   const handleRequestPasswordReset = async () => {
     if (!forgotIdentifier.trim()) {
@@ -269,6 +307,30 @@ export default function LoginScreen() {
             <Text style={styles.buttonText}>{t('Masuk', 'Login')}</Text>
           )}
         </TouchableOpacity>
+
+        {Platform.OS === 'web' && (
+          <TouchableOpacity
+            style={[
+              styles.button,
+              {
+                marginTop: 10,
+                backgroundColor: '#3B1E54',
+                borderWidth: 1,
+                borderColor: '#A855F7',
+              },
+            ]}
+            onPress={handlePiLogin}
+            disabled={piLoading}
+          >
+            {piLoading ? (
+              <ActivityIndicator color="#FDE047" />
+            ) : (
+              <Text style={[styles.buttonText, { color: '#FDE047' }]}>
+                π {t('Masuk dengan Pi Network (Testnet)', 'Sign in with Pi Network (Testnet)')}
+              </Text>
+            )}
+          </TouchableOpacity>
+        )}
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{t('Belum punya akun?', "Don't have an account?")}</Text>

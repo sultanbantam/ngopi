@@ -6,7 +6,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; frame-src 'self' https://www.bamboochain.id https://bamboochain.id; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app-cdn.minepi.com https://sdk.minepi.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.ngopi.top https://www.bamboochat.click https://bamboochat.click https://archive.org https://*.archive.org https://*.mzstatic.com https://*.apple.com https://images.unsplash.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self' blob: data: https: wss:; media-src 'self' data: blob: https: http:; font-src 'self' data:; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
+          "value": "default-src 'self'; frame-src 'self' https://www.bamboochain.id https://bamboochain.id https://sandbox.minepi.com https://minepi.com https://*.minepi.com; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://app-cdn.minepi.com https://sdk.minepi.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://api.ngopi.top https://www.bamboochat.click https://bamboochat.click https://archive.org https://*.archive.org https://*.mzstatic.com https://*.apple.com https://images.unsplash.com https://tile.openstreetmap.org https://*.tile.openstreetmap.org; connect-src 'self' blob: data: https: wss:; media-src 'self' data: blob: https: http:; font-src 'self' data:; object-src 'none'; base-uri 'self'; upgrade-insecure-requests"
         },
         {
           "key": "X-Content-Type-Options",

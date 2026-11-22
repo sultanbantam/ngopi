@@ -34,6 +34,7 @@ import axios from 'axios';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { socketService } from '../../src/utils/socket';
 import { getValidAccessToken } from '../../src/utils/session';
+import { payWithPi } from '../../src/utils/piSdk';
 import * as SecureStore from '../../src/utils/storage';
 import { getMimeType } from '../../src/utils/fileHelpers';
 import { AmbientPlayer } from '../../src/components/AmbientPlayer';
@@ -293,6 +294,42 @@ export default function BambupediaRoom() {
   const [transferNote, setTransferNote] = useState('');
   const [transferSending, setTransferSending] = useState(false);
   const [transferError, setTransferError] = useState('');
+  const [piModalVisible, setPiModalVisible] = useState(false);
+  const [piPaying, setPiPaying] = useState(false);
+  const [piStatus, setPiStatus] = useState('');
+
+  const handlePiTopup = async (piAmount: number, pointsAmount: number) => {
+    setPiPaying(true);
+    setPiStatus('Menyiapkan transaksi Pi...');
+    try {
+      const res = await payWithPi({
+        amount: piAmount,
+        memo: `Top-up ${pointsAmount.toLocaleString('id-ID')} Poin Ngopi`,
+        metadata: {
+          type: 'ngopi_points_topup',
+          points_amount: pointsAmount,
+          userId: currentUserId || undefined,
+          username: currentUsername || undefined,
+        },
+        onStatus: (msg) => setPiStatus(msg),
+      });
+      if (typeof res.newBalance === 'number') {
+        setUserPoints(res.newBalance);
+      } else {
+        setUserPoints((prev) => prev + pointsAmount);
+      }
+      setPiStatus('');
+      setPiModalVisible(false);
+      Alert.alert(
+        'Pembayaran Pi Berhasil!',
+        `+${pointsAmount.toLocaleString('id-ID')} Poin Ngopi telah ditambahkan ke akun Anda.`
+      );
+    } catch (err: any) {
+      setPiStatus(err?.message || 'Pembayaran Pi gagal atau dibatalkan.');
+    } finally {
+      setPiPaying(false);
+    }
+  };
 
   const handleTransferPoints = async () => {
     const amt = Math.floor(Number(transferAmount || 0));
@@ -1787,6 +1824,19 @@ export default function BambupediaRoom() {
               <Text style={[styles.quickChipText, { color: '#38BDF8', fontWeight: '800' }]}>💸 Kirim Poin</Text>
             </TouchableOpacity>
 
+            {Platform.OS === 'web' && (
+              <TouchableOpacity
+                style={[styles.quickChipBtn, { backgroundColor: 'rgba(168, 85, 247, 0.18)', borderColor: '#9333EA' }]}
+                onPress={() => {
+                  setPiStatus('');
+                  setPiModalVisible(true);
+                }}
+                accessibilityLabel="Top-up Poin dengan Pi Network"
+              >
+                <Text style={[styles.quickChipText, { color: '#E9D5FF', fontWeight: '800' }]}>π Top-up Pi</Text>
+              </TouchableOpacity>
+            )}
+
             <TouchableOpacity
               style={[styles.quickChipBtn, { backgroundColor: 'rgba(212, 163, 115, 0.22)', borderColor: coffee.accent }]}
               onPress={() => setCafeCheckinVisible(true)}
@@ -2034,6 +2084,66 @@ export default function BambupediaRoom() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Pi Network Testnet Top-Up Modal */}
+      <Modal
+        visible={piModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !piPaying && setPiModalVisible(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.75)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: '#1B130E', borderRadius: 14, padding: 18, width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#7E22CE' }}>
+            <Text style={{ color: '#FDE047', fontSize: 17, fontWeight: '800', marginBottom: 4 }}>
+              π Top-up Poin via Pi Network (Testnet)
+            </Text>
+            <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 14 }}>
+              Gunakan Test-Pi di Pi Browser / Pi Sandbox untuk mengisi Poin Ngopi secara instan.
+            </Text>
+
+            {piStatus ? (
+              <Text style={{ color: '#E9D5FF', fontSize: 12, marginBottom: 12, backgroundColor: 'rgba(147,51,234,0.2)', padding: 8, borderRadius: 8 }}>
+                {piStatus}
+              </Text>
+            ) : null}
+
+            {[
+              { pi: 1, pts: 1000, label: 'Paket Seduh (1 Test-Pi → 1.000 Poin)' },
+              { pi: 5, pts: 5500, label: 'Paket Barista (5 Test-Pi → 5.500 Poin)' },
+              { pi: 10, pts: 12000, label: 'Paket Sultan (10 Test-Pi → 12.000 Poin)' },
+            ].map((pkg) => (
+              <TouchableOpacity
+                key={pkg.pi}
+                disabled={piPaying}
+                onPress={() => handlePiTopup(pkg.pi, pkg.pts)}
+                style={{
+                  backgroundColor: '#2E1065',
+                  borderWidth: 1,
+                  borderColor: '#A855F7',
+                  borderRadius: 10,
+                  paddingVertical: 12,
+                  paddingHorizontal: 14,
+                  marginBottom: 10,
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#F5ECE2', fontWeight: '700', fontSize: 13 }}>{pkg.label}</Text>
+                <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 13 }}>Bayar →</Text>
+              </TouchableOpacity>
+            ))}
+
+            <TouchableOpacity
+              disabled={piPaying}
+              onPress={() => setPiModalVisible(false)}
+              style={{ marginTop: 4, paddingVertical: 10, borderRadius: 10, backgroundColor: '#261C15', alignItems: 'center', borderWidth: 1, borderColor: '#4A3728' }}
+            >
+              <Text style={{ color: coffee.secondary, fontWeight: '700' }}>Tutup</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>

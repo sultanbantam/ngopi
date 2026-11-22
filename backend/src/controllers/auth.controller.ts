@@ -701,3 +701,64 @@ export const setRecoveryOptions = async (req: Request, res: Response): Promise<v
     res.status(500).json({ error: 'Internal server error' });
   }
 };
+
+
+export const piLogin = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const accessToken = String(req.body?.accessToken || '').trim();
+    if (!accessToken) {
+      res.status(400).json({ error: 'Pi accessToken is required' });
+      return;
+    }
+
+    const piRes = await axios.get('https://api.minepi.com/v2/me', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      timeout: 10000,
+    });
+
+    const piUid = String(piRes.data?.uid || '').trim();
+    const rawPiUsername = String(piRes.data?.username || '').trim().toLowerCase().replace(/[^a-z0-9_.-]/g, '');
+    if (!piUid || !rawPiUsername) {
+      res.status(401).json({ error: 'Invalid Pi Network user verification response' });
+      return;
+    }
+
+    // Look up by pi_<uid_prefix> or matching pi username
+    const piTag = `pi:${piUid}`;
+    let user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { wallet_address: piTag },
+          { username: rawPiUsername },
+          { username: `pi_${rawPiUsername}`.slice(0, 30) },
+        ],
+      },
+    });
+
+    if (!user) {
+      const candidateUsername = telecomService.isEmailPrefixLocked(rawPiUsername)
+        ? `pi_${rawPiUsername}`.slice(0, 30)
+        : rawPiUsername.slice(0, 30);
+
+      const salt = await bcrypt.genSalt(12);
+      const password_hash = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), salt);
+
+      user = await prisma.user.create({
+        data: {
+          username: candidateUsername,
+          password_hash,
+          display_name: piRes.data?.username || candidateUsername,
+          wallet_address: piTag,
+          role: 'user',
+        },
+      });
+    }
+
+    await completeLogin(req, res, user);
+  } catch (err: any) {
+    console.error('Pi Login Error:', err?.response?.data || err?.message);
+    res.status(err?.response?.status || 401).json({
+      error: 'Verifikasi Pi Network gagal. Pastikan Anda membuka ngopi.top di Pi Browser atau Pi Sandbox.',
+    });
+  }
+};
