@@ -1698,11 +1698,18 @@ function PrivateChatRoomScreen() {
             placeholderTextColor={coffee.muted}
             value={inputText}
             onChangeText={handleTextChange}
+            onChange={(e: any) => {
+              const nextVal = e?.nativeEvent?.text ?? e?.target?.value;
+              if (typeof nextVal === 'string' && nextVal !== inputText) {
+                handleTextChange(nextVal);
+              }
+            }}
             multiline
           />
 
           {inputText.trim() === '' ? (
             <TouchableOpacity
+              key="chat-mic-btn"
               style={[styles.sendButton, isRecording ? { backgroundColor: coffee.dangerButton } : {}]}
               onPressIn={startRecording}
               onPressOut={stopRecording}
@@ -1710,8 +1717,12 @@ function PrivateChatRoomScreen() {
               <Text style={styles.sendButtonText}>{isRecording ? 'Stop' : 'Mic'}</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={styles.sendButton} onPress={sendMessage}>
-              <Text style={styles.sendButtonText}>Send</Text>
+            <TouchableOpacity
+              key="chat-send-btn"
+              style={[styles.sendButton, { backgroundColor: coffee.accent }]}
+              onPress={sendMessage}
+            >
+              <Text style={[styles.sendButtonText, { color: '#1B130E' }]}>Send</Text>
             </TouchableOpacity>
           )}
         </View>
