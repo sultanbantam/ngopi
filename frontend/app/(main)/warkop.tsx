@@ -297,10 +297,26 @@ export default function BambupediaRoom() {
   const [piModalVisible, setPiModalVisible] = useState(false);
   const [piPaying, setPiPaying] = useState(false);
   const [piStatus, setPiStatus] = useState('');
-  const [piTab, setPiTab] = useState<'points' | 'identity'>('points');
+  const [piTab, setPiTab] = useState<'points' | 'identity' | 'history'>('points');
   const [piIdentityMode, setPiIdentityMode] = useState<'number' | 'email' | 'bundle'>('number');
   const [piDesiredNumber, setPiDesiredNumber] = useState('');
   const [piDesiredEmail, setPiDesiredEmail] = useState('');
+  const [piHistory, setPiHistory] = useState<any[]>([]);
+  const [piHistoryLoading, setPiHistoryLoading] = useState(false);
+
+  const loadPiHistory = async () => {
+    setPiHistoryLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/payments/history`, {
+        params: { userId: currentUserId || undefined },
+      });
+      setPiHistory(res.data?.transactions || []);
+    } catch {
+      setPiHistory([]);
+    } finally {
+      setPiHistoryLoading(false);
+    }
+  };
 
   const handlePiBuyIdentity = async () => {
     const cleanNum = piDesiredNumber.trim();
@@ -2223,7 +2239,23 @@ export default function BambupediaRoom() {
                 }}
               >
                 <Text style={{ color: piTab === 'identity' ? '#FDE047' : coffee.secondary, fontWeight: '800', fontSize: 12 }}>
-                  📞 Beli Identitas Ngopi
+                  📞 Identitas
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => { setPiTab('history'); setPiStatus(''); loadPiHistory(); }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 8,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  backgroundColor: piTab === 'history' ? '#7E22CE' : '#261C15',
+                  borderWidth: 1,
+                  borderColor: piTab === 'history' ? '#A855F7' : '#4A3728',
+                }}
+              >
+                <Text style={{ color: piTab === 'history' ? '#FDE047' : coffee.secondary, fontWeight: '800', fontSize: 12 }}>
+                  📜 Riwayat Pi
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2263,6 +2295,43 @@ export default function BambupediaRoom() {
                   </TouchableOpacity>
                 ))}
               </>
+            ) : piTab === 'history' ? (
+              <ScrollView style={{ maxHeight: 260, marginBottom: 8 }}>
+                {piHistoryLoading ? (
+                  <Text style={{ color: coffee.secondary, textAlign: 'center', padding: 16 }}>Memuat riwayat Pi...</Text>
+                ) : piHistory.length === 0 ? (
+                  <Text style={{ color: coffee.muted, textAlign: 'center', padding: 16, fontSize: 12 }}>
+                    Belum ada transaksi Pi tercatat.
+                  </Text>
+                ) : (
+                  piHistory.map((tx) => (
+                    <View
+                      key={tx.paymentId}
+                      style={{
+                        backgroundColor: '#120D0A',
+                        borderWidth: 1,
+                        borderColor: '#3A2A1E',
+                        borderRadius: 10,
+                        padding: 10,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 12 }}>{tx.amount} Pi</Text>
+                        <Text style={{ color: coffee.muted, fontSize: 10 }}>
+                          {new Date(tx.created_at).toLocaleString('id-ID')}
+                        </Text>
+                      </View>
+                      <Text style={{ color: '#F5ECE2', fontSize: 12, marginBottom: 6 }}>{tx.memo}</Text>
+                      <TouchableOpacity onPress={() => Linking.openURL(tx.explorer_url)}>
+                        <Text style={{ color: '#38BDF8', fontSize: 11, fontWeight: '700' }}>
+                          🔗 Verifikasi di Pi BlockExplorer →
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
             ) : (
               <View>
                 <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>

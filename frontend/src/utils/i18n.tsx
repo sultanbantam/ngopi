@@ -88,6 +88,29 @@ const ID_TO_EN_PHRASES: Array<[string, string]> = [
   ['Status Gerbang: Mode Konfigurasi', 'Gateway Status: Configuration Mode'],
   ['6. Undang Teman & Kode Profil', '6. Invite Friends & Profile Code'],
   ['Salin Tautan Undang Teman', 'Copy Invite Link'],
+
+  // Pi Network, Pustaka, & Transfer Poin
+  ['π Top-up Pi', 'π Pi Pay'],
+  ['Pembayaran Pi Network (Testnet)', 'Pi Network Payments (Testnet)'],
+  ['Beli Poin Ngopi', 'Buy Ngopi Points'],
+  ['Beli Identitas Ngopi', 'Buy Ngopi Identity'],
+  ['Riwayat Pi', 'Pi History'],
+  ['Kirim Poin', 'Send Points'],
+  ['Transfer Poin Ngopi', 'Transfer Ngopi Points'],
+  ['Ngopi Pustaka', 'Ngopi Library'],
+  ['Perpustakaan Komunitas & Studio Penulis', 'Community Library & Writer Studio'],
+  ['Perpustakaan', 'Library'],
+  ['Studio Penulis', 'Writer Studio'],
+  ['Mulai Menulis', 'Start Writing'],
+  ['Terbitkan ke Perpustakaan', 'Publish to Library'],
+  ['Kirim Tip', 'Send Tip'],
+  ['Apresiasi Penulis dengan Poin Ngopi', 'Tip Author with Ngopi Points'],
+  ['Belum ada karya di kategori ini', 'No works in this category yet'],
+  ['Fiksi', 'Fiction'],
+  ['Esai', 'Essay'],
+  ['Puisi', 'Poetry'],
+  ['Edukasi', 'Education'],
+  ['Komunitas', 'Community'],
   ['Kode Anda:', 'Your Code:'],
   ['teman', 'friends'],
   ['Pakai', 'Apply'],
@@ -198,9 +221,19 @@ function applyDomTranslation(lang: AppLanguage) {
 
 function readInitialLang(): AppLanguage {
   try {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      const v = window.localStorage.getItem(LANG_KEY) || window.localStorage.getItem(LEGACY_LANG_KEY);
-      if (v === 'en' || v === 'id') return v;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (window.localStorage) {
+        const v = window.localStorage.getItem(LANG_KEY) || window.localStorage.getItem(LEGACY_LANG_KEY);
+        if (v === 'en' || v === 'id') return v;
+      }
+      const navLang = (
+        window.navigator?.language ||
+        (Array.isArray(window.navigator?.languages) ? window.navigator.languages[0] : '') ||
+        ''
+      ).toLowerCase();
+      if (navLang && !navLang.startsWith('id') && !navLang.startsWith('ms')) {
+        return 'en';
+      }
     }
   } catch {
     // ignore

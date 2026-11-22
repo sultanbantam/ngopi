@@ -1,12 +1,63 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 import { pointsEconomyService } from '../services/points.service';
 import { PointsManager } from '../utils/pointsManager';
 import { telecomService } from '../services/telecom.service';
 import { prisma } from '../utils/prisma';
 
 const PI_API_URL = 'https://api.minepi.com/v2';
+const HISTORY_FILE = path.join(__dirname, '../../uploads/pi_payment_history.json');
 const creditedPaymentIds = new Set<string>();
+
+export interface PiPaymentRecord {
+  paymentId: string;
+  txid: string;
+  userId: string;
+  username?: string;
+  amount: number;
+  memo: string;
+  type: string;
+  points_credited: number;
+  activated_identity?: { number?: string; email?: string };
+  explorer_url: string;
+  created_at: string;
+}
+
+function loadHistory(): PiPaymentRecord[] {
+  try {
+    if (fs.existsSync(HISTORY_FILE)) {
+      const raw = fs.readFileSync(HISTORY_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    }
+  } catch (_) {}
+  return [];
+}
+
+function saveHistoryRecord(record: PiPaymentRecord) {
+  try {
+    const dir = path.dirname(HISTORY_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const list = loadHistory().filter((r) => r.paymentId !== record.paymentId);
+    list.unshift(record);
+    fs.writeFileSync(HISTORY_FILE, JSON.stringify(list.slice(0, 500), null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[PiPayment] Failed saving history:', e);
+  }
+}
+
+export const getPaymentHistory = async (req: Request, res: Response) => {
+  try {
+    const userId = String(req.query.userId || '').trim();
+    const list = loadHistory();
+    const filtered = userId ? list.filter((r) => r.userId === userId) : list.slice(0, 50);
+    return res.status(200).json({ success: true, transactions: filtered });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: error?.message || 'Failed to load Pi payment history' });
+  }
+};
 
 export const approvePayment = async (req: Request, res: Response) => {
   try {
@@ -81,7 +132,7 @@ export const completePayment = async (req: Request, res: Response) => {
       creditedPaymentIds.add(String(paymentId));
 
       // 1. Points Top-up
-      if (pointsAmount > 0) {
+      if (paymentType === 'ngopi_points_topup' && pointsAmount > 0) {
         try {
           pointsEconomyService.syncWithPointsManager(targetUserId, targetUsername || undefined);
           newBalance = pointsEconomyService.addDirectPoints(
@@ -118,21 +169,78 @@ export const completePayment = async (req: Request, res: Response) => {
             });
             if (actRes.success) {
               activatedIdentity = { number: actRes.number, email: actRes.email };
-            } else {
-              console.warn('[PiPayment] Identity activation warning:', actRes.error);
             }
           }
         } catch (idErr) {
           console.warn('[PiPayment] Failed activating Ngopi identity:', idErr);
         }
       }
+
+      // 3. Author Tip in Ngopi Pustaka via Pi
+      if (paymentType === 'ngopi_library_tip' && metadata.workId) {
+        try {
+          const workId = String(metadata.workId);
+          const work = await prisma.libraryWork.findUnique({ where: { id: workId } });
+          if (work) {
+            const equivalentPoints = Math.max(100, Math.round(Number(payment.amount || 1) * 1000));
+            pointsEconomyService.syncWithPointsManager(work.author_id, work.author_username);
+            const authorBal = pointsEconomyService.addDirectPoints(
+              work.author_id,
+              equivalentPoints,
+              'daily_mission',
+              `Tip Pi (${payment.amount || 1} Pi) untuk karya "${work.title}"`,
+              `PI-${paymentId}`
+            );
+            PointsManager.setPoints(work.author_id, authorBal, true, true);
+            PointsManager.setPoints(work.author_username, authorBal, true, true);
+
+            await prisma.$transaction([
+              prisma.libraryTip.create({
+                data: {
+                  work_id: workId,
+                  from_user_id: targetUserId,
+                  to_user_id: work.author_id,
+                  amount: equivalentPoints,
+                  message: `Tip via Pi Network (${payment.amount || 1} Pi)`,
+                },
+              }),
+              prisma.libraryWork.update({
+                where: { id: workId },
+                data: { total_tip_points: { increment: equivalentPoints } },
+              }),
+            ]);
+          }
+        } catch (tipErr) {
+          console.warn('[PiPayment] Failed crediting library author tip:', tipErr);
+        }
+      }
     }
+
+    const isTestnet = payment.network !== 'Pi Network';
+    const explorerUrl = isTestnet
+      ? `https://blockexplorer.minepi.com/testnet/tx/${txid}`
+      : `https://blockexplorer.minepi.com/mainnet/tx/${txid}`;
+
+    saveHistoryRecord({
+      paymentId: String(paymentId),
+      txid: String(txid),
+      userId: targetUserId,
+      username: targetUsername || undefined,
+      amount: Number(payment.amount || 0),
+      memo: String(payment.memo || 'Transaksi Pi Ngopi'),
+      type: paymentType,
+      points_credited: newBalance !== undefined ? pointsAmount : 0,
+      activated_identity: activatedIdentity,
+      explorer_url: explorerUrl,
+      created_at: new Date().toISOString(),
+    });
 
     return res.status(200).json({
       ...payment,
       points_credited: newBalance !== undefined ? pointsAmount : 0,
       new_balance: newBalance,
       activated_identity: activatedIdentity,
+      explorer_url: explorerUrl,
     });
   } catch (error: any) {
     console.error('Complete Payment Error:', error.response?.data || error.message);

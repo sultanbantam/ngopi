@@ -15,6 +15,7 @@ import { router } from 'expo-router';
 import axios from 'axios';
 import { coffee } from '../../src/theme/coffee';
 import { API_URL, getStoredToken } from '../../src/utils/session';
+import { payWithPi } from '../../src/utils/piSdk';
 
 interface LibraryWork {
   id: string;
@@ -210,6 +211,31 @@ export default function PustakaScreen() {
       loadWorks();
     } catch (err: any) {
       showAlert('Gagal Kirim Tip', err?.response?.data?.error || 'Saldo tidak cukup atau terjadi kesalahan.');
+    } finally {
+      setTipSending(false);
+    }
+  };
+
+  const handleSendPiTip = async () => {
+    if (!selectedWork) return;
+    setTipSending(true);
+    try {
+      await payWithPi({
+        amount: 1,
+        memo: `Tip Penulis @${selectedWork.author_username}: ${selectedWork.title}`,
+        metadata: {
+          type: 'ngopi_library_tip',
+          workId: selectedWork.id,
+          userId: currentUserId || undefined,
+        },
+      });
+      showAlert('Tip Pi Terkirim!', `1 Test-Pi (+1.000 Poin ekuivalen) berhasil dikirim ke @${selectedWork.author_username}!`);
+      setSelectedWork((prev) =>
+        prev ? { ...prev, total_tip_points: prev.total_tip_points + 1000 } : prev
+      );
+      loadWorks();
+    } catch (err: any) {
+      showAlert('Tip Pi Dibatalkan / Gagal', err?.message || 'Gagal memproses Tip Pi.');
     } finally {
       setTipSending(false);
     }
@@ -469,6 +495,25 @@ export default function PustakaScreen() {
                     <Text style={styles.primaryBtnText}>{tipSending ? '...' : 'Kirim Tip'}</Text>
                   </TouchableOpacity>
                 </View>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    onPress={handleSendPiTip}
+                    disabled={tipSending}
+                    style={{
+                      marginTop: 10,
+                      backgroundColor: '#3B1E54',
+                      borderWidth: 1,
+                      borderColor: '#A855F7',
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: '#FDE047', fontWeight: '800', fontSize: 13 }}>
+                      π Tip Penulis dengan 1 Test-Pi (+1.000 Poin)
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ) : null}
 

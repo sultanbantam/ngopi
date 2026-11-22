@@ -241,6 +241,26 @@ export default function LoginScreen() {
           </Text>
         </TouchableOpacity>
         <NgopiBrand />
+        <View
+          style={{
+            backgroundColor: 'rgba(126, 34, 206, 0.14)',
+            borderWidth: 1,
+            borderColor: 'rgba(168, 85, 247, 0.45)',
+            borderRadius: 10,
+            padding: 10,
+            marginBottom: 12,
+          }}
+        >
+          <Text style={{ color: '#FDE047', fontSize: 11, fontWeight: '800', marginBottom: 4 }}>
+            π {t('Siap untuk Pi Browser & Pi Testnet', 'Ready for Pi Browser & Pi Testnet')}
+          </Text>
+          <Text style={{ color: coffee.secondary, fontSize: 11, lineHeight: 16 }}>
+            {t(
+              '• Chat E2EE & Warung Kopi Sosial\n• Studio Penulis & Musik AI (Validasi AI Objektif)\n• Bayar Poin, Tip Penulis & Identitas Ngopi pakai Pi',
+              '• E2EE Chat & Social Coffee Lounge\n• AI Writer Library & AI Mixtape Studio\n• Pay for Points, Author Tips & Ngopi Identity with Pi'
+            )}
+          </Text>
+        </View>
         <Text style={styles.subtitle}>{t('Selamat datang kembali.', 'Welcome back.')}</Text>
 
         {error ? <Text style={styles.errorText} accessibilityRole="alert">{error}</Text> : null}
