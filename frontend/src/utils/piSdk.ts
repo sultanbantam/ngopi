@@ -2,36 +2,32 @@ import { Platform } from 'react-native';
 import axios from 'axios';
 import { API_URL } from './session';
 
-declare global {
-  interface Window {
-    Pi?: {
-      init: (config: { version: string; sandbox?: boolean }) => void;
-      authenticate: (
-        scopes: string[],
-        onIncompletePaymentFound?: (payment: any) => void
-      ) => Promise<{ accessToken: string; user: { uid: string; username: string } }>;
-      createPayment: (
-        paymentData: { amount: number; memo: string; metadata?: Record<string, any> },
-        callbacks: {
-          onReadyForServerApproval: (paymentId: string) => void;
-          onReadyForServerCompletion: (paymentId: string, txid: string) => void;
-          onCancel: (paymentId: string) => void;
-          onError: (error: Error, payment?: any) => void;
-        }
-      ) => void;
-    };
-  }
+interface PiSdkInstance {
+  init: (config: { version: string; sandbox?: boolean }) => void;
+  authenticate: (
+    scopes: string[],
+    onIncompletePaymentFound?: (payment: any) => void
+  ) => Promise<{ accessToken: string; user: { uid: string; username: string } }>;
+  createPayment: (
+    paymentData: { amount: number; memo: string; metadata?: Record<string, any> },
+    callbacks: {
+      onReadyForServerApproval: (paymentId: string) => void;
+      onReadyForServerCompletion: (paymentId: string, txid: string) => void;
+      onCancel: (paymentId: string) => void;
+      onError: (error: Error, payment?: any) => void;
+    }
+  ) => void;
 }
 
 const PI_SANDBOX = process.env.EXPO_PUBLIC_PI_SANDBOX !== 'false'; // Staging (Testnet / Sandbox) by default
 let piInitPromise: Promise<void> | null = null;
 
-export async function ensurePiSdk(): Promise<NonNullable<Window['Pi']>> {
+export async function ensurePiSdk(): Promise<PiSdkInstance> {
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
     throw new Error('Pi Network SDK hanya tersedia di Web / Pi Browser.');
   }
 
-  if (!window.Pi) {
+  if (!(window as any).Pi) {
     if (!piInitPromise) {
       piInitPromise = new Promise<void>((resolve, reject) => {
         const existing = document.querySelector('script[src*="sdk.minepi.com/pi-sdk.js"]');
@@ -51,12 +47,13 @@ export async function ensurePiSdk(): Promise<NonNullable<Window['Pi']>> {
     await piInitPromise;
   }
 
-  if (!window.Pi) {
+  const pi = (window as any).Pi as PiSdkInstance | undefined;
+  if (!pi) {
     throw new Error('Pi SDK belum siap. Pastikan dibuka melalui Pi Browser atau Pi Sandbox.');
   }
 
-  window.Pi.init({ version: '2.0', sandbox: PI_SANDBOX });
-  return window.Pi;
+  pi.init({ version: '2.0', sandbox: PI_SANDBOX });
+  return pi;
 }
 
 const handleIncompletePayment = async (payment: any) => {
