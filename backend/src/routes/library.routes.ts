@@ -107,7 +107,7 @@ router.post('/works', verifyJWT, requireDbUser, async (req: Request, res: Respon
       });
     }
 
-    const allowedCategories = ['fiksi', 'esai', 'puisi', 'edukasi', 'komunitas'];
+    const allowedCategories = ['fiksi', 'esai', 'puisi', 'edukasi', 'komunitas', 'diary', 'novel', 'cerita', 'dongeng'];
     const safeCategory = allowedCategories.includes(category) ? category : 'fiksi';
 
     const evaluation = await evaluateLiteraryWork({

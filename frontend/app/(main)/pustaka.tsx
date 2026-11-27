@@ -49,6 +49,10 @@ interface LibraryChapter {
 const CATEGORIES = [
   { key: 'all', label: 'Semua' },
   { key: 'fiksi', label: 'Fiksi' },
+  { key: 'novel', label: 'Novel' },
+  { key: 'cerita', label: 'Cerita' },
+  { key: 'dongeng', label: 'Dongeng' },
+  { key: 'diary', label: 'Diary' },
   { key: 'esai', label: 'Esai' },
   { key: 'puisi', label: 'Puisi' },
   { key: 'edukasi', label: 'Edukasi' },
