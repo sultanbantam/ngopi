@@ -14,6 +14,7 @@ model User {
   role                 String    @default("user")
   recovery_pin_hash    String?
   recovery_email       String?
+  recovery_whatsapp    String?
   mfa_secret_encrypted String?
   mfa_enabled          Boolean   @default(false)
   mfa_verified_at      DateTime?

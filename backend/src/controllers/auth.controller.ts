@@ -150,7 +150,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
       return;
     }
 
-    const { username, password, display_name, wallet_address, public_key, referral_code, recovery_pin, recovery_email, captcha_token, captcha_answer, cf_turnstile_token } = value;
+    const { username, password, display_name, wallet_address, public_key, referral_code, recovery_pin, recovery_email, recovery_whatsapp, captcha_token, captcha_answer, cf_turnstile_token } = value;
 
     const turnstileSecret = process.env.TURNSTILE_SECRET_KEY;
     let humanVerified = false;
@@ -198,6 +198,7 @@ export const register = async (req: Request, res: Response): Promise<void> => {
         public_key,
         recovery_pin_hash: recovery_pin ? await bcrypt.hash(String(recovery_pin).trim(), 10) : null,
         recovery_email: recovery_email ? String(recovery_email).trim().toLowerCase() : null,
+        recovery_whatsapp: recovery_whatsapp ? String(recovery_whatsapp).replace(/\D/g, '').replace(/^0/, '62') : null,
         role: 'user',
       },
     });
@@ -507,25 +508,72 @@ export const bamboochainCallback = async (req: Request, res: Response): Promise<
 };
 
 
+const normalizeWhatsapp = (raw: string): string => {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('0')) return `62${digits.slice(1)}`;
+  return digits;
+};
+
+const sendWhatsappOtpIfConfigured = async (waNumber: string, message: string): Promise<boolean> => {
+  const cleanWa = normalizeWhatsapp(waNumber);
+  if (!cleanWa) return false;
+  try {
+    if (process.env.FONNTE_TOKEN) {
+      await axios.post(
+        'https://api.fonnte.com/send',
+        { target: cleanWa, message },
+        { headers: { Authorization: process.env.FONNTE_TOKEN }, timeout: 8000 }
+      );
+      return true;
+    }
+    if (process.env.WHATSAPP_GATEWAY_URL) {
+      await axios.post(
+        process.env.WHATSAPP_GATEWAY_URL,
+        { to: cleanWa, message },
+        {
+          headers: process.env.WHATSAPP_GATEWAY_TOKEN
+            ? { Authorization: `Bearer ${process.env.WHATSAPP_GATEWAY_TOKEN}` }
+            : undefined,
+          timeout: 8000,
+        }
+      );
+      return true;
+    }
+  } catch (err: any) {
+    console.warn('[Auth] WhatsApp OTP delivery failed:', err?.message);
+  }
+  return false;
+};
+
 const resolveAuthRecoveryUser = async (identifier: string) => {
   const clean = String(identifier || '').trim();
   if (!clean) return null;
+
+  const normalizedWa = normalizeWhatsapp(clean);
+  const localWa = normalizedWa.startsWith('62') ? `0${normalizedWa.slice(2)}` : normalizedWa;
+  const stripped = clean.replace(/^@/, '').replace(/@ngopi\.top$/i, '').replace(/@mail\.ngopi\.top$/i, '').trim();
+
+  const direct = await prisma.user.findFirst({
+    where: {
+      OR: [
+        { id: clean },
+        { username: { equals: stripped, mode: 'insensitive' } },
+        { display_name: { equals: clean, mode: 'insensitive' } },
+        { recovery_email: { equals: clean.toLowerCase(), mode: 'insensitive' } },
+        ...(normalizedWa.length >= 8
+          ? [{ recovery_whatsapp: normalizedWa }, { recovery_whatsapp: localWa }]
+          : []),
+      ],
+    },
+  });
+  if (direct) return direct;
 
   const resolved = await telecomService.resolveUserByIdentifier(clean);
   if (resolved) {
     return prisma.user.findUnique({ where: { id: resolved.id } });
   }
-
-  const stripped = clean.replace(/^@/, '').replace(/@ngopi\.top$/i, '').replace(/@mail\.ngopi\.top$/i, '').trim();
-  return prisma.user.findFirst({
-    where: {
-      OR: [
-        { id: clean },
-        { username: { equals: stripped, mode: 'insensitive' } },
-        { recovery_email: { equals: clean.toLowerCase(), mode: 'insensitive' } },
-      ],
-    },
-  });
+  return null;
 };
 
 export const forgotPassword = async (req: Request, res: Response): Promise<void> => {
@@ -539,7 +587,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const user = await resolveAuthRecoveryUser(value.identifier);
     if (!user) {
       res.status(404).json({
-        error: 'Akun dengan Email Ngopi, Username, atau Nomor ID Ngopi tersebut tidak ditemukan.',
+        error: 'Akun tidak ditemukan. Coba masukkan Email pemulihan (Gmail/Yahoo), Nomor WhatsApp terdaftar, Username, atau Nama Tampilan Anda.',
       });
       return;
     }
@@ -552,7 +600,7 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
       data: {
         user_id: user.id,
         token_hash: tokenHash,
-        channel: user.recovery_email ? 'external_email' : 'ngopi_inbox',
+        channel: user.recovery_email ? 'external_email' : user.recovery_whatsapp ? 'whatsapp' : 'recovery_pin',
         expires_at: expiresAt,
       },
     });
@@ -561,42 +609,59 @@ export const forgotPassword = async (req: Request, res: Response): Promise<void>
     const ngopiNumber = resolvedIdentity?.ngopi_number || telecomService.getNumberForUser(user);
     const ngopiEmail = resolvedIdentity?.ngopi_email || `${user.username}@ngopi.top`;
 
-    try {
-      await telecomService.deliverSystemRecoveryMail(
-        user,
-        ngopiNumber,
-        ngopiEmail,
-        'Kode Reset Kata Sandi Ngopi',
-        `Halo ${user.display_name || user.username},\n\nKode OTP reset kata sandi Anda adalah: ${otp}\nBerlaku selama 15 menit.\n\nJika Anda tidak meminta reset password, abaikan pesan ini.`
-      );
-    } catch (mailErr) {
-      console.warn('[Auth] Failed delivering recovery OTP to Ngopi inbox:', mailErr);
-    }
-
-    let sentExternal = false;
+    let sentExternalEmail = false;
     if (user.recovery_email) {
       const extResult = await telecomService.sendExternalEmailDirect({
         to: user.recovery_email,
         subject: '[Ngopi.top] Kode Reset Kata Sandi Akun Anda',
-        body: `Halo ${user.display_name || user.username},\n\nKode OTP reset kata sandi akun Ngopi (#${ngopiNumber} / ${ngopiEmail}) Anda adalah:\n\n${otp}\n\nKode berlaku selama 15 menit.`,
+        body: `Halo ${user.display_name || user.username},\n\nKode OTP reset kata sandi akun Ngopi (@${user.username}) Anda adalah:\n\n${otp}\n\nKode berlaku selama 15 menit.`,
         fromEmail: ngopiEmail,
         fromName: 'Ngopi Security',
       });
-      sentExternal = extResult.sent;
+      sentExternalEmail = extResult.sent;
+    }
+
+    let sentWhatsapp = false;
+    if (user.recovery_whatsapp) {
+      sentWhatsapp = await sendWhatsappOtpIfConfigured(
+        user.recovery_whatsapp,
+        `[Ngopi.top] Halo ${user.display_name || user.username}, kode OTP reset kata sandi akun @${user.username} adalah: *${otp}* (berlaku 15 menit).`
+      );
+    }
+
+    const maskedEmail = user.recovery_email
+      ? user.recovery_email.replace(/(^.).*(@.*$)/, '$1***$2')
+      : null;
+    const maskedWa = user.recovery_whatsapp
+      ? `${user.recovery_whatsapp.slice(0, 4)}****${user.recovery_whatsapp.slice(-3)}`
+      : null;
+
+    const whatsappSupportText = `Halo Admin Ngopi, saya lupa kata sandi akun @${user.username} (${user.display_name}). Mohon bantu pemulihan akun saya.`;
+    const whatsappSupportUrl = `https://wa.me/628174139994?text=${encodeURIComponent(whatsappSupportText)}`;
+
+    let message = '';
+    if (sentExternalEmail && sentWhatsapp) {
+      message = `Kode OTP telah dikirim ke Email (${maskedEmail}) dan WhatsApp (${maskedWa}).`;
+    } else if (sentExternalEmail) {
+      message = `Kode OTP reset kata sandi telah dikirim ke Email pemulihan Anda (${maskedEmail}).`;
+    } else if (sentWhatsapp) {
+      message = `Kode OTP reset kata sandi telah dikirim ke WhatsApp Anda (${maskedWa}).`;
+    } else if (user.recovery_pin_hash) {
+      message = `Akun @${user.username} ditemukan. Masukkan PIN Pemulihan Anda untuk membuat kata sandi baru.`;
+    } else {
+      message = `Akun @${user.username} ditemukan, namun belum memiliki Email luar/WhatsApp/PIN pemulihan terverifikasi. Gunakan tombol bantuan WhatsApp Admin di bawah.`;
     }
 
     res.status(200).json({
       success: true,
-      ngopi_number: ngopiNumber,
-      ngopi_email: ngopiEmail,
+      username: user.username,
       has_recovery_pin: Boolean(user.recovery_pin_hash),
-      sent_to_external_email: sentExternal,
-      sent_to_ngopi_inbox: true,
-      message: sentExternal
-        ? 'Kode OTP reset kata sandi telah dikirim ke Email Pemulihan dan Inbox Ngopi Anda.'
-        : user.recovery_pin_hash
-          ? 'Permintaan reset dibuat. Masukkan PIN Pemulihan Anda atau kode OTP dari Inbox Ngopi.'
-          : 'Kode OTP reset telah dikirim ke Inbox Ngopi Anda.',
+      has_external_email: Boolean(user.recovery_email),
+      has_whatsapp: Boolean(user.recovery_whatsapp),
+      sent_to_external_email: sentExternalEmail,
+      sent_to_whatsapp: sentWhatsapp,
+      whatsapp_support_url: whatsappSupportUrl,
+      message,
     });
   } catch (err) {
     console.error('forgotPassword error:', err);
@@ -692,6 +757,9 @@ export const setRecoveryOptions = async (req: Request, res: Response): Promise<v
     }
     if (value.recovery_email !== undefined) {
       data.recovery_email = value.recovery_email ? String(value.recovery_email).trim().toLowerCase() : null;
+    }
+    if (value.recovery_whatsapp !== undefined) {
+      data.recovery_whatsapp = value.recovery_whatsapp ? normalizeWhatsapp(String(value.recovery_whatsapp)) : null;
     }
 
     await prisma.user.update({ where: { id: userId }, data });

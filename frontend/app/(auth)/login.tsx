@@ -1,7 +1,7 @@
 import { afterProfileLogin } from '../../src/utils/profileLink';
 import { coffee } from '../../src/theme/coffee';
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView, Modal } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Platform, ScrollView, Modal, Linking } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as SecureStore from '../../src/utils/storage';
 import axios from 'axios';
@@ -32,6 +32,7 @@ export default function LoginScreen() {
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [hasRecoveryPin, setHasRecoveryPin] = useState(false);
+  const [forgotWhatsappUrl, setForgotWhatsappUrl] = useState('');
   const [piLoading, setPiLoading] = useState(false);
   const [isPiBrowser, setIsPiBrowser] = useState<boolean>(() => isRunningInPiBrowser());
   const params = useLocalSearchParams();
@@ -99,9 +100,10 @@ export default function LoginScreen() {
         identifier: forgotIdentifier.trim(),
       });
       setHasRecoveryPin(Boolean(res.data?.has_recovery_pin));
+      setForgotWhatsappUrl(res.data?.whatsapp_support_url || '');
       setForgotInfo(
         res.data?.message ||
-          `Permintaan pemulihan untuk ${res.data?.ngopi_email || forgotIdentifier} berhasil diproses.`
+          'Permintaan pemulihan berhasil diproses.'
       );
       setForgotStep('reset');
     } catch (err: any) {
@@ -416,8 +418,8 @@ export default function LoginScreen() {
             </Text>
             <Text style={{ color: coffee.secondary, fontSize: 12, marginBottom: 14 }}>
               {t(
-                'Pulihkan akun menggunakan Email @ngopi.top, Username, atau Nomor ID Ngopi Anda.',
-                'Recover your account via @ngopi.top Email, Username, or Ngopi ID Number.'
+                'Pulihkan akun melalui Email luar (Gmail/Yahoo), Nomor WhatsApp terdaftar, Username, atau Nama Tampilan Anda.',
+                'Recover your account via External Email (Gmail/Yahoo), registered WhatsApp number, Username, or Display Name.'
               )}
             </Text>
 
@@ -430,7 +432,7 @@ export default function LoginScreen() {
 
             <TextInput
               style={styles.input}
-              placeholder={t('Email @ngopi.top / Username / Nomor ID Ngopi', '@ngopi.top Email / Username / Ngopi ID')}
+              placeholder={t('Email Gmail / No. WhatsApp / Username / Nama', 'Gmail / WhatsApp / Username / Display Name')}
               placeholderTextColor={coffee.muted}
               value={forgotIdentifier}
               onChangeText={setForgotIdentifier}
@@ -444,8 +446,8 @@ export default function LoginScreen() {
                   style={styles.input}
                   placeholder={
                     hasRecoveryPin
-                      ? t('PIN Pemulihan atau Kode OTP 6 digit', 'Recovery PIN or 6-digit OTP')
-                      : t('Kode OTP 6 digit dari Inbox / Email', '6-digit OTP from Inbox / Email')
+                      ? t('PIN Pemulihan atau Kode OTP dari Gmail / WhatsApp', 'Recovery PIN or OTP from Gmail / WhatsApp')
+                      : t('Kode OTP 6 digit dari Gmail / WhatsApp', '6-digit OTP from Gmail / WhatsApp')
                   }
                   placeholderTextColor={coffee.muted}
                   value={forgotOtpOrPin}
@@ -460,6 +462,24 @@ export default function LoginScreen() {
                   onChangeText={setForgotNewPassword}
                   secureTextEntry
                 />
+                {forgotWhatsappUrl ? (
+                  <TouchableOpacity
+                    onPress={() => Linking.openURL(forgotWhatsappUrl)}
+                    style={{
+                      backgroundColor: 'rgba(34, 197, 94, 0.14)',
+                      borderWidth: 1,
+                      borderColor: '#22C55E',
+                      borderRadius: 10,
+                      paddingVertical: 10,
+                      alignItems: 'center',
+                      marginBottom: 10,
+                    }}
+                  >
+                    <Text style={{ color: '#4ADE80', fontWeight: '700', fontSize: 12 }}>
+                      💬 {t('Hubungi Admin via WhatsApp untuk Reset Manual', 'Contact Admin via WhatsApp for Manual Reset')}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
               </>
             ) : null}
 

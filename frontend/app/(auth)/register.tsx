@@ -28,6 +28,7 @@ export default function RegisterScreen() {
   const [error, setError] = useState('');
   const [recoveryPin, setRecoveryPin] = useState('');
   const [recoveryEmail, setRecoveryEmail] = useState('');
+  const [recoveryWhatsapp, setRecoveryWhatsapp] = useState('');
   const [captchaToken, setCaptchaToken] = useState('');
   const [captchaQuestion, setCaptchaQuestion] = useState('');
   const [captchaAnswer, setCaptchaAnswer] = useState('');
@@ -121,6 +122,7 @@ export default function RegisterScreen() {
         referral_code: referralCode ? referralCode.trim() : undefined,
         recovery_pin: recoveryPin.trim() || undefined,
         recovery_email: recoveryEmail.trim() || undefined,
+        recovery_whatsapp: recoveryWhatsapp.trim() || undefined,
         captcha_token: captchaToken,
         captcha_answer: captchaAnswer.trim(),
       }, { withCredentials: true, headers: { 'x-skip-auth-refresh': 'true' } });
@@ -260,6 +262,17 @@ export default function RegisterScreen() {
           value={recoveryEmail}
           onChangeText={setRecoveryEmail}
           keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+
+        <TextInput
+          style={styles.input}
+          placeholder={t('Nomor WhatsApp Pemulihan (opsional, misal 0812...)', 'Recovery WhatsApp Number (optional, e.g. 0812...)')}
+          placeholderTextColor={coffee.muted}
+          value={recoveryWhatsapp}
+          onChangeText={setRecoveryWhatsapp}
+          keyboardType="phone-pad"
           autoCapitalize="none"
           autoCorrect={false}
         />

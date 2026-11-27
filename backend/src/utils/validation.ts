@@ -15,6 +15,7 @@ export const registerSchema = Joi.object({
   referral_code: Joi.string().trim().max(100).allow(null, '').optional(),
   recovery_pin: Joi.string().trim().min(4).max(12).allow(null, '').optional(),
   recovery_email: Joi.string().trim().email().max(160).allow(null, '').optional(),
+  recovery_whatsapp: Joi.string().trim().min(8).max(24).allow(null, '').optional(),
   captcha_token: Joi.string().trim().max(512).allow(null, '').optional(),
   captcha_answer: Joi.alternatives().try(Joi.string().trim().max(32), Joi.number()).optional(),
   cf_turnstile_token: Joi.string().trim().max(2048).allow(null, '').optional(),
@@ -34,6 +35,7 @@ export const resetPasswordSchema = Joi.object({
 export const recoverySettingsSchema = Joi.object({
   recovery_pin: Joi.string().trim().min(4).max(12).allow(null, '').optional(),
   recovery_email: Joi.string().trim().email().max(160).allow(null, '').optional(),
+  recovery_whatsapp: Joi.string().trim().min(8).max(24).allow(null, '').optional(),
 }).min(1);
 
 export const loginSchema = Joi.object({
